@@ -24,6 +24,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   late Animation<double> _textGlowAnimation;
 
   final TextEditingController _textController = TextEditingController();
+  final FocusNode _textFocusNode = FocusNode();
+  final GlobalKey _editorKey = GlobalKey();
+  final ScrollController _editorScrollController = ScrollController();
   bool _isAnalyzing = false;
   double _analysisProgress = 0.0;
   double _aiDetectionPercentage = 0.0;
@@ -82,6 +85,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   void dispose() {
     _controller?.dispose();
     _textController.dispose();
+    _textFocusNode.dispose();
+    _editorScrollController.dispose();
     super.dispose();
   }
 
@@ -399,6 +404,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       // Text field
                       Expanded(
                         child: Container(
+                          key: _editorKey,
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(15),
@@ -429,8 +435,19 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.all(20),
                             ),
+                            focusNode: _textFocusNode,
                             onChanged: (value) {
                               setState(() {});
+                              // ensure editor is visible when typing
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (_editorKey.currentContext != null) {
+                                  Scrollable.ensureVisible(
+                                    _editorKey.currentContext!,
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeInOut,
+                                  );
+                                }
+                              });
                             },
                           ),
                         ),

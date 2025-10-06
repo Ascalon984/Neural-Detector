@@ -218,15 +218,15 @@ class _HomeScreenState extends State<HomeScreen>
                       Text(
                         'NEURAL',
                         style: TextStyle(
-                          fontSize: 28,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                           color: Colors.cyan.shade300,
-                          letterSpacing: 3,
+                          letterSpacing: 2,
                           fontFamily: 'Courier',
                           shadows: [
                             Shadow(
-                              color: Colors.cyan.withOpacity(0.5),
-                              blurRadius: 10,
+                              color: Colors.cyan.withOpacity(0.4),
+                              blurRadius: 8,
                             ),
                           ],
                         ),
@@ -236,15 +236,15 @@ class _HomeScreenState extends State<HomeScreen>
                       Text(
                         'DETECTOR',
                         style: TextStyle(
-                          fontSize: 28,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                           color: Colors.pink.shade300,
-                          letterSpacing: 3,
+                          letterSpacing: 2,
                           fontFamily: 'Courier',
                           shadows: [
                             Shadow(
-                              color: Colors.pink.withOpacity(0.5),
-                              blurRadius: 10,
+                              color: Colors.pink.withOpacity(0.4),
+                              blurRadius: 8,
                             ),
                           ],
                         ),
