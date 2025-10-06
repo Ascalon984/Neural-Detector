@@ -9,6 +9,14 @@ import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
 import '../utils/app_localizations.dart';
 
+// ScrollBehavior to remove scrollbars (useful for web where scrollbars can be intrusive)
+class _NoScrollbarScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    return child; // don't build any scrollbar
+  }
+}
+
 class TextEditorScreen extends StatefulWidget {
   const TextEditorScreen({super.key});
 
@@ -112,36 +120,39 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                controller: _outerScrollController,
-                reverse: true,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header dengan animasi
-                    _buildHeader(),
+              child: ScrollConfiguration(
+                behavior: _NoScrollbarScrollBehavior(),
+                child: SingleChildScrollView(
+                  controller: _outerScrollController,
+                  reverse: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header dengan animasi
+                      _buildHeader(),
 
-                    const SizedBox(height: 18),
+                      const SizedBox(height: 18),
 
-                    // Text editor area (not expanded so keyboard won't cover it)
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.55,
-                        minHeight: 200,
+                      // Text editor area (not expanded so keyboard won't cover it)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.55,
+                          minHeight: 200,
+                        ),
+                        child: _buildTextEditorArea(),
                       ),
-                      child: _buildTextEditorArea(),
-                    ),
 
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                    // Stats bar
-                    _buildStatsBar(),
+                      // Stats bar
+                      _buildStatsBar(),
 
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                    // Action buttons
-                    _buildActionButtons(),
-                  ],
+                      // Action buttons
+                      _buildActionButtons(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -595,7 +606,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       children: [
         Expanded(
           child: _buildCyberButton(
-            text: 'CLEAR ALL',
+            text: 'CLEAR',
             icon: Icons.delete_sweep,
             onPressed: _clearText,
             color: Colors.red,

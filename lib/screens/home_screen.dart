@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen>
                     _buildHeader(),
 
                   // minimal spacing after subtitle
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 5),
                   
                   // Search bar futuristik
                   _buildSearchBar(),
@@ -533,15 +533,15 @@ class _HomeScreenState extends State<HomeScreen>
       children: [
         _buildFeatureCard(
           icon: Icons.edit,
-          title: 'NEURAL TEXT EDITOR',
-          subtitle: 'Real-time AI detection while typing',
+          title: 'TEXT EDITOR',
+          subtitle: 'AI detection while typing',
           gradient: [Colors.cyan, Colors.blue],
           onTap: () => _navigateTo(1),
         ),
         const SizedBox(height: 15),
         _buildFeatureCard(
           icon: Icons.upload_file,
-          title: 'QUANTUM UPLOAD',
+          title: 'UPLOAD FILE',
           subtitle: 'Advanced document analysis',
           gradient: [Colors.purple, Colors.pink],
           onTap: () => _navigateTo(2),
@@ -549,7 +549,7 @@ class _HomeScreenState extends State<HomeScreen>
         const SizedBox(height: 15),
         _buildFeatureCard(
           icon: Icons.camera_alt,
-          title: 'CYBER SCANNER',
+          title: 'SCANNER',
           subtitle: 'OCR with neural processing',
           gradient: [Colors.pink, Colors.cyan],
           onTap: () => _navigateTo(3),
