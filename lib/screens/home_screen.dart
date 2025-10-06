@@ -582,7 +582,7 @@ class _HomeScreenState extends State<HomeScreen>
             opacity: _fadeAnimation.value,
             child: GestureDetector(
               onTap: onTap,
-                child: Container(
+              child: Container(
                 height: 100,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
@@ -594,12 +594,10 @@ class _HomeScreenState extends State<HomeScreen>
                       gradient[1].withOpacity(0.18),
                     ],
                   ),
-                  // stronger/crisper border
                   border: Border.all(
                     color: gradient[0].withOpacity(0.85),
                     width: 2,
                   ),
-                  // reduced, tighter shadow for HD look
                   boxShadow: [
                     BoxShadow(
                       color: gradient[0].withOpacity(0.12),
@@ -677,8 +675,8 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-          );
-        },
+          ),
+        );
       },
     );
   }

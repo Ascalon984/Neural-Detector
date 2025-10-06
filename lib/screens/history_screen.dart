@@ -753,117 +753,122 @@ class _HistoryScreenState extends State<HistoryScreen>
   void _showHistoryDetails(Model.ScanHistory history) {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.blue.shade900.withOpacity(0.9),
-                Colors.purple.shade900.withOpacity(0.9),
-              ],
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.blue.shade900.withOpacity(0.9),
+                  Colors.purple.shade900.withOpacity(0.9),
+                ],
+              ),
+              border: Border.all(color: Colors.cyan, width: 2),
             ),
-            border: Border.all(color: Colors.cyan, width: 2),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(25),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Padding(
+              padding: const EdgeInsets.all(25),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'SCAN DETAILS',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.cyan.shade300,
-                        fontFamily: 'Courier',
-                        letterSpacing: 2,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'SCAN DETAILS',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.cyan.shade300,
+                            fontFamily: 'Courier',
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.green),
+                          ),
+                          child: Text(
+                            history.id,
+                            style: TextStyle(
+                              color: Colors.green.shade300,
+                              fontSize: 12,
+                              fontFamily: 'Courier',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    _buildDetailItem('File Name', history.fileName),
+                    _buildDetailItem('Date & Time', history.date),
+                    _buildDetailItem('File Size', history.fileSize),
+                    const SizedBox(height: 15),
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'ANALYSIS RESULTS',
+                            style: TextStyle(
+                              color: Colors.pink.shade300,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Courier',
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildResultIndicator('AI', '${history.aiDetection}%', Colors.orange),
+                              _buildResultIndicator('HUMAN', '${history.humanWritten}%', Colors.cyan),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.green),
-                      ),
-                      child: Text(
-                        history.id,
-                        style: TextStyle(
-                          color: Colors.green.shade300,
-                          fontSize: 12,
-                          fontFamily: 'Courier',
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        child: const Text(
+                          'CLOSE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                _buildDetailItem('File Name', history.fileName),
-                _buildDetailItem('Date & Time', history.date),
-                _buildDetailItem('File Size', history.fileSize),
-                const SizedBox(height: 15),
-                Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        'ANALYSIS RESULTS',
-                        style: TextStyle(
-                          color: Colors.pink.shade300,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Courier',
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildResultIndicator('AI', '${history.aiDetection}%', Colors.orange),
-                          _buildResultIndicator('HUMAN', '${history.humanWritten}%', Colors.cyan),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                    child: const Text(
-                      'CLOSE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      );
+        );
+      },
+    );
   }
 
   Widget _buildDetailItem(String label, String value) {
