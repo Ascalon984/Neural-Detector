@@ -169,6 +169,19 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Debug Gradle assembleRelease (stacktrace)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew assembleRelease --stacktrace --no-daemon > ../gradle_assemble_release.log 2>&1 || true
+
+      - name: Upload Gradle debug log
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-debug-log
+          path: gradle_assemble_release.log
+
       - name: Build AppBundle and analyze size
         run: flutter build appbundle --release --analyze-size
 
