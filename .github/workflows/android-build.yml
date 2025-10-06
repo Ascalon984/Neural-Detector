@@ -50,36 +50,41 @@ jobs:
 
       - name: Install dependencies
         run: |
-          echo "Cleaning Flutter..."
-          flutter clean
+          # Debug info
+          echo "Current directory structure:"
+          pwd
+          ls -la
           
-          echo "Removing pubspec.lock..."
-          rm -f pubspec.lock
+          echo "Environment variables:"
+          env
           
-          echo "Setting up Flutter..."
-          flutter config --no-analytics
-          flutter precache
-          
-          echo "Verifying Flutter installation..."
+          echo "Flutter and Dart versions:"
           flutter --version
-          flutter doctor -v
+          dart --version
           
-          echo "Installing dependencies (attempt 1)..."
-          flutter pub get --verbose || {
-            echo "First attempt failed, retrying after cache clean..."
-            flutter pub cache clean
-            flutter pub get --verbose
-          } || {
-            echo "Both attempts failed. Checking environment..."
-            echo "PWD: $PWD"
-            echo "Flutter config:"
-            flutter config
-            echo "Directory contents:"
-            ls -la
-            echo "pubspec.yaml contents:"
+          # Try running pub get with full debug output
+          echo "Running pub get with debug..."
+          flutter pub get --verbose 2>&1 | tee pub_get_log.txt
+          
+          if [ $? -ne 0 ]; then
+            echo "Error during pub get. Detailed debugging:"
+            echo "1. Checking pubspec.yaml..."
             cat pubspec.yaml
+            
+            echo "2. Running pub outdated to check compatibility..."
+            flutter pub outdated || true
+            
+            echo "3. Running pub deps to show dependency tree..."
+            flutter pub deps || true
+            
+            echo "4. Checking for conflicting dependencies..."
+            flutter pub deps | grep -i conflict || true
+            
+            echo "5. Full pub get log:"
+            cat pub_get_log.txt
+            
             exit 1
-          }
+          fi
           
       - name: Generate launcher icons
         run: |
