@@ -88,6 +88,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Provider.of<ThemeProvider>(context).backgroundColor,
       body: Stack(
         children: [
@@ -104,29 +105,36 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header dengan animasi
-                  _buildHeader(),
-                  
-                  const SizedBox(height: 30),
-                  
-                  // Text editor area
-                  Expanded(
-                    child: _buildTextEditorArea(),
-                  ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Stats bar
-                  _buildStatsBar(),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Action buttons
-                  _buildActionButtons(),
-                ],
+              child: SingleChildScrollView(
+                reverse: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header dengan animasi
+                    _buildHeader(),
+
+                    const SizedBox(height: 18),
+
+                    // Text editor area (not expanded so keyboard won't cover it)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.55,
+                        minHeight: 200,
+                      ),
+                      child: _buildTextEditorArea(),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Stats bar
+                    _buildStatsBar(),
+
+                    const SizedBox(height: 20),
+
+                    // Action buttons
+                    _buildActionButtons(),
+                  ],
+                ),
               ),
             ),
           ),

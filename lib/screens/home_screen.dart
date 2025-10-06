@@ -96,10 +96,13 @@ class _HomeScreenState extends State<HomeScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header dengan animasi
-                  _buildHeader(),
-                  
-                  const SizedBox(height: 30),
+                  // Header dengan animasi (constrained to a smaller fraction of screen)
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.22,
+                    child: _buildHeader(),
+                  ),
+
+                  const SizedBox(height: 18),
                   
                   // Search bar futuristik
                   _buildSearchBar(),
@@ -378,8 +381,8 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (context, child) {
         return GestureDetector(
           onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
+        child: Container(
+      decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -402,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 15),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Column(
                 children: [
                   Icon(icon, color: color, size: 24),
