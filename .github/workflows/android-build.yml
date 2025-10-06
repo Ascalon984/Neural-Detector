@@ -8,22 +8,38 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 'stable'
 
+      - name: Install Android SDK command-line tools
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          curl -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
+          unzip -q tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+
       - name: Accept Android licenses
         run: |
-          yes | sdkmanager --licenses || true
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
 
       - name: Install Android SDK components
         run: |
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973"
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
       - name: Install dependencies
         run: flutter pub get
@@ -32,7 +48,9 @@ jobs:
         run: flutter pub run flutter_launcher_icons:main || true
 
       - name: Build APK (arm64)
-        run: flutter build apk --release --target-platform android-arm64 --no-shrink
+        run: |
+          export JAVA_TOOL_OPTIONS="-Xmx4g -XX:+UseG1GC"
+          flutter build apk --release --target-platform android-arm64 --no-shrink
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
