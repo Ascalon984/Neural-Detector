@@ -103,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _buildHeader(),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 28),
                   
                   // Search bar futuristik
                   _buildSearchBar(),

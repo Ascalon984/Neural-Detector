@@ -28,6 +28,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   final FocusNode _textFocusNode = FocusNode();
   final GlobalKey _editorKey = GlobalKey();
   final ScrollController _editorScrollController = ScrollController();
+  final ScrollController _outerScrollController = ScrollController();
   bool _isAnalyzing = false;
   double _analysisProgress = 0.0;
   double _aiDetectionPercentage = 0.0;
@@ -112,6 +113,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: SingleChildScrollView(
+                controller: _outerScrollController,
                 reverse: true,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,8 +405,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       const SizedBox(height: 20),
                       
                       // Text field
-                      Expanded(
-                        child: Container(
+                        Expanded(
+                          child: Container(
                           key: _editorKey,
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.3),
@@ -439,14 +441,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             focusNode: _textFocusNode,
                             onChanged: (value) {
                               setState(() {});
-                              // ensure editor is visible when typing
+                              // scroll the outer SingleChildScrollView to keep editor visible
                               WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (_editorKey.currentContext != null) {
-                                  Scrollable.ensureVisible(
-                                    _editorKey.currentContext!,
+                                try {
+                                  _outerScrollController.animateTo(
+                                    _outerScrollController.position.maxScrollExtent,
                                     duration: const Duration(milliseconds: 200),
                                     curve: Curves.easeInOut,
                                   );
+                                } catch (_) {
+                                  // ignore if position isn't ready
                                 }
                               });
                             },
