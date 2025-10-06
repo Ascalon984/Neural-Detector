@@ -50,21 +50,34 @@ jobs:
 
       - name: Install dependencies
         run: |
-          echo "Checking Flutter and Dart installation..."
+          echo "Cleaning Flutter..."
+          flutter clean
+          
+          echo "Removing pubspec.lock..."
+          rm -f pubspec.lock
+          
+          echo "Setting up Flutter..."
+          flutter config --no-analytics
+          flutter precache
+          
+          echo "Verifying Flutter installation..."
           flutter --version
-          dart --version
-          
-          echo "Analyzing project structure..."
-          ls -la
-          cat pubspec.yaml
-          
-          echo "Running Flutter doctor..."
           flutter doctor -v
           
-          echo "Installing dependencies..."
+          echo "Installing dependencies (attempt 1)..."
           flutter pub get --verbose || {
-            echo "Error installing dependencies. Checking pubspec.lock..."
-            [ -f pubspec.lock ] && cat pubspec.lock
+            echo "First attempt failed, retrying after cache clean..."
+            flutter pub cache clean
+            flutter pub get --verbose
+          } || {
+            echo "Both attempts failed. Checking environment..."
+            echo "PWD: $PWD"
+            echo "Flutter config:"
+            flutter config
+            echo "Directory contents:"
+            ls -la
+            echo "pubspec.yaml contents:"
+            cat pubspec.yaml
             exit 1
           }
           
