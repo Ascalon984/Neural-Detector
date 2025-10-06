@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' show File, Platform;
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:path/path.dart' as p;
@@ -7,6 +7,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'settings_manager.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+// Web-only helper for triggering downloads. Imported via relative path; this
+// file exists only for web.
+import 'exporter_web.dart' if (dart.library.html) 'exporter_web.dart' as web_export;
 // ...existing code...
 
 class Exporter {
@@ -107,7 +112,27 @@ class Exporter {
   // Prompt the user to select a destination folder and save both CSV and XLSX there.
   // Returns the path to the saved CSV file on success, or null on cancel/failure.
   static Future<String?> exportToFolder(List<Map<String, dynamic>> rows, {String? suggestedName}) async {
-    // Let user pick a directory. file_picker supports directory picking on many platforms.
+    // Web: browsers cannot write to arbitrary local folders. Instead trigger a
+    // download for both CSV and XLSX.
+    final baseName = suggestedName ?? 'scan_history_${DateTime.now().millisecondsSinceEpoch}';
+    final csvContent = generateCsv(rows);
+    final xlsxBytes = generateXlsxBytes(rows);
+
+    if (kIsWeb) {
+      // Trigger downloads in browser
+      try {
+        final csvBytes = Uint8List.fromList(csvContent.codeUnits);
+        await web_export.saveBytesAsFile(csvBytes, '$baseName.csv');
+        if (xlsxBytes.isNotEmpty) {
+          await web_export.saveBytesAsFile(Uint8List.fromList(xlsxBytes), '$baseName.xlsx');
+        }
+        return baseName; // return base name as a 'path' indicator
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Non-web: Let user pick a directory. file_picker supports directory picking on many platforms.
     String? selectedDirectory;
     try {
       final result = await FilePicker.platform.getDirectoryPath();
@@ -118,13 +143,10 @@ class Exporter {
 
     if (selectedDirectory == null) return null;
 
-  final baseName = suggestedName ?? 'scan_history_${DateTime.now().millisecondsSinceEpoch}';
-    final csvContent = generateCsv(rows);
     final csvPath = p.join(selectedDirectory, '$baseName.csv');
     final csvFile = File(csvPath);
     await csvFile.writeAsString(csvContent, flush: true);
 
-    final xlsxBytes = generateXlsxBytes(rows);
     if (xlsxBytes.isNotEmpty) {
       final xlsxPath = p.join(selectedDirectory, '$baseName.xlsx');
       final xlsxFile = File(xlsxPath);
@@ -141,6 +163,19 @@ class Exporter {
     final xlsxBytes = generateXlsxBytes(rows);
     final csvContent = generateCsv(rows);
     final baseName = suggestedName ?? 'scan_history_${DateTime.now().millisecondsSinceEpoch}';
+    // If running on web, trigger downloads
+    if (kIsWeb) {
+      try {
+        final csvBytes = Uint8List.fromList(csvContent.codeUnits);
+        await web_export.saveBytesAsFile(csvBytes, '$baseName.csv');
+        if (xlsxBytes.isNotEmpty) {
+          await web_export.saveBytesAsFile(Uint8List.fromList(xlsxBytes), '$baseName.xlsx');
+        }
+        return baseName;
+      } catch (_) {
+        // fall through
+      }
+    }
 
     // Try Android platform channel first
     try {
