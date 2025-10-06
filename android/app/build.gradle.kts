@@ -35,6 +35,11 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Disable code shrinking/minification for now to avoid R8 errors
+            // caused by missing ML Kit language modules. Re-enable after
+            // adding explicit ML Kit dependencies and ProGuard rules.
+            isMinifyEnabled = false
+            shrinkResources = false
         }
     }
 }
