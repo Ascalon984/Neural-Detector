@@ -103,7 +103,8 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _buildHeader(),
                   ),
 
-                  const SizedBox(height: 28),
+            // increase spacing so the search/quick-actions block doesn't crowd the subtitle
+            const SizedBox(height: 44),
                   
                   // Search bar futuristik
                   _buildSearchBar(),
