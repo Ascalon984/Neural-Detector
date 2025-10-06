@@ -93,15 +93,16 @@ class _HomeScreenState extends State<HomeScreen>
           // Content utama
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              // lift content higher on the screen
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
                     // Header dengan animasi (size to content so content below sits right after subtitle)
                     _buildHeader(),
 
                   // minimal spacing after subtitle
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 2),
                   
                   // Search bar futuristik
                   _buildSearchBar(),
@@ -257,7 +258,8 @@ class _HomeScreenState extends State<HomeScreen>
             );
           },
         ),
-        const SizedBox(height: 10),
+        // tighter spacing between title and subtitle
+        const SizedBox(height: 4),
         const Text(
           'Quantum AI detection system with neural analysis',
           style: TextStyle(
