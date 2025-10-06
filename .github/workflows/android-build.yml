@@ -5,12 +5,16 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       JAVA_TOOL_OPTIONS: -Xmx4g
+      FLUTTER_VERSION: '3.13.9'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +29,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.13.9'
+          channel: 'stable'
           cache: true
 
       - name: Install Android SDK command-line tools
@@ -51,7 +56,9 @@ jobs:
 
       - name: Build APK (arm64)
         run: |
+          flutter doctor -v
           flutter clean
+          flutter pub get
           flutter build apk --release --target-platform android-arm64 --no-shrink --verbose
 
       - name: Upload APK
