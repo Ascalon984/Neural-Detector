@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      JAVA_TOOL_OPTIONS: -Xmx4g
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +24,8 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          flutter-version: '3.13.9'
+          cache: true
 
       - name: Install Android SDK command-line tools
         run: |
@@ -49,8 +51,8 @@ jobs:
 
       - name: Build APK (arm64)
         run: |
-          export JAVA_TOOL_OPTIONS="-Xmx4g -XX:+UseG1GC"
-          flutter build apk --release --target-platform android-arm64 --no-shrink
+          flutter clean
+          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
