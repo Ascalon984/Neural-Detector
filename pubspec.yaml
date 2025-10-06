@@ -19,7 +19,7 @@ dependencies:
   animated_text_kit: ^4.2.2
   flutter_animate: ^4.2.0
   glass_kit: ^3.0.0
-  camera: ^0.11.2
+  camera: ^0.10.5+5
   permission_handler: ^10.4.5
   provider: ^6.0.5
   ffi: ^1.2.1
