@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ai_text_checker
 
 A new Flutter project.
@@ -14,3 +15,6 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# Neural-Detector
+>>>>>>> 85f8846385fec2d87cbd5dc416662dc000e0dbe6
