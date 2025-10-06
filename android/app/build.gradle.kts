@@ -28,18 +28,23 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Restrict packaged locales to reduce APK size (adjust as needed)
+        resConfigs("en", "id")
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
-            // Disable code shrinking/minification for now to avoid R8 errors
-            // caused by missing ML Kit language modules. Re-enable after
-            // adding explicit ML Kit dependencies and ProGuard rules.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Enable code shrinking and resource shrinking to reduce APK size.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // Use default optimize proguard file and project rules
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

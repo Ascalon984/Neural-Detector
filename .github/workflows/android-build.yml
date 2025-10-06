@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, optimize/android-size ]
 
 permissions:
   contents: read
@@ -32,21 +32,51 @@ jobs:
           # intentionally not pinning flutter-version to allow GitHub runner to use latest stable Flutter
           # which provides a newer Dart SDK compatible with current plugin versions
 
-      - name: Install Android SDK command-line tools
+      - name: Cache Android SDK cmdline-tools and NDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools
+            ${{ env.ANDROID_SDK_ROOT }}/ndk
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Install Android SDK command-line tools (robust)
         run: |
+          set -euo pipefail
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          curl -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
-          unzip -q tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            echo 'Downloading Android cmdline-tools (with resume)'
+            curl -C - -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
+            unzip -q tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+            mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          else
+            echo 'cmdline-tools already present in cache'
+          fi
 
-      - name: Accept Android licenses
+      - name: Install Android SDK components (with retry)
         run: |
+          set -euo pipefail
+          PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973")
+          MAX_RETRIES=3
+          for pkg in "${PKGS[@]}"; do
+            i=0
+            until [ $i -ge $MAX_RETRIES ]; do
+              echo "Installing $pkg (attempt $((i+1))/$MAX_RETRIES)..."
+              if yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg"; then
+                echo "Installed $pkg"
+                break
+              fi
+              i=$((i+1))
+              echo "Install $pkg failed, retrying in 10s..."
+              sleep 10
+            done
+            if [ $i -ge $MAX_RETRIES ]; then
+              echo "Failed to install $pkg after $MAX_RETRIES attempts"
+              exit 1
+            fi
+          done
+          echo "Accepting licenses"
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
-
-      - name: Install Android SDK components
-        run: |
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
       - name: Install dependencies
         run: |
@@ -112,3 +142,35 @@ jobs:
           path: |
             build/app/outputs/**/*.apk
           if-no-files-found: warn
+
+  optimize-size:
+    name: Optimize Android size (AAB + split-per-abi)
+    runs-on: ubuntu-latest
+    needs: build-apk
+    if: github.ref == 'refs/heads/optimize/android-size' || startsWith(github.head_ref, 'optimize/android-size')
+    env:
+      JAVA_TOOL_OPTIONS: -Xmx4g
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build AppBundle and analyze size
+        run: flutter build appbundle --release --analyze-size
+
+      - name: Build split-per-ABI APKs
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --tree-shake-icons
+
+      - name: Upload artifacts (AAB, APKs, size report)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            build/app/outputs/**/*.aab
+            build/app/outputs/**/*.apk
+            build/**/app_size_*.json
