@@ -9,9 +9,9 @@ import 'dart:typed_data';
 import 'settings_manager.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// Web-only helper for triggering downloads. Imported via relative path; this
-// file exists only for web.
-import 'exporter_web.dart' if (dart.library.html) 'exporter_web.dart' as web_export;
+// Conditional import: use the web implementation when dart:html is available,
+// otherwise fall back to a non-web stub that does nothing.
+import 'exporter_stub.dart' if (dart.library.html) 'exporter_web.dart' as web_export;
 // ...existing code...
 
 class Exporter {
