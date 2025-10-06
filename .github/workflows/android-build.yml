@@ -76,9 +76,10 @@ jobs:
               if [ "$pkg" = "platform-tools" ]; then
                 echo "Attempting direct download of platform-tools as fallback"
                 mkdir -p $ANDROID_SDK_ROOT/platform-tools
-                curl -sSfL https://dl.google.com/android/repository/platform-tools_r33.0.3-linux.zip -o platform-tools.zip
-                unzip -q platform-tools.zip -d $ANDROID_SDK_ROOT
-                echo "Platform-tools extracted"
+                # download with resume support and overwrite quietly when extracting
+                curl -C - -sSfL https://dl.google.com/android/repository/platform-tools-latest-linux.zip -o platform-tools.zip
+                unzip -oq platform-tools.zip -d $ANDROID_SDK_ROOT
+                echo "Platform-tools extracted (fallback)"
                 break
               fi
               exit 1
