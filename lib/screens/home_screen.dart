@@ -97,14 +97,11 @@ class _HomeScreenState extends State<HomeScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header dengan animasi (constrained to a smaller fraction of screen)
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.15,
-                    child: _buildHeader(),
-                  ),
+                    // Header dengan animasi (size to content so content below sits right after subtitle)
+                    _buildHeader(),
 
-            // increase spacing so the search/quick-actions block doesn't crowd the subtitle
-            const SizedBox(height: 18),
+                  // minimal spacing after subtitle
+                  const SizedBox(height: 6),
                   
                   // Search bar futuristik
                   _buildSearchBar(),
