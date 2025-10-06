@@ -39,7 +39,7 @@ android {
             // caused by missing ML Kit language modules. Re-enable after
             // adding explicit ML Kit dependencies and ProGuard rules.
             isMinifyEnabled = false
-            shrinkResources = false
+            isShrinkResources = false
         }
     }
 }
