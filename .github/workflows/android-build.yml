@@ -58,13 +58,47 @@ jobs:
           set -euo pipefail
           PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973")
           MAX_RETRIES=3
+
+          install_platform_tools_fallback() {
+            echo "Attempting direct download of platform-tools (fallback)"
+            curl -C - -fSL --retry 3 --retry-delay 5 \
+              "https://dl.google.com/android/repository/platform-tools-latest-linux.zip" \
+              -o platform-tools.zip
+
+            TMP_DIR=$(mktemp -d)
+            unzip -q platform-tools.zip -d "$TMP_DIR"
+
+            # Remove any existing install so we won't get interactive prompts
+            sudo rm -rf "$ANDROID_SDK_ROOT/platform-tools"
+            sudo mkdir -p "$ANDROID_SDK_ROOT/platform-tools"
+
+            # Move extracted files into place (preserve mode, avoid interactive prompts)
+            sudo cp -a "$TMP_DIR/platform-tools/." "$ANDROID_SDK_ROOT/platform-tools/"
+            sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT/platform-tools"
+            sudo chmod -R a+rX "$ANDROID_SDK_ROOT/platform-tools"
+
+            rm -rf platform-tools.zip "$TMP_DIR"
+            echo "Platform-tools installed successfully (fallback)"
+          }
+
           for pkg in "${PKGS[@]}"; do
             i=0
             until [ $i -ge $MAX_RETRIES ]; do
               echo "Installing $pkg (attempt $((i+1))/$MAX_RETRIES)..."
-              if yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg"; then
-                echo "Installed $pkg"
-                break
+              if [ "$pkg" = "platform-tools" ]; then
+                # Try sdkmanager first; if it fails we'll fall back to direct download
+                if yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg"; then
+                  echo "Installed $pkg"
+                  break
+                else
+                  echo "sdkmanager failed for platform-tools; will try direct download fallback"
+                  install_platform_tools_fallback && break
+                fi
+              else
+                if yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg"; then
+                  echo "Installed $pkg"
+                  break
+                fi
               fi
               i=$((i+1))
               echo "Install $pkg failed, retrying in 10s..."
@@ -72,23 +106,11 @@ jobs:
             done
             if [ $i -ge $MAX_RETRIES ]; then
               echo "Failed to install $pkg after $MAX_RETRIES attempts"
-              # If platform-tools fails via sdkmanager repeatedly, try direct download
-              if [ "$pkg" = "platform-tools" ]; then
-                echo "Attempting direct download of platform-tools as fallback"
-                mkdir -p $ANDROID_SDK_ROOT/platform-tools
-                # download with resume support and overwrite quietly when extracting
-                curl -C - -sSfL https://dl.google.com/android/repository/platform-tools-latest-linux.zip -o platform-tools.zip
-                # Remove any existing platform-tools to avoid interactive overwrite prompts
-                sudo rm -rf $ANDROID_SDK_ROOT/platform-tools || true
-                # Extract with sudo and overwrite quietly
-                sudo unzip -oq platform-tools.zip -d $ANDROID_SDK_ROOT
-                echo "Platform-tools extracted (fallback)"
-                break
-              fi
               exit 1
             fi
           done
-          echo "Accepting licenses"
+
+          echo "Accepting Android SDK licenses (non-interactive)"
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
 
       - name: Install dependencies
