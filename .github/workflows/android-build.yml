@@ -78,6 +78,8 @@ jobs:
                 mkdir -p $ANDROID_SDK_ROOT/platform-tools
                 # download with resume support and overwrite quietly when extracting
                 curl -C - -sSfL https://dl.google.com/android/repository/platform-tools-latest-linux.zip -o platform-tools.zip
+                # Remove any existing platform-tools to avoid interactive overwrite prompts
+                rm -rf $ANDROID_SDK_ROOT/platform-tools
                 unzip -oq platform-tools.zip -d $ANDROID_SDK_ROOT
                 echo "Platform-tools extracted (fallback)"
                 break
