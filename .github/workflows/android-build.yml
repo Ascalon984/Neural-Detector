@@ -50,12 +50,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          flutter config --no-analytics
-          flutter doctor -v
-          dart --version
+          echo "Checking Flutter and Dart installation..."
           flutter --version
-          flutter pub cache clean
-          flutter pub get --verbose
+          dart --version
+          
+          echo "Analyzing project structure..."
+          ls -la
+          cat pubspec.yaml
+          
+          echo "Running Flutter doctor..."
+          flutter doctor -v
+          
+          echo "Installing dependencies..."
+          flutter pub get --verbose || {
+            echo "Error installing dependencies. Checking pubspec.lock..."
+            [ -f pubspec.lock ] && cat pubspec.lock
+            exit 1
+          }
           
       - name: Generate launcher icons
         run: |
