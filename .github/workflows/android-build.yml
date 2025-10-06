@@ -49,6 +49,8 @@ jobs:
             curl -C - -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
             unzip -q tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
             mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+            # Make SDK root writable by the runner to allow sdkmanager to install components
+            sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT"
           else
             echo 'cmdline-tools already present in cache'
           fi
@@ -57,6 +59,8 @@ jobs:
         run: |
           set -euo pipefail
           PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973")
+          # Ensure sdk root is owned by the current user so sdkmanager can write files
+          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
           MAX_RETRIES=3
 
           install_platform_tools_fallback() {
@@ -81,21 +85,49 @@ jobs:
             echo "Platform-tools installed successfully (fallback)"
           }
 
+          package_installed_check() {
+            pkg="$1"
+            case "$pkg" in
+              "platform-tools")
+                [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && return 0 || return 1
+                ;;
+              platforms\;*)
+                ver=${pkg#platforms;}
+                [ -d "$ANDROID_SDK_ROOT/platforms/$ver" ] && return 0 || return 1
+                ;;
+              build-tools\;*)
+                ver=${pkg#build-tools;}
+                [ -d "$ANDROID_SDK_ROOT/build-tools/$ver" ] && return 0 || return 1
+                ;;
+              ndk\;*)
+                ver=${pkg#ndk;}
+                [ -d "$ANDROID_SDK_ROOT/ndk/$ver" ] && return 0 || return 1
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+          }
+
           for pkg in "${PKGS[@]}"; do
             i=0
             until [ $i -ge $MAX_RETRIES ]; do
               echo "Installing $pkg (attempt $((i+1))/$MAX_RETRIES)..."
               if [ "$pkg" = "platform-tools" ]; then
                 # Try sdkmanager first; if it fails we'll fall back to direct download
-                if yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg"; then
+                echo "Running sdkmanager for $pkg (logged to sdkmanager_${pkg//;/_}.log)"
+                yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" > "sdkmanager_${pkg//;/_}.log" 2>&1 || true
+                if package_installed_check "$pkg"; then
                   echo "Installed $pkg"
                   break
                 else
-                  echo "sdkmanager failed for platform-tools; will try direct download fallback"
+                  echo "sdkmanager did not install $pkg; will try direct download fallback"
                   install_platform_tools_fallback && break
                 fi
               else
-                if yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg"; then
+                echo "Running sdkmanager for $pkg (logged to sdkmanager_${pkg//;/_}.log)"
+                yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" > "sdkmanager_${pkg//;/_}.log" 2>&1 || true
+                if package_installed_check "$pkg"; then
                   echo "Installed $pkg"
                   break
                 fi
