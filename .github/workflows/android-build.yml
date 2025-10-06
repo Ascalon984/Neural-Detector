@@ -1,9 +1,9 @@
-name: Android CI - Build optimized artifacts
+name: Build Android APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main, optimize/android-size ]
+    branches: [ main, master, optimize/android-size ]
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -49,7 +49,42 @@ jobs:
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          # Debug info
+          echo "Current directory structure:"
+          pwd
+          ls -la
+          
+          echo "Environment variables:"
+          env
+          
+          echo "Flutter and Dart versions:"
+          flutter --version
+          dart --version
+          
+          # Try running pub get with full debug output
+          echo "Running pub get with debug..."
+          flutter pub get --verbose 2>&1 | tee pub_get_log.txt
+          
+          if [ $? -ne 0 ]; then
+            echo "Error during pub get. Detailed debugging:"
+            echo "1. Checking pubspec.yaml..."
+            cat pubspec.yaml
+            
+            echo "2. Running pub outdated to check compatibility..."
+            flutter pub outdated || true
+            
+            echo "3. Running pub deps to show dependency tree..."
+            flutter pub deps || true
+            
+            echo "4. Checking for conflicting dependencies..."
+            flutter pub deps | grep -i conflict || true
+            
+            echo "5. Full pub get log:"
+            cat pub_get_log.txt
+            
+            exit 1
+          fi
           
       - name: Generate launcher icons
         run: |
@@ -57,20 +92,51 @@ jobs:
             flutter pub run flutter_launcher_icons:main
           fi
 
-      - name: Build AAB and analyze size
+      - name: Build APK (arm64)
         run: |
+          flutter doctor -v
           flutter clean
-          flutter build appbundle --release --analyze-size
-        env:
-          JAVA_TOOL_OPTIONS: -Xmx4g
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose
+      - name: List build outputs (debug)
+        run: |
+          echo "Listing build/app/outputs"
+          ls -la build/app/outputs || true
+          echo "Recursively listing APK files"
+          find build/app/outputs -type f -name "*.apk" -print || true
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-artifacts
+          path: |
+            build/app/outputs/**/*.apk
+          if-no-files-found: warn
+
+  optimize-size:
+    name: Optimize Android size (AAB + split-per-abi)
+    runs-on: ubuntu-latest
+    needs: build-apk
+    if: github.ref == 'refs/heads/optimize/android-size' || startsWith(github.head_ref, 'optimize/android-size')
+    env:
+      JAVA_TOOL_OPTIONS: -Xmx4g
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build AppBundle and analyze size
+        run: flutter build appbundle --release --analyze-size
 
       - name: Build split-per-ABI APKs
-        run: |
-          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --tree-shake-icons
-        env:
-          JAVA_TOOL_OPTIONS: -Xmx4g
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --tree-shake-icons
 
-      - name: Upload artifacts
+      - name: Upload artifacts (AAB, APKs, size report)
         uses: actions/upload-artifact@v4
         with:
           name: android-artifacts

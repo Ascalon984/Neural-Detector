@@ -28,20 +28,19 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Limit resources to required locales to reduce APK size
+        // Restrict packaged locales to reduce APK size (adjust as needed)
         resConfigs("en", "id")
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
-            // Enable code shrinking/minification (R8) and resource shrinking.
-            // Keep an eye on runtime errors related to reflection or native libs
-            // and add ProGuard rules as needed.
+            // Enable code shrinking and resource shrinking to reduce APK size.
             isMinifyEnabled = true
             isShrinkResources = true
+            // Use default optimize proguard file and project rules
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
