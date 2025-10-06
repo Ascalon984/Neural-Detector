@@ -47,5 +47,5 @@ flutter_icons:
   ios: false
   image_path: "assets/app_icon.png"
 
-dependency_overrides:
-  google_mlkit_commons: ^0.11.0
+# dependency_overrides:
+#  google_mlkit_commons: ^0.11.0
