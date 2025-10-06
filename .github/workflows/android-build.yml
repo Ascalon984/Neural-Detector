@@ -191,10 +191,19 @@ jobs:
 
       - name: Build APK (arm64)
         run: |
-          flutter doctor -v
-          flutter clean
-          flutter pub get
-          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose
+          set -euo pipefail
+          echo "=== flutter doctor ==="
+          flutter doctor -v || true
+          echo "=== flutter clean ==="
+          flutter clean || true
+          echo "=== flutter pub get ==="
+          flutter pub get --verbose || true
+          echo "=== flutter build apk (arm64) - start ==="
+          # Capture full build output to a log file for debugging
+          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose > build_apk_arm64.log 2>&1 || true
+          echo "Build exit code: $?"
+          echo "--- Last 200 lines of build log ---"
+          tail -n 200 build_apk_arm64.log || true
       - name: List build outputs (debug)
         run: |
           echo "Listing build/app/outputs"
@@ -207,6 +216,15 @@ jobs:
         with:
           name: apk-artifacts
           path: |
+            build/app/outputs/**/*.apk
+          if-no-files-found: warn
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build_apk_arm64.log
             build/app/outputs/**/*.apk
           if-no-files-found: warn
 
