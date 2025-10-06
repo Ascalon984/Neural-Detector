@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/animation_config.dart';
 import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
 import '../utils/history_manager.dart';
 import '../models/scan_history.dart' as Model;
 import '../utils/app_localizations.dart';
@@ -223,7 +224,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                           fontWeight: FontWeight.w900,
                           color: Colors.cyan.shade300,
                           letterSpacing: 2,
-                          fontFamily: 'Courier',
+                          fontFamily: AppTheme.defaultFontFamily,
                         ),
                       ),
                     ),
@@ -862,8 +863,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildDetailItem(String label, String value) {

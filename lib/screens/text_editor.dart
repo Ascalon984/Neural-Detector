@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/animation_config.dart';
 import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
 import '../utils/text_analyzer.dart';
 import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
@@ -263,7 +264,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       fontWeight: FontWeight.w900,
                       color: Colors.cyan.shade300,
                       letterSpacing: 2,
-                      fontFamily: 'Courier',
+                                  fontFamily: AppTheme.defaultFontFamily,
                     ),
                   ),
                 ),

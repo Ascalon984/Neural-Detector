@@ -15,6 +15,7 @@ import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
 import '../utils/app_localizations.dart';
+import '../theme/app_theme.dart';
 
 class FileUploadScreen extends StatefulWidget {
   const FileUploadScreen({super.key});
@@ -201,7 +202,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     fontWeight: FontWeight.w900,
                     color: Colors.cyan.shade300,
                     letterSpacing: 2,
-                    fontFamily: 'Courier',
+                    fontFamily: AppTheme.defaultFontFamily,
                   ),
                 ),
                 Text(

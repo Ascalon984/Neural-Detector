@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../config/animation_config.dart';
+import '../theme/app_theme.dart';
 
 class CyberAppBar extends StatefulWidget implements PreferredSizeWidget {
   final String title;
@@ -242,7 +243,7 @@ class _CyberAppBarState extends State<CyberAppBar>
               fontSize: 24,
               fontWeight: FontWeight.w900,
               letterSpacing: 2,
-              fontFamily: 'Courier',
+                                fontFamily: AppTheme.defaultFontFamily,
               shadows: [
                 Shadow(
                   color: widget.primaryColor.withOpacity(0.5 * _glowAnimation.value),

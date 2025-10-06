@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/animation_config.dart';
 import '../theme/theme_provider.dart';
+import '../theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<int>? onNavTap;
@@ -222,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen>
                           fontWeight: FontWeight.w900,
                           color: Colors.cyan.shade300,
                           letterSpacing: 2,
-                          fontFamily: 'Courier',
+                          fontFamily: AppTheme.defaultFontFamily,
                           shadows: [
                             Shadow(
                               color: Colors.cyan.withOpacity(0.4),
@@ -240,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen>
                           fontWeight: FontWeight.w900,
                           color: Colors.pink.shade300,
                           letterSpacing: 2,
-                          fontFamily: 'Courier',
+                          fontFamily: AppTheme.defaultFontFamily,
                           shadows: [
                             Shadow(
                               color: Colors.pink.withOpacity(0.4),
@@ -676,8 +677,8 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ),
-          ),
-        );
+          );
+        },
       },
     );
   }

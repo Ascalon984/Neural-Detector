@@ -28,11 +28,14 @@ class AppTheme {
   static const Color textSecondary = Color(0xB3FFFFFF);
   static const Color textTertiary = Color(0x80FFFFFF);
 
+  // default font family for the app (use Inter via Google Fonts)
+  static final String defaultFontFamily = GoogleFonts.inter().fontFamily ?? 'Inter';
+
   static final ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
     primarySwatch: Colors.blue,
     scaffoldBackgroundColor: primaryNavy,
-    fontFamily: GoogleFonts.inter().fontFamily,
+    fontFamily: defaultFontFamily,
     textTheme: GoogleFonts.interTextTheme().apply(
       bodyColor: textPrimary,
       displayColor: textPrimary,
