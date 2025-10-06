@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen>
                 children: [
                   // Header dengan animasi (constrained to a smaller fraction of screen)
                   SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.22,
+                    height: MediaQuery.of(context).size.height * 0.15,
                     child: _buildHeader(),
                   ),
 
