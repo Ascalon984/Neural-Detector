@@ -200,8 +200,14 @@ jobs:
           flutter pub get --verbose || true
           echo "=== flutter build apk (arm64) - start ==="
           # Capture full build output to a log file for debugging
-          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose > build_apk_arm64.log 2>&1 || true
-          echo "Build exit code: $?"
+          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose > build_apk_arm64.log 2>&1
+          BUILD_EXIT_CODE=$?
+          echo "Build exit code: $BUILD_EXIT_CODE"
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "flutter build failed; printing last 500 lines of log for quick inspection"
+            tail -n 500 build_apk_arm64.log || true
+            exit $BUILD_EXIT_CODE
+          fi
           echo "--- Last 200 lines of build log ---"
           tail -n 200 build_apk_arm64.log || true
       - name: List build outputs (debug)
@@ -225,7 +231,7 @@ jobs:
           name: build-logs
           path: |
             build_apk_arm64.log
-            build/app/outputs/**/*.apk
+            build/**
           if-no-files-found: warn
 
   optimize-size:
