@@ -3,19 +3,12 @@ import 'package:provider/provider.dart';
 import '../config/animation_config.dart';
 import '../theme/theme_provider.dart';
 import '../theme/app_theme.dart';
+import 'dart:math' as math;
 import '../utils/text_analyzer.dart';
 import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
 import '../utils/app_localizations.dart';
-
-// ScrollBehavior to remove scrollbars (useful for web where scrollbars can be intrusive)
-class _NoScrollbarScrollBehavior extends MaterialScrollBehavior {
-  @override
-  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
-    return child; // don't build any scrollbar
-  }
-}
 
 class TextEditorScreen extends StatefulWidget {
   const TextEditorScreen({super.key});
@@ -25,16 +18,24 @@ class TextEditorScreen extends StatefulWidget {
 }
 
 class _TextEditorScreenState extends State<TextEditorScreen>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _controller;
-  late Animation<double> _scanAnimation;
+    with TickerProviderStateMixin {
+  late AnimationController _backgroundController;
+  late AnimationController _glowController;
+  late AnimationController _scanController;
+  late AnimationController _pulseController;
+  late AnimationController _typingController;
+  late AnimationController _rotateController;
+  
+  late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
+  late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _textGlowAnimation;
+  late Animation<Color?> _textColorAnimation;
+  late Animation<double> _rotateAnimation;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
-  final GlobalKey _editorKey = GlobalKey();
   final ScrollController _editorScrollController = ScrollController();
   final ScrollController _outerScrollController = ScrollController();
   bool _isAnalyzing = false;
@@ -46,25 +47,56 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   void initState() {
     super.initState();
     
-    if (AnimationConfig.enableBackgroundAnimations) {
-      _controller = AnimationController(
-        duration: const Duration(seconds: 3),
-        vsync: this,
-      )..repeat(reverse: true);
+    // Initialize multiple animation controllers for different effects
+    _backgroundController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
 
-      _scanAnimation = Tween<double>(
+    _glowController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _scanController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+
+    _pulseController = AnimationController(
+      duration: Duration(seconds: 1, milliseconds: 500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _typingController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    _rotateController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
+
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _backgroundAnimation = Tween<double>(
         begin: 0.0,
         end: 1.0,
-      ).animate(CurvedAnimation(
-        parent: _controller!,
-        curve: Curves.easeInOut,
-      ));
+      ).animate(_backgroundController);
 
       _glowAnimation = Tween<double>(
         begin: 0.3,
         end: 0.8,
       ).animate(CurvedAnimation(
-        parent: _controller!,
+        parent: _glowController,
+        curve: Curves.easeInOut,
+      ));
+
+      _scanAnimation = Tween<double>(
+        begin: -0.2,
+        end: 1.2,
+      ).animate(CurvedAnimation(
+        parent: _scanController,
         curve: Curves.easeInOut,
       ));
 
@@ -72,7 +104,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         begin: 0.98,
         end: 1.02,
       ).animate(CurvedAnimation(
-        parent: _controller!,
+        parent: _pulseController,
         curve: Curves.easeInOut,
       ));
 
@@ -80,76 +112,84 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         begin: 0.1,
         end: 0.3,
       ).animate(CurvedAnimation(
-        parent: _controller!,
+        parent: _glowController,
         curve: Curves.easeInOut,
       ));
+
+      _textColorAnimation = ColorTween(
+        begin: Colors.cyan.shade300,
+        end: Colors.pink.shade300,
+      ).animate(CurvedAnimation(
+        parent: _glowController,
+        curve: Curves.easeInOut,
+      ));
+      _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_rotateController);
     } else {
+      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
+      _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
-      _glowAnimation = AlwaysStoppedAnimation(0.3);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _textGlowAnimation = AlwaysStoppedAnimation(0.1);
+      _textGlowAnimation = AlwaysStoppedAnimation(0.2);
+      _textColorAnimation = AlwaysStoppedAnimation(Colors.cyan.shade300);
+      _rotateAnimation = AlwaysStoppedAnimation(0.0);
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _backgroundController.dispose();
+    _glowController.dispose();
+    _scanController.dispose();
+    _pulseController.dispose();
+    _typingController.dispose();
+  _rotateController.dispose();
     _textController.dispose();
     _textFocusNode.dispose();
     _editorScrollController.dispose();
+    _outerScrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: Provider.of<ThemeProvider>(context).backgroundColor,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Background dengan efek cyberpunk
-          _buildCyberpunkBackground(),
+          // Animated cyberpunk background
+          _buildAnimatedBackground(),
           
-          // Grid pattern overlay
-          _buildGridPattern(),
+          // Grid overlay effect
+          _buildGridOverlay(),
           
           // Scan line effect
           _buildScanLine(),
           
-          // Content utama
+          // Glitch effect overlay
+          _buildGlitchEffect(),
+          
+          // Floating particles effect
+          _buildFloatingParticles(),
+          // Main content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: ScrollConfiguration(
-                behavior: _NoScrollbarScrollBehavior(),
+                behavior: const MaterialScrollBehavior().copyWith(
+                  scrollbars: false,
+                ),
                 child: SingleChildScrollView(
                   controller: _outerScrollController,
                   reverse: true,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header dengan animasi
                       _buildHeader(),
-
-                      const SizedBox(height: 18),
-
-                      // Text editor area (not expanded so keyboard won't cover it)
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.of(context).size.height * 0.55,
-                          minHeight: 200,
-                        ),
-                        child: _buildTextEditorArea(),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Stats bar
+                      const SizedBox(height: 25),
+                      _buildTextEditorArea(),
+                      const SizedBox(height: 25),
                       _buildStatsBar(),
-
-                      const SizedBox(height: 20),
-
-                      // Action buttons
+                      const SizedBox(height: 25),
                       _buildActionButtons(),
                     ],
                   ),
@@ -158,67 +198,36 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             ),
           ),
           
-          // Corner borders decorative
-          _buildCornerBorders(),
+          // Cyberpunk frame borders
+          _buildCyberpunkFrame(),
         ],
       ),
     );
   }
 
-  Widget _buildCyberpunkBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment.topLeft,
-          radius: 1.5,
-          colors: [
-            Colors.black,
-            Colors.purple.shade900.withOpacity(0.3),
-            Colors.blue.shade900.withOpacity(0.1),
-          ],
-        ),
-      ),
-      child: AnimationConfig.enableBackgroundAnimations
-          ? CustomPaint(
-              painter: _CyberpunkBackgroundPainter(
-                animation: _controller ?? AlwaysStoppedAnimation(0.0),
-              ),
-            )
-          : null,
-    );
-  }
-
-  Widget _buildGridPattern() {
-    return IgnorePointer(
-      child: Opacity(
-        opacity: 0.05,
-        child: CustomPaint(
-          painter: _GridPainter(),
-          size: Size.infinite,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScanLine() {
-    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+  Widget _buildAnimatedBackground() {
     return AnimatedBuilder(
-      animation: _controller ?? AlwaysStoppedAnimation(0.0),
+      animation: _backgroundAnimation,
       builder: (context, child) {
-        return Positioned(
-          top: _scanAnimation.value * MediaQuery.of(context).size.height,
-          child: Container(
-            width: MediaQuery.of(context).size.width,
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  Colors.cyan.withOpacity(0.6),
-                  Colors.pink.withOpacity(0.6),
-                  Colors.transparent,
-                ],
-              ),
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(
+                  const Color(0xFF0a0a0a),
+                  const Color(0xFF1a0033),
+                  _backgroundAnimation.value,
+                )!,
+                Color.lerp(
+                  const Color(0xFF0d1117),
+                  const Color(0xFF0a0e27),
+                  _backgroundAnimation.value,
+                )!,
+                Colors.black,
+              ],
+              stops: const [0.0, 0.5, 1.0],
             ),
           ),
         );
@@ -226,64 +235,138 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
+  Widget _buildGridOverlay() {
+    return IgnorePointer(
+      child: CustomPaint(
+        painter: _GridPainter(),
+        size: Size.infinite,
+      ),
+    );
+  }
+
+  Widget _buildScanLine() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _scanAnimation,
+      builder: (context, child) {
+        return Positioned(
+          top: _scanAnimation.value * MediaQuery.of(context).size.height,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  Colors.cyan.withOpacity(0.8),
+                  Colors.pink.withOpacity(0.8),
+                  Colors.transparent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyan.withOpacity(0.5),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGlitchEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _glowAnimation,
+        builder: (context, child) {
+          return Opacity(
+            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.pink.withOpacity(0.1),
+                    Colors.cyan.withOpacity(0.1),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Row(
           children: [
-            AnimatedBuilder(
-              animation: _controller ?? AlwaysStoppedAnimation(0.0),
-              builder: (context, child) {
-                return Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
+                    blurRadius: 20,
+                    spreadRadius: 3,
+                  ),
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.edit_document,
+                color: Colors.white,
+                size: 35,
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
                       colors: [
                         Colors.cyan.withOpacity(_glowAnimation.value),
                         Colors.pink.withOpacity(_glowAnimation.value),
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyan.withOpacity(0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
+                    ).createShader(bounds),
+                    child: const Text(
+                      'NEURAL EDITOR',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 3,
+                        fontFamily: 'Orbitron',
                       ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.edit_document,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 15),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    AppLocalizations.t('neural_editor'),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.cyan.shade300,
-                      letterSpacing: 2,
-                                  fontFamily: AppTheme.defaultFontFamily,
                     ),
                   ),
-                ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
+                  const SizedBox(height: 5),
+                  Text(
                     'REAL-TIME AI ANALYSIS',
                     style: TextStyle(
                       color: Colors.pink.shade300,
@@ -293,51 +376,44 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       fontFamily: 'Courier',
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-        ),
-        
-        const SizedBox(height: 10),
-        
-        const Text(
-          'Type or paste text for quantum neural analysis',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 14,
-            fontWeight: FontWeight.w300,
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildTextEditorArea() {
     return AnimatedBuilder(
-      animation: _controller ?? AlwaysStoppedAnimation(0.0),
+      animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: _pulseAnimation.value,
           child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+              minHeight: 250,
+            ),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.cyan.withOpacity(0.5),
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(25),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.1),
-                  Colors.purple.shade900.withOpacity(0.1),
-                  Colors.black.withOpacity(0.8),
+                  Colors.blue.shade900.withOpacity(0.2),
+                  Colors.purple.shade900.withOpacity(0.2),
+                  Colors.black.withOpacity(0.7),
                 ],
+              ),
+              border: Border.all(
+                color: Colors.cyan.withOpacity(_glowAnimation.value),
+                width: 2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.1),
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
                   blurRadius: 20,
                   spreadRadius: 5,
                 ),
@@ -346,22 +422,25 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             child: Stack(
               children: [
                 // Scan line inside editor
-                Positioned(
-                  top: _scanAnimation.value * 300,
-                  child: Container(
-                    width: MediaQuery.of(context).size.width - 40,
-                    height: 1,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          Colors.cyan.withOpacity(0.4),
-                          Colors.transparent,
-                        ],
+                if (AnimationConfig.enableBackgroundAnimations)
+                  Positioned(
+                    top: _scanAnimation.value * 300,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Colors.cyan.withOpacity(0.6),
+                            Colors.pink.withOpacity(0.6),
+                            Colors.transparent,
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
                 
                 Padding(
                   padding: const EdgeInsets.all(20),
@@ -372,21 +451,18 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              'QUANTUM TEXT INPUT',
-                              style: TextStyle(
-                                color: Colors.cyan.shade300,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.5,
-                                fontFamily: 'Courier',
-                              ),
+                          Text(
+                            'QUANTUM TEXT INPUT',
+                            style: TextStyle(
+                              color: Colors.cyan.shade300,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                              fontFamily: 'Orbitron',
                             ),
                           ),
                           AnimatedBuilder(
-                            animation: _controller ?? AlwaysStoppedAnimation(0.0),
+                            animation: _glowAnimation,
                             builder: (context, child) {
                               return Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -413,14 +489,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         ],
                       ),
                       
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 15),
                       
                       // Text field
-                        Expanded(
-                          child: Container(
-                          key: _editorKey,
+                      Expanded(
+                        child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withOpacity(0.4),
                             borderRadius: BorderRadius.circular(15),
                             border: Border.all(
                               color: Colors.white.withOpacity(0.1),
@@ -433,15 +508,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
+                              fontFamily: 'Courier',
                               shadows: [
                                 Shadow(
                                   color: Colors.cyan.withOpacity(_textGlowAnimation.value),
-                                  blurRadius: 10,
+                                  blurRadius: 8,
                                 ),
                               ],
                             ),
                             decoration: const InputDecoration(
-                              hintText: 'Begin typing or paste text for neural analysis...\n\n• Real-time AI detection\n• Quantum processing\n• Neural network analysis',
+                              hintText: 'Initiate neural text input...\n\n• Real-time AI detection\n• Quantum processing\n• Neural network analysis',
                               hintStyle: TextStyle(
                                 color: Colors.white38,
                                 fontSize: 14,
@@ -452,7 +528,11 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             focusNode: _textFocusNode,
                             onChanged: (value) {
                               setState(() {});
-                              // scroll the outer SingleChildScrollView to keep editor visible
+                              _typingController.forward().then((_) {
+                                _typingController.reset();
+                              });
+                              
+                              // Scroll to keep editor visible
                               WidgetsBinding.instance.addPostFrameCallback((_) {
                                 try {
                                   _outerScrollController.animateTo(
@@ -461,7 +541,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                                     curve: Curves.easeInOut,
                                   );
                                 } catch (_) {
-                                  // ignore if position isn't ready
+                                  // Ignore if position isn't ready
                                 }
                               });
                             },
@@ -491,10 +571,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         child: Container(
           width: 30,
           height: 30,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: Colors.pink, width: 3),
-              top: BorderSide(color: Colors.pink, width: 3),
+              left: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+              top: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
             ),
           ),
         ),
@@ -506,10 +586,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         child: Container(
           width: 30,
           height: 30,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              right: BorderSide(color: Colors.pink, width: 3),
-              top: BorderSide(color: Colors.pink, width: 3),
+              right: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+              top: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
             ),
           ),
         ),
@@ -521,10 +601,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         child: Container(
           width: 30,
           height: 30,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: Colors.pink, width: 3),
-              bottom: BorderSide(color: Colors.pink, width: 3),
+              left: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+              bottom: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
             ),
           ),
         ),
@@ -536,10 +616,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         child: Container(
           width: 30,
           height: 30,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              right: BorderSide(color: Colors.pink, width: 3),
-              bottom: BorderSide(color: Colors.pink, width: 3),
+              right: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+              bottom: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
             ),
           ),
         ),
@@ -548,53 +628,86 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   Widget _buildStatsBar() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.blue.shade900.withOpacity(0.3),
-            Colors.purple.shade900.withOpacity(0.3),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.cyan.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem('WORDS', _countWords().toString(), Icons.text_fields),
-          _buildStatItem('LINES', _countLines().toString(), Icons.format_line_spacing),
-          _buildStatItem('DENSITY', '${_calculateDensity()}%', Icons.analytics),
-        ],
-      ),
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.blue.shade900.withOpacity(0.3),
+                Colors.purple.shade900.withOpacity(0.3),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.cyan.withOpacity(_glowAnimation.value),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
+                blurRadius: 15,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem('WORDS', _countWords().toString(), Icons.text_fields, Colors.cyan),
+              _buildStatItem('LINES', _countLines().toString(), Icons.format_line_spacing, Colors.pink),
+              _buildStatItem('DENSITY', '${_calculateDensity()}%', Icons.analytics, Colors.purple),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon) {
+  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
     return Column(
       children: [
-        Icon(icon, color: Colors.cyan.shade300, size: 20),
-        const SizedBox(height: 5),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [
+                color.withOpacity(0.3),
+                color.withOpacity(0.1),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(_glowAnimation.value * 0.5),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(height: 8),
         Text(
           value,
           style: TextStyle(
-            color: Colors.cyan.shade300,
-            fontSize: 16,
+            color: color,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
-            fontFamily: 'Courier',
+            fontFamily: 'Orbitron',
+            letterSpacing: 1,
           ),
         ),
         Text(
           label,
           style: const TextStyle(
             color: Colors.white70,
-            fontSize: 10,
+            fontSize: 11,
+            fontWeight: FontWeight.w300,
+            letterSpacing: 1.5,
           ),
         ),
       ],
@@ -637,11 +750,11 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     bool isAnalyzing = false,
   }) {
     return AnimatedBuilder(
-      animation: _controller ?? AlwaysStoppedAnimation(0.0),
+      animation: _glowAnimation,
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
               colors: [
                 color.withOpacity(isDisabled ? 0.1 : 0.3),
@@ -654,27 +767,27 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             ),
             boxShadow: isDisabled ? [] : [
               BoxShadow(
-                color: color.withOpacity(0.2),
-                blurRadius: 10,
+                color: color.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 15,
                 spreadRadius: 2,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(20),
             child: InkWell(
               onTap: isDisabled ? null : onPressed,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 15),
+                padding: const EdgeInsets.symmetric(vertical: 18),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (isAnalyzing)
                       SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 22,
+                        height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           value: _analysisProgress,
@@ -682,15 +795,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         ),
                       )
                     else
-                      Icon(icon, color: color, size: 20),
-                    const SizedBox(width: 10),
+                      Icon(icon, color: color, size: 22),
+                    const SizedBox(width: 12),
                     Text(
                       text,
                       style: TextStyle(
                         color: isDisabled ? Colors.white30 : Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 14,
                         letterSpacing: 1.2,
+                        fontFamily: 'Orbitron',
                       ),
                     ),
                   ],
@@ -703,38 +817,84 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildCornerBorders() {
+  Widget _buildCyberpunkFrame() {
     return IgnorePointer(
       child: Stack(
         children: [
+          // Top border
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: Container(
-              height: 1,
-              decoration: const BoxDecoration(
+              height: 2,
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.pink,
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
                     Colors.transparent,
                   ],
                 ),
               ),
             ),
           ),
+          // Bottom border
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              height: 1,
-              decoration: const BoxDecoration(
+              height: 2,
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.pink,
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Left border
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Right border
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
                     Colors.transparent,
                   ],
                 ),
@@ -784,7 +944,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         });
       }
 
-      // Actual text analysis (use centralized TextAnalyzer which routes based on sensitivity)
+      // Actual text analysis
       var result = await TextAnalyzer.analyzeText(_textController.text);
       try {
         result = await applySensitivityToResult(result);
@@ -805,7 +965,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
 
     } catch (e) {
       print('Error analyzing text: $e');
-      // Show error dialog if needed
     } finally {
       setState(() {
         _isAnalyzing = false;
@@ -821,7 +980,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         backgroundColor: Colors.transparent,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -838,66 +997,115 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               color: _aiDetectionPercentage > 50 ? Colors.red : Colors.cyan,
               width: 2
             ),
+            boxShadow: [
+              BoxShadow(
+                color: (_aiDetectionPercentage > 50 ? Colors.red : Colors.cyan).withOpacity(0.5),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(25),
+            padding: const EdgeInsets.all(30),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 80,
-                  height: 80,
-                  decoration: const BoxDecoration(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.cyan, Colors.pink],
+                      colors: [
+                        Colors.cyan,
+                        Colors.pink,
+                      ],
                     ),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.cyan.withOpacity(0.5),
+                        blurRadius: 15,
+                        spreadRadius: 3,
+                      ),
+                    ],
                   ),
                   child: const Icon(
                     Icons.verified,
                     color: Colors.white,
-                    size: 40,
+                    size: 45,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
                 Text(
                   'NEURAL ANALYSIS COMPLETE',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.cyan.shade300,
-                    fontFamily: 'Courier',
+                    fontFamily: 'Orbitron',
                     letterSpacing: 1.5,
                   ),
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 20),
                 Container(
-                  padding: const EdgeInsets.all(15),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: Colors.cyan.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
                   child: Column(
                     children: [
-                      Text(
-                        'AI Detection: ${_aiDetectionPercentage.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          color: Colors.green.shade300,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'AI Detection:',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '${_aiDetectionPercentage.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              color: _aiDetectionPercentage > 50 ? Colors.red.shade300 : Colors.green.shade300,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        'Human Written: ${_humanWrittenPercentage.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          color: Colors.cyan.shade300,
-                          fontSize: 16,
-                        ),
+                      const SizedBox(height: 15),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Human Written:',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '${_humanWrittenPercentage.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              color: Colors.cyan.shade300,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
                 _buildCyberButton(
                   text: 'CLOSE',
                   icon: Icons.close,
@@ -911,35 +1119,39 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       ),
     );
   }
+
+  Widget _buildFloatingParticles() {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _rotateController,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _EditorParticlesPainter(_rotateController.value),
+            size: Size.infinite,
+          );
+        },
+      ),
+    );
+  }
+
 }
 
-class _CyberpunkBackgroundPainter extends CustomPainter {
-  final Animation<double> animation;
-
-  _CyberpunkBackgroundPainter({required this.animation});
+class _EditorParticlesPainter extends CustomPainter {
+  final double animationValue;
+  _EditorParticlesPainter(this.animationValue);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.purple.shade900.withOpacity(0.1),
-          Colors.blue.shade900.withOpacity(0.1),
-          Colors.black,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+      ..color = Colors.cyan.withOpacity(0.25)
+      ..style = PaintingStyle.fill;
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
-
-    final linePaint = Paint()
-      ..color = Colors.cyan.withOpacity(0.2 * animation.value)
-      ..strokeWidth = 1;
-
-    for (int i = 0; i < size.width; i += 25) {
-      final x = i + animation.value * 25;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+    final random = math.Random(99);
+    for (int i = 0; i < 18; i++) {
+      final x = (random.nextDouble() * size.width);
+      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
+      final radius = random.nextDouble() * 2 + 0.8;
+      canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }
 
@@ -951,14 +1163,27 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.1)
+      ..color = Colors.cyan.withOpacity(0.05)
       ..strokeWidth = 0.5;
 
-    for (double x = 0; x < size.width; x += 30) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    const gridSize = 30.0;
+
+    // Draw vertical lines
+    for (double x = 0; x < size.width; x += gridSize) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        paint,
+      );
     }
-    for (double y = 0; y < size.height; y += 30) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+
+    // Draw horizontal lines
+    for (double y = 0; y < size.height; y += gridSize) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        paint,
+      );
     }
   }
 

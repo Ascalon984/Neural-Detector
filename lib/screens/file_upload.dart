@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:file_picker/file_picker.dart';
+import '../config/animation_config.dart';
 // conditional import: use web helper when available
 import '../utils/file_picker_stub.dart'
   if (dart.library.html) '../utils/file_picker_web.dart' as webpicker;
@@ -25,11 +26,18 @@ class FileUploadScreen extends StatefulWidget {
 }
 
 class _FileUploadScreenState extends State<FileUploadScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scanAnimation;
+    with TickerProviderStateMixin {
+  late AnimationController _backgroundController;
+  late AnimationController _glowController;
+  late AnimationController _scanController;
+  late AnimationController _pulseController;
+  late AnimationController _rotateController;
+  
+  late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
+  late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _rotateAnimation;
 
   String? _selectedFileName;
   int? _selectedFileSize;
@@ -41,39 +49,68 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   void initState() {
     super.initState();
     
-    _controller = AnimationController(
-      duration: const Duration(seconds: 4),
+    // Initialize multiple animation controllers for different effects
+    _backgroundController = AnimationController(
+      duration: const Duration(seconds: 8),
       vsync: this,
-    );
+    )..repeat();
 
-    _scanAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+    _glowController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
 
-    _glowAnimation = Tween<double>(
-      begin: 0.3,
-      end: 0.8,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+    _scanController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
 
-    _pulseAnimation = Tween<double>(
-      begin: 0.95,
-      end: 1.05,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+    _pulseController = AnimationController(
+      duration: Duration(seconds: 1, milliseconds: 500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+
+    _rotateController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
+    // Initialize animation objects (use AlwaysStoppedAnimation when animations are disabled)
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
+
+      _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+        parent: _glowController,
+        curve: Curves.easeInOut,
+      ));
+
+      _scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(CurvedAnimation(
+        parent: _scanController,
+        curve: Curves.easeInOut,
+      ));
+
+      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ));
+
+      _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_rotateController);
+    } else {
+      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
+      _glowAnimation = AlwaysStoppedAnimation(0.5);
+      _scanAnimation = AlwaysStoppedAnimation(0.0);
+      _pulseAnimation = AlwaysStoppedAnimation(1.0);
+      _rotateAnimation = AlwaysStoppedAnimation(0.0);
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _backgroundController.dispose();
+    _glowController.dispose();
+    _scanController.dispose();
+    _pulseController.dispose();
+    _rotateController.dispose();
     super.dispose();
   }
 
@@ -83,183 +120,265 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Background dengan efek cyberpunk
-          _buildCyberpunkBackground(),
+          // Animated cyberpunk background
+          _buildAnimatedBackground(),
           
-          // Grid pattern overlay
-          _buildGridPattern(),
+          // Grid overlay effect
+          _buildGridOverlay(),
           
-          // Content utama
+          // Scan line effect
+          _buildScanLine(),
+          
+          // Glitch effect overlay
+          _buildGlitchEffect(),
+          
+          // Floating particles effect
+          _buildFloatingParticles(),
+          
+          // Main content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header dengan animasi
                   _buildHeader(),
-                  
                   const SizedBox(height: 30),
-                  
-                  // Upload area utama
                   Expanded(
                     child: _buildUploadArea(),
                   ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Action buttons
+                  const SizedBox(height: 25),
                   _buildActionButtons(),
                 ],
               ),
             ),
           ),
           
-          // Corner borders decorative
-          _buildCornerBorders(),
+          // Cyberpunk frame borders
+          _buildCyberpunkFrame(),
         ],
       ),
     );
   }
 
-  Widget _buildCyberpunkBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment.topLeft,
-          radius: 1.5,
-          colors: [
-            Colors.black,
-            Colors.purple.shade900.withOpacity(0.3),
-            Colors.blue.shade900.withOpacity(0.1),
-          ],
-        ),
-      ),
+  Widget _buildAnimatedBackground() {
+    return AnimatedBuilder(
+      animation: _backgroundAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(
+                  const Color(0xFF0a0a0a),
+                  const Color(0xFF1a0033),
+                  _backgroundAnimation.value,
+                )!,
+                Color.lerp(
+                  const Color(0xFF0d1117),
+                  const Color(0xFF0a0e27),
+                  _backgroundAnimation.value,
+                )!,
+                Colors.black,
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGridOverlay() {
+    return IgnorePointer(
       child: CustomPaint(
-        painter: _CyberpunkBackgroundPainter(animation: _controller),
+        painter: _GridPainter(),
+        size: Size.infinite,
       ),
     );
   }
 
-  Widget _buildGridPattern() {
+  Widget _buildScanLine() {
+    return AnimatedBuilder(
+      animation: _scanAnimation,
+      builder: (context, child) {
+        return Positioned(
+          top: _scanAnimation.value * MediaQuery.of(context).size.height,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  Colors.cyan.withOpacity(0.8),
+                  Colors.pink.withOpacity(0.8),
+                  Colors.transparent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyan.withOpacity(0.5),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGlitchEffect() {
     return IgnorePointer(
-      child: Opacity(
-        opacity: 0.05,
-        child: CustomPaint(
-          painter: _GridPainter(),
-          size: Size.infinite,
-        ),
+      child: AnimatedBuilder(
+        animation: _glowAnimation,
+        builder: (context, child) {
+          return Opacity(
+            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.pink.withOpacity(0.1),
+                    Colors.cyan.withOpacity(0.1),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFloatingParticles() {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _rotateController,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _ParticlesPainter(_rotateController.value),
+            size: Size.infinite,
+          );
+        },
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Row(
           children: [
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
+                    blurRadius: 20,
+                    spreadRadius: 3,
+                  ),
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.cloud_upload,
+                color: Colors.white,
+                size: 35,
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
                       colors: [
                         Colors.cyan.withOpacity(_glowAnimation.value),
                         Colors.pink.withOpacity(_glowAnimation.value),
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyan.withOpacity(0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
+                    ).createShader(bounds),
+                    child: const Text(
+                      'QUANTUM UPLOAD',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 3,
+                        fontFamily: 'Orbitron',
                       ),
-                    ],
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.cloud_upload,
-                    color: Colors.white,
-                    size: 30,
+                  const SizedBox(height: 5),
+                  Text(
+                    'NEURAL FILE PROCESSING',
+                    style: TextStyle(
+                      color: Colors.pink.shade300,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w300,
+                      letterSpacing: 3,
+                      fontFamily: 'Courier',
+                    ),
                   ),
-                );
-              },
-            ),
-            const SizedBox(width: 15),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppLocalizations.t('file_upload_title'),
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.cyan.shade300,
-                    letterSpacing: 2,
-                    fontFamily: AppTheme.defaultFontFamily,
-                  ),
-                ),
-                Text(
-                  'QUANTUM FILE PROCESSING',
-                  style: TextStyle(
-                    color: Colors.pink.shade300,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: 3,
-                    fontFamily: 'Courier',
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-        ).animate().fadeIn(duration: 600.ms).slideX(begin: -0.5),
-        
-        const SizedBox(height: 10),
-        
-        const Text(
-          'Upload documents for AI analysis and neural processing',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 14,
-            fontWeight: FontWeight.w300,
-          ),
-        ).animate().fadeIn(delay: 200.ms),
-      ],
+        ).animate().fadeIn(duration: 600.ms).slideX(begin: -0.5);
+      },
     );
   }
 
   Widget _buildUploadArea() {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: _pulseAnimation.value,
           child: Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.cyan.withOpacity(0.5),
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(25),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.1),
-                  Colors.purple.shade900.withOpacity(0.1),
-                  Colors.black.withOpacity(0.8),
+                  Colors.blue.shade900.withOpacity(0.2),
+                  Colors.purple.shade900.withOpacity(0.2),
+                  Colors.black.withOpacity(0.7),
                 ],
+              ),
+              border: Border.all(
+                color: Colors.cyan.withOpacity(_glowAnimation.value),
+                width: 2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.1),
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
                   blurRadius: 20,
                   spreadRadius: 5,
                 ),
@@ -267,17 +386,19 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             ),
             child: Stack(
               children: [
-                // Scan line effect
+                // Scan line inside upload area
                 Positioned(
-                  top: _scanAnimation.value * MediaQuery.of(context).size.height,
+                  top: _scanAnimation.value * 400,
+                  left: 0,
+                  right: 0,
                   child: Container(
-                    width: MediaQuery.of(context).size.width - 40,
                     height: 2,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          Colors.cyan.withOpacity(0.8),
+                          Colors.cyan.withOpacity(0.6),
+                          Colors.pink.withOpacity(0.6),
                           Colors.transparent,
                         ],
                       ),
@@ -291,17 +412,17 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Upload icon dengan animasi
+                      // Upload icon with animation
                       _buildUploadIcon(),
                       
                       const SizedBox(height: 30),
                       
-                      // File info atau placeholder
+                      // File info or placeholder
                       _buildFileInfo(),
                       
                       const SizedBox(height: 20),
                       
-                      // Progress bar jika sedang upload
+                      // Progress bar if uploading
                       if (_isUploading) _buildProgressBar(),
                       
                       const SizedBox(height: 20),
@@ -326,26 +447,55 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     return Stack(
       alignment: Alignment.center,
       children: [
-        Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                Colors.cyan.withOpacity(0.3),
-                Colors.pink.withOpacity(0.1),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
+        // Outer glow ring
         AnimatedBuilder(
-          animation: _controller,
+          animation: _glowAnimation,
           builder: (context, child) {
             return Container(
-              width: 80,
-              height: 80,
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    Colors.pink.withOpacity(_glowAnimation.value * 0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        
+        // Rotating ring
+        AnimatedBuilder(
+          animation: _rotateController,
+          builder: (context, child) {
+            return Transform.rotate(
+              angle: _rotateController.value * 2 * math.pi,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.cyan.withOpacity(0.3),
+                    width: 2,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        
+        // Main icon container
+        AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -356,8 +506,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(0.3),
-                    blurRadius: 15,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
+                    blurRadius: 20,
                     spreadRadius: 5,
                   ),
                 ],
@@ -365,7 +515,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               child: Icon(
                 _selectedFileName != null ? Icons.description : Icons.cloud_upload,
                 color: Colors.white,
-                size: 40,
+                size: 45,
               ),
             );
           },
@@ -378,13 +528,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     return Column(
       children: [
         Text(
-          _selectedFileName ?? AppLocalizations.t('upload_placeholder'),
+          _selectedFileName ?? 'DRAG & DROP OR CLICK TO UPLOAD',
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Colors.white,
             letterSpacing: 1.2,
-            fontFamily: 'Courier',
+            fontFamily: 'Orbitron',
           ),
           textAlign: TextAlign.center,
         ),
@@ -401,11 +551,12 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           ),
         ] else ...[
           Text(
-            'Supported formats: PDF, DOC, DOCX, TXT',
-            style: const TextStyle(
-              color: Colors.white70,
+            'SUPPORTED FORMATS: PDF, DOC, DOCX, TXT',
+            style: TextStyle(
+              color: Colors.cyan.shade300,
               fontSize: 14,
               fontWeight: FontWeight.w300,
+              letterSpacing: 1.5,
             ),
             textAlign: TextAlign.center,
           ),
@@ -418,60 +569,61 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     return Column(
       children: [
         Container(
-          height: 6,
+          height: 8,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(4),
             color: Colors.black.withOpacity(0.5),
           ),
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  // Progress track
-                  Container(
-                    width: double.infinity,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(3),
-                      color: Colors.blue.shade900.withOpacity(0.3),
-                    ),
-                  ),
-                  
-                  // Progress bar
-                  Container(
+          child: Stack(
+            children: [
+              // Progress track
+              Container(
+                width: double.infinity,
+                height: 8,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.blue.shade900.withOpacity(0.3),
+                ),
+              ),
+              
+              // Progress bar
+              AnimatedBuilder(
+                animation: _glowAnimation,
+                builder: (context, child) {
+                  return Container(
                     width: (MediaQuery.of(context).size.width - 100) * _uploadProgress,
-                    height: 6,
+                    height: 8,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(3),
-                      gradient: const LinearGradient(
+                      borderRadius: BorderRadius.circular(4),
+                      gradient: LinearGradient(
                         colors: [
-                          Colors.cyan,
-                          Colors.pink,
+                          Colors.cyan.withOpacity(_glowAnimation.value),
+                          Colors.pink.withOpacity(_glowAnimation.value),
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.cyan.withOpacity(0.5),
-                          blurRadius: 5,
+                          color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
+                          blurRadius: 8,
                           spreadRadius: 1,
                         ),
                       ],
                     ),
-                  ),
-                ],
-              );
-            },
+                  );
+                },
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 10),
         Text(
-          'PROCESSING: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+          'QUANTUM PROCESSING: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
           style: TextStyle(
             color: Colors.cyan.shade300,
             fontSize: 12,
             fontWeight: FontWeight.bold,
-            fontFamily: 'Courier',
+            fontFamily: 'Orbitron',
+            letterSpacing: 1.5,
           ),
         ),
       ],
@@ -481,36 +633,49 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   Widget _buildStatusIndicator() {
     if (_selectedFileName == null) return const SizedBox();
     
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.cyan.withOpacity(0.5),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.verified,
-            color: Colors.cyan.shade300,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'QUANTUM READY',
-            style: TextStyle(
-              color: Colors.cyan.shade300,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'Courier',
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.cyan.withOpacity(_glowAnimation.value),
+              width: 1.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.verified,
+                color: Colors.cyan.shade300,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'QUANTUM READY',
+                style: TextStyle(
+                  color: Colors.cyan.shade300,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Orbitron',
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -520,60 +685,80 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       Positioned(
         top: 0,
         left: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: const BoxDecoration(
-            border: Border(
-              left: BorderSide(color: Colors.pink, width: 3),
-              top: BorderSide(color: Colors.pink, width: 3),
-            ),
-          ),
+        child: AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                  top: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                ),
+              ),
+            );
+          },
         ),
       ),
       // Top Right
       Positioned(
         top: 0,
         right: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: const BoxDecoration(
-            border: Border(
-              right: BorderSide(color: Colors.pink, width: 3),
-              top: BorderSide(color: Colors.pink, width: 3),
-            ),
-          ),
+        child: AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                  top: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                ),
+              ),
+            );
+          },
         ),
       ),
       // Bottom Left
       Positioned(
         bottom: 0,
         left: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: const BoxDecoration(
-            border: Border(
-              left: BorderSide(color: Colors.pink, width: 3),
-              bottom: BorderSide(color: Colors.pink, width: 3),
-            ),
-          ),
+        child: AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                  bottom: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                ),
+              ),
+            );
+          },
         ),
       ),
       // Bottom Right
       Positioned(
         bottom: 0,
         right: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: const BoxDecoration(
-            border: Border(
-              right: BorderSide(color: Colors.pink, width: 3),
-              bottom: BorderSide(color: Colors.pink, width: 3),
-            ),
-          ),
+        child: AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                  bottom: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
+                ),
+              ),
+            );
+          },
         ),
       ),
     ];
@@ -584,22 +769,21 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       children: [
         Expanded(
           child: _buildCyberButton(
-            text: AppLocalizations.t('browse_files'),
+            text: 'OPEN',
             icon: Icons.folder_open,
             onPressed: _pickFile,
-            colors: [Colors.blue.shade700, Colors.purple.shade700],
-            fontSize: 12,
+            color: Colors.blue,
           ),
         ),
         if (_selectedFileName != null) ...[
           const SizedBox(width: 15),
           Expanded(
             child: _buildCyberButton(
-                  text: _isUploading ? AppLocalizations.t('processing') : AppLocalizations.t('analyze'),
+              text: _isUploading ? 'PROCESSING' : 'ANALYZE',
               icon: _isUploading ? Icons.hourglass_top : Icons.psychology,
               onPressed: _isUploading ? null : _analyzeFile,
-              fontSize: _isUploading ? 12 : 14,
-              colors: [Colors.cyan.shade700, Colors.pink.shade700],
+              color: Colors.cyan,
+              isAnalyzing: _isUploading,
             ),
           ),
         ],
@@ -611,48 +795,65 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     required String text,
     required IconData icon,
     required VoidCallback? onPressed,
-    required List<Color> colors,
-    double fontSize = 14,
+    required Color color,
+    bool isAnalyzing = false,
   }) {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _glowAnimation,
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
-              colors: colors,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(0.3),
+                color.withOpacity(0.1),
+              ],
+            ),
+            border: Border.all(
+              color: color.withOpacity(_glowAnimation.value),
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: colors.first.withOpacity(_glowAnimation.value * 0.5),
-                blurRadius: 10,
+                color: color.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 15,
                 spreadRadius: 2,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(20),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, color: Colors.white, size: 20),
-                    const SizedBox(width: 10),
-                        Text(
-                          text,
+                    if (isAnalyzing)
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: _uploadProgress,
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                        ),
+                      )
+                    else
+                      Icon(icon, color: color, size: 22),
+                    const SizedBox(width: 12),
+                    Text(
+                      text,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: fontSize,
+                        fontSize: 14,
                         letterSpacing: 1.2,
+                        fontFamily: 'Orbitron',
                       ),
                     ),
                   ],
@@ -665,7 +866,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildCornerBorders() {
+  Widget _buildCyberpunkFrame() {
     return IgnorePointer(
       child: Stack(
         children: [
@@ -675,12 +876,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 1,
-              decoration: const BoxDecoration(
+              height: 2,
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.pink,
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
                     Colors.transparent,
                   ],
                 ),
@@ -693,12 +895,55 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 1,
-              decoration: const BoxDecoration(
+              height: 2,
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.pink,
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Left border
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Right border
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
                     Colors.transparent,
                   ],
                 ),
@@ -773,7 +1018,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       } catch (e) {
         // ignore: avoid_print
         print('Error picking file: $e');
-  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.t('file_pick_failed').replaceAll('{err}', e.toString()))));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.t('file_pick_failed').replaceAll('{err}', e.toString())))
+        );
       }
     }();
   }
@@ -781,10 +1028,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 B';
     const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  var i = (math.log(bytes) / math.log(1024)).floor();
-  if (i < 0) i = 0;
-  if (i >= suffixes.length) i = suffixes.length - 1;
-  final val = bytes / math.pow(1024, i);
+    var i = (math.log(bytes) / math.log(1024)).floor();
+    if (i < 0) i = 0;
+    if (i >= suffixes.length) i = suffixes.length - 1;
+    final val = bytes / math.pow(1024, i);
     return '${val.toStringAsFixed(val >= 10 || i == 0 ? 0 : 1)} ${suffixes[i]}';
   }
 
@@ -859,16 +1106,30 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         backgroundColor: Colors.transparent,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.blue.shade900.withOpacity(0.8),
-                Colors.purple.shade900.withOpacity(0.8),
+                aiPct > 50 
+                  ? Colors.red.shade900.withOpacity(0.9)
+                  : Colors.blue.shade900.withOpacity(0.9),
+                aiPct > 50
+                  ? Colors.deepOrange.shade900.withOpacity(0.9)
+                  : Colors.purple.shade900.withOpacity(0.9),
               ],
             ),
-            border: Border.all(color: Colors.cyan, width: 2),
+            border: Border.all(
+              color: aiPct > 50 ? Colors.red : Colors.cyan,
+              width: 2
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (aiPct > 50 ? Colors.red : Colors.cyan).withOpacity(0.5),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
           ),
           child: Padding(
             padding: const EdgeInsets.all(30),
@@ -876,64 +1137,103 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 80,
-                  height: 80,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
                       colors: [Colors.cyan, Colors.pink],
                     ),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.cyan.withOpacity(0.5),
+                        blurRadius: 15,
+                        spreadRadius: 3,
+                      ),
+                    ],
                   ),
                   child: const Icon(
                     Icons.verified,
                     color: Colors.white,
-                    size: 40,
+                    size: 45,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
                 Text(
-                  AppLocalizations.t('neural_analysis_complete'),
+                  'NEURAL ANALYSIS COMPLETE',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.cyan.shade300,
-                    fontFamily: 'Courier',
+                    fontFamily: 'Orbitron',
                     letterSpacing: 1.5,
                   ),
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 20),
                 Container(
-                  padding: const EdgeInsets.all(15),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: Colors.cyan.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
                   child: Column(
                     children: [
-                      Text(
-                        AppLocalizations.t('ai_detection_label').replaceAll('{pct}', aiPct.toStringAsFixed(1)),
-                        style: TextStyle(
-                          color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'AI Detection:',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '${aiPct.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        AppLocalizations.t('human_written_label').replaceAll('{pct}', humanPct.toStringAsFixed(1)),
-                        style: TextStyle(
-                          color: Colors.cyan.shade300,
-                          fontSize: 16,
-                        ),
+                      const SizedBox(height: 15),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Human Written:',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '${humanPct.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              color: Colors.cyan.shade300,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
                 _buildCyberButton(
-                  text: AppLocalizations.t('close'),
-                  icon: Icons.visibility,
+                  text: 'CLOSE',
+                  icon: Icons.close,
                   onPressed: () => Navigator.pop(context),
-                  colors: [Colors.cyan.shade700, Colors.pink.shade700],
+                  color: Colors.cyan,
                 ),
               ],
             ),
@@ -944,56 +1244,60 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   }
 }
 
-class _CyberpunkBackgroundPainter extends CustomPainter {
-  final Animation<double> animation;
-
-  _CyberpunkBackgroundPainter({required this.animation});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.purple.shade900.withOpacity(0.1),
-          Colors.blue.shade900.withOpacity(0.1),
-          Colors.black,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
-
-    // Animated lines
-    final linePaint = Paint()
-      ..color = Colors.cyan.withOpacity(0.2 * animation.value)
-      ..strokeWidth = 1;
-
-    for (int i = 0; i < size.width; i += 25) {
-      final x = i + animation.value * 25;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
 class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.1)
+      ..color = Colors.cyan.withOpacity(0.05)
       ..strokeWidth = 0.5;
 
-    for (double x = 0; x < size.width; x += 30) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    const gridSize = 30.0;
+
+    // Draw vertical lines
+    for (double x = 0; x < size.width; x += gridSize) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        paint,
+      );
     }
-    for (double y = 0; y < size.height; y += 30) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+
+    // Draw horizontal lines
+    for (double y = 0; y < size.height; y += gridSize) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        paint,
+      );
     }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ParticlesPainter extends CustomPainter {
+  final double animationValue;
+  
+  _ParticlesPainter(this.animationValue);
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.cyan.withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+    
+    final random = math.Random(42); // Fixed seed for consistent particles
+    
+    for (int i = 0; i < 20; i++) {
+      final x = (random.nextDouble() * size.width);
+      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
+      final radius = random.nextDouble() * 2 + 1;
+      
+      canvas.drawCircle(Offset(x, y), radius, paint);
+    }
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

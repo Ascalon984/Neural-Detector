@@ -8,6 +8,7 @@ import '../utils/app_localizations.dart';
 import 'package:intl/intl.dart';
 import '../models/scan_history.dart';
 import '../utils/exporter.dart';
+import 'dart:math' as math;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,16 +18,23 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _controller;
-  Animation<double>? _scanAnimation;
-  Animation<double>? _glowAnimation;
-  Animation<double>? _pulseAnimation;
+    with TickerProviderStateMixin {
+  late AnimationController _backgroundController;
+  late AnimationController _glowController;
+  late AnimationController _scanController;
+  late AnimationController _pulseController;
+  late AnimationController _rotateController;
+  
+  late Animation<double> _backgroundAnimation;
+  late Animation<double> _glowAnimation;
+  late Animation<double> _scanAnimation;
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _rotateAnimation;
 
   bool _notifications = true;
   bool _autoScan = false;
   bool _highAccuracy = false;
-  double _scanSensitivity = 0.5; // represents level / 10 (default level 5)
+  double _scanSensitivity = 0.5;
   double _previousSensitivity = 0.5;
   String _selectedLanguage = 'English';
 
@@ -35,45 +43,78 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void initState() {
     super.initState();
+    
+    // Initialize multiple animation controllers for different effects
+    _backgroundController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
+
+    _glowController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _scanController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
+
+    _pulseController = AnimationController(
+      duration: Duration(seconds: 1, milliseconds: 500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+ 
+
+    _rotateController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
+    
+    // Initialize animation objects (use AlwaysStoppedAnimation when animations are disabled)
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
+
+      _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+        parent: _glowController,
+        curve: Curves.easeInOut,
+      ));
+
+      _scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(CurvedAnimation(
+        parent: _scanController,
+        curve: Curves.easeInOut,
+      ));
+
+      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ));
+
+      _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_rotateController);
+    } else {
+      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
+      _glowAnimation = AlwaysStoppedAnimation(0.5);
+      _scanAnimation = AlwaysStoppedAnimation(0.0);
+      _pulseAnimation = AlwaysStoppedAnimation(1.0);
+      _rotateAnimation = AlwaysStoppedAnimation(0.0);
+    }
+
     _loadSensitivity();
     _loadHighAccuracy();
     _loadAutoScan();
     _loadNotifications();
     _loadLanguage();
-    if (AnimationConfig.enableBackgroundAnimations) {
-      _controller = AnimationController(
-        duration: const Duration(seconds: 3),
-        vsync: this,
-      )..repeat(reverse: true);
+  }
 
-      _scanAnimation = Tween<double>(
-        begin: 0.0,
-        end: 1.0,
-      ).animate(CurvedAnimation(
-        parent: _controller!,
-        curve: Curves.easeInOut,
-      ));
-
-      _glowAnimation = Tween<double>(
-        begin: 0.4,
-        end: 0.8,
-      ).animate(CurvedAnimation(
-        parent: _controller!,
-        curve: Curves.easeInOut,
-      ));
-
-      _pulseAnimation = Tween<double>(
-        begin: 0.95,
-        end: 1.05,
-      ).animate(CurvedAnimation(
-        parent: _controller!,
-        curve: Curves.easeInOut,
-      ));
-    } else {
-      _scanAnimation = const AlwaysStoppedAnimation(0.0);
-      _glowAnimation = const AlwaysStoppedAnimation(0.6);
-      _pulseAnimation = const AlwaysStoppedAnimation(1.0);
-    }
+  @override
+  void dispose() {
+    _backgroundController.dispose();
+    _glowController.dispose();
+    _scanController.dispose();
+    _pulseController.dispose();
+    _rotateController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLanguage() async {
@@ -101,7 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         _highAccuracy = high;
         if (_highAccuracy) {
           _previousSensitivity = _scanSensitivity;
-          _scanSensitivity = 1.0; // lock to 100%
+          _scanSensitivity = 1.0;
         }
       });
     } catch (_) {}
@@ -126,36 +167,35 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Provider.of<ThemeProvider>(context).backgroundColor,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Background dengan efek cyberpunk
-          _buildCyberpunkBackground(),
+          // Animated cyberpunk background
+          _buildAnimatedBackground(),
           
-          // Grid pattern overlay
-          _buildGridPattern(),
+          // Grid overlay effect
+          _buildGridOverlay(),
           
-          // Content utama
+          // Scan line effect
+          _buildScanLine(),
+          
+          // Glitch effect overlay
+          _buildGlitchEffect(),
+          
+          // Floating particles effect
+          _buildFloatingParticles(),
+          
+          // Main content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header dengan animasi
                   _buildHeader(),
-                  
                   const SizedBox(height: 30),
-                  
-                  // Settings content
                   Expanded(
                     child: _buildSettingsContent(),
                   ),
@@ -164,103 +204,188 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
           
-          // Corner borders decorative
-          _buildCornerBorders(),
+          // Cyberpunk frame borders
+          _buildCyberpunkFrame(),
         ],
       ),
     );
   }
 
-  Widget _buildCyberpunkBackground() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment.bottomRight,
-          radius: 1.5,
-          colors: [
-            Colors.black,
-            Colors.purple.shade900.withOpacity(0.5),
-            Colors.blue.shade900.withOpacity(0.3),
-          ],
-        ),
-      ),
+  Widget _buildAnimatedBackground() {
+    return AnimatedBuilder(
+      animation: _backgroundAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(
+                  const Color(0xFF0a0a0a),
+                  const Color(0xFF1a0033),
+                  _backgroundAnimation.value,
+                )!,
+                Color.lerp(
+                  const Color(0xFF0d1117),
+                  const Color(0xFF0a0e27),
+                  _backgroundAnimation.value,
+                )!,
+                Colors.black,
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGridOverlay() {
+    return IgnorePointer(
       child: CustomPaint(
-        painter: _CyberpunkBackgroundPainter(animation: _controller ?? const AlwaysStoppedAnimation(0.0)),
+        painter: _GridPainter(),
+        size: Size.infinite,
       ),
     );
   }
 
-  Widget _buildGridPattern() {
+  Widget _buildScanLine() {
+    return AnimatedBuilder(
+      animation: _scanAnimation,
+      builder: (context, child) {
+        return Positioned(
+          top: _scanAnimation.value * MediaQuery.of(context).size.height,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  Colors.cyan.withOpacity(0.8),
+                  Colors.pink.withOpacity(0.8),
+                  Colors.transparent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyan.withOpacity(0.5),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGlitchEffect() {
     return IgnorePointer(
-      child: Opacity(
-        opacity: 0.05,
-        child: CustomPaint(
-          painter: _GridPainter(),
-          size: Size.infinite,
-        ),
+      child: AnimatedBuilder(
+        animation: _glowAnimation,
+        builder: (context, child) {
+          return Opacity(
+            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.pink.withOpacity(0.1),
+                    Colors.cyan.withOpacity(0.1),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFloatingParticles() {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _rotateController,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _ParticlesPainter(_rotateController.value),
+            size: Size.infinite,
+          );
+        },
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Row(
           children: [
-            AnimatedBuilder(
-              animation: _controller ?? const AlwaysStoppedAnimation(0.0),
-              builder: (context, child) {
-                return Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.cyan.withOpacity(_glowAnimation?.value ?? 0.6),
-                        Colors.pink.withOpacity(_glowAnimation?.value ?? 0.6),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyan.withOpacity(0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.settings,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 15),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    AppLocalizations.t('system_config'),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.cyan.shade300,
-                      letterSpacing: 2,
-                      fontFamily: 'Courier',
-                    ),
-                  ),
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    AppLocalizations.t('neural_network_settings'),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
+                    blurRadius: 20,
+                    spreadRadius: 3,
+                  ),
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.settings,
+                color: Colors.white,
+                size: 35,
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Colors.cyan.withOpacity(_glowAnimation.value),
+                        Colors.pink.withOpacity(_glowAnimation.value),
+                      ],
+                    ).createShader(bounds),
+                    child: const Text(
+                      'SYSTEM CONFIG',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 3,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'NEURAL NETWORK SETTINGS',
                     style: TextStyle(
                       color: Colors.pink.shade300,
                       fontSize: 12,
@@ -269,43 +394,34 @@ class _SettingsScreenState extends State<SettingsScreen>
                       fontFamily: 'Courier',
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-        ),
-        
-        const SizedBox(height: 10),
-        
-        Text(
-          AppLocalizations.t('detection_settings'),
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 14,
-            fontWeight: FontWeight.w300,
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildSettingsContent() {
     return AnimatedBuilder(
-      animation: _controller ?? const AlwaysStoppedAnimation(0.0),
+      animation: _scanAnimation,
       builder: (context, child) {
         return Stack(
           children: [
             // Scan line effect
             Positioned(
-              top: (_scanAnimation?.value ?? 0.0) * MediaQuery.of(context).size.height,
+              top: _scanAnimation.value * MediaQuery.of(context).size.height,
+              left: 0,
+              right: 0,
               child: Container(
-                width: MediaQuery.of(context).size.width - 40,
-                height: 1,
+                height: 2,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
                       Colors.cyan.withOpacity(0.6),
+                      Colors.pink.withOpacity(0.6),
                       Colors.transparent,
                     ],
                   ),
@@ -322,7 +438,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                   subtitle: 'Maximum detection precision (slower)',
                   value: _highAccuracy,
                   onChanged: (value) async {
-                    // toggle high accuracy: if enabling, lock sensitivity to 100%; if disabling, restore previous
                     if (value) {
                       _previousSensitivity = _scanSensitivity;
                       setState(() {
@@ -337,7 +452,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _scanSensitivity = _previousSensitivity;
                       });
                       await SettingsManager.setHighAccuracy(false);
-                      // restore sensitivity level based on previous sensitivity
                       final restoredLevel = (_previousSensitivity * 10).round().clamp(1, 10);
                       await SettingsManager.setSensitivityLevel(restoredLevel);
                     }
@@ -403,8 +517,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                 
                 _buildSystemInfo(),
                 const SizedBox(height: 30),
-                
-                _buildActionButtons(),
               ],
             ),
           ],
@@ -420,10 +532,10 @@ class _SettingsScreenState extends State<SettingsScreen>
         title,
         style: TextStyle(
           color: Colors.cyan.shade300,
-          fontSize: 16,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
           letterSpacing: 2,
-          fontFamily: 'Courier',
+          fontFamily: 'Orbitron',
         ),
       ),
     );
@@ -438,61 +550,65 @@ class _SettingsScreenState extends State<SettingsScreen>
     required Color color,
   }) {
     return AnimatedBuilder(
-      animation: _controller ?? const AlwaysStoppedAnimation(0.0),
+      animation: _glowAnimation,
       builder: (context, child) {
-        return Opacity(
-                  opacity: _glowAnimation?.value ?? 0.6,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 15),
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          color.withOpacity(0.62),
-                          color.withOpacity(0.12),
-                        ],
-                      ),
-                      border: Border.all(
-                        color: color.withOpacity(0.92),
-                        width: 1.6,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(0.12),
-                          blurRadius: 6,
-                          spreadRadius: 1,
-                          offset: const Offset(0, 4),
-                        ),
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          blurRadius: 4,
-                          spreadRadius: 0,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 15),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  color.withOpacity(0.3),
+                  color.withOpacity(0.1),
+                ],
+              ),
+              border: Border.all(
+                color: color.withOpacity(_glowAnimation.value),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(_glowAnimation.value * 0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 5),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
             child: Row(
               children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color.withOpacity(0.28),
-                        border: Border.all(color: Colors.white.withOpacity(0.06)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: color.withOpacity(0.12),
-                            blurRadius: 4,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withOpacity(0.3),
+                        color.withOpacity(0.1),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(_glowAnimation.value * 0.5),
+                        blurRadius: 10,
+                        spreadRadius: 2,
                       ),
-                      child: Icon(icon, color: color, size: 20),
-                      ),
-                    const SizedBox(width: 15),
+                    ],
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 15),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -502,12 +618,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          fontFamily: 'Orbitron',
                         ),
                       ),
+                      const SizedBox(height: 5),
                       Text(
                         subtitle,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.88),
+                        style: const TextStyle(
+                          color: Colors.white70,
                           fontSize: 12,
                         ),
                       ),
@@ -515,7 +634,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ),
                 Transform.scale(
-                  scale: _pulseAnimation?.value ?? 1.0,
+                  scale: _pulseAnimation.value,
                   child: Switch(
                     value: value,
                     onChanged: onChanged,
@@ -532,164 +651,215 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildSensitivitySlider() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.purple.shade900.withOpacity(0.45),
-            Colors.pink.shade900.withOpacity(0.45),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.pink.withOpacity(0.55),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.pink.withOpacity(0.08),
-            blurRadius: 6,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.tune, color: Colors.pink.shade300, size: 20),
-              const SizedBox(width: 10),
-              Text(
-                AppLocalizations.t('detection_sensitivity'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.purple.shade900.withOpacity(0.3),
+                Colors.pink.shade900.withOpacity(0.3),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.pink.withOpacity(_glowAnimation.value),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 15,
+                spreadRadius: 2,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Slider(
-                value: _scanSensitivity,
-                onChanged: _highAccuracy ? null : (value) => setState(() => _scanSensitivity = value),
-                onChangeEnd: _highAccuracy
-                    ? null
-                    : (value) async {
-                        // map slider value (0.1..1.0) to level 1..10 and persist
-                        final level = (value * 10).round().clamp(1, 10);
-                        await SettingsManager.setSensitivityLevel(level);
-                      },
-                min: 0.1,
-                max: 1.0,
-                divisions: 9,
-                label: '${(_scanSensitivity * 100).round()}%',
-                activeColor: Colors.pink,
-                inactiveColor: Colors.pink.withOpacity(0.3),
-              ),
-              if (_highAccuracy)
-                Positioned(
-                  right: 8,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.red.shade300, borderRadius: BorderRadius.circular(8)),
-                    child: Text(AppLocalizations.t('locked_badge'), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Icon(Icons.tune, color: Colors.pink.shade300, size: 24),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Detection Sensitivity',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontFamily: 'Orbitron',
+                    ),
                   ),
-                ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              Stack(
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: Colors.pink,
+                      inactiveTrackColor: Colors.pink.withOpacity(0.3),
+                      thumbColor: Colors.pink,
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                      overlayColor: Colors.pink.withOpacity(0.2),
+                      valueIndicatorColor: Colors.pink,
+                      valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+                    ),
+                    child: Slider(
+                      value: _scanSensitivity,
+                      onChanged: _highAccuracy ? null : (value) => setState(() => _scanSensitivity = value),
+                      onChangeEnd: _highAccuracy
+                          ? null
+                          : (value) async {
+                              final level = (value * 10).round().clamp(1, 10);
+                              await SettingsManager.setSensitivityLevel(level);
+                            },
+                      min: 0.1,
+                      max: 1.0,
+                      divisions: 9,
+                      label: '${(_scanSensitivity * 100).round()}%',
+                    ),
+                  ),
+                  if (_highAccuracy)
+                    Positioned(
+                      right: 8,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade300,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'LOCKED',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'LOW',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                  Text(
+                    'HIGH',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                AppLocalizations.t('low_label'),
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              Text(
-                AppLocalizations.t('high_label'),
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildLanguageSelector() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.blue.shade900.withOpacity(0.48),
-            Colors.cyan.shade900.withOpacity(0.48),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.cyan.withOpacity(0.6),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.cyan.withOpacity(0.08),
-            blurRadius: 6,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.blue.shade900.withOpacity(0.3),
+                Colors.cyan.shade900.withOpacity(0.3),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.cyan.withOpacity(_glowAnimation.value),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 15,
+                spreadRadius: 2,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.language, color: Colors.cyan.shade300, size: 20),
-              const SizedBox(width: 10),
-              const Text(
-                'Language',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Icon(Icons.language, color: Colors.cyan.shade300, size: 24),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Language',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontFamily: 'Orbitron',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value),
+                    width: 1,
+                  ),
+                ),
+                child: DropdownButton<String>(
+                  value: _selectedLanguage,
+                  dropdownColor: Colors.black87,
+                  style: const TextStyle(color: Colors.white),
+                  icon: const Icon(Icons.arrow_drop_down, color: Colors.cyan),
+                  underline: Container(height: 0),
+                  isExpanded: true,
+                  items: _languages.map((String language) {
+                    return DropdownMenuItem<String>(
+                      value: language,
+                      child: Text(language),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedLanguage = newValue!;
+                    });
+                    final code = (_selectedLanguage == 'Indonesian') ? 'id' : 'en';
+                    SettingsManager.setLanguage(code);
+                  },
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          DropdownButton<String>(
-            value: _selectedLanguage,
-            dropdownColor: Colors.black,
-            style: const TextStyle(color: Colors.white),
-            icon: const Icon(Icons.arrow_drop_down, color: Colors.cyan),
-            underline: Container(height: 0),
-            isExpanded: true,
-            items: _languages.map((String language) {
-              return DropdownMenuItem<String>(
-                value: language,
-                child: Text(language),
-              );
-            }).toList(),
-            onChanged: (String? newValue) {
-              setState(() {
-                _selectedLanguage = newValue!;
-              });
-              // persist language code
-              final code = (_selectedLanguage == 'Indonesian') ? 'id' : 'en';
-              SettingsManager.setLanguage(code);
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -700,82 +870,104 @@ class _SettingsScreenState extends State<SettingsScreen>
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            color.withOpacity(0.36),
-            Colors.transparent,
-          ],
-        ),
-        border: Border.all(
-          color: color.withOpacity(0.6),
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 6,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(15),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(15),
-          child: Padding(
-            padding: const EdgeInsets.all(15),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color.withOpacity(0.2),
-                  ),
-                  child: Icon(icon, color: color, size: 20),
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 15),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  color.withOpacity(0.3),
+                  color.withOpacity(0.1),
+                ],
+              ),
+              border: Border.all(
+                color: color.withOpacity(_glowAnimation.value),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(_glowAnimation.value * 0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 5),
                 ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
                     children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              color.withOpacity(0.3),
+                              color.withOpacity(0.1),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withOpacity(_glowAnimation.value * 0.5),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Icon(icon, color: color, size: 24),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              subtitle,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
+                      Icon(Icons.arrow_forward_ios, color: color, size: 20),
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios, color: color, size: 16),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _buildSystemInfo() {
-    // Use a FutureBuilder to compute database size dynamically from history
     return FutureBuilder<List<ScanHistory>>(
       future: HistoryManager.loadHistory(),
       builder: (context, snapshot) {
@@ -792,68 +984,70 @@ class _SettingsScreenState extends State<SettingsScreen>
 
         final lastUpdated = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
-        return Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.grey.shade900.withOpacity(0.6),
-                Colors.black.withOpacity(0.7),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.35),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 6,
-                spreadRadius: 0,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SYSTEM INFORMATION',
-                style: TextStyle(
-                  color: Colors.cyan.shade300,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Courier',
+        return AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.grey.shade900.withOpacity(0.3),
+                    Colors.black.withOpacity(0.5),
+                  ],
                 ),
+                border: Border.all(
+                  color: Colors.cyan.withOpacity(_glowAnimation.value),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              _buildInfoRow('Version', 'Neural Detector'),
-              _buildInfoRow('Last Updated', lastUpdated),
-              _buildInfoRow('Database Size', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
-              _buildInfoRow('AI Model', 'Tensor Flow Lite'),
-            ],
-          ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SYSTEM INFORMATION',
+                    style: TextStyle(
+                      color: Colors.cyan.shade300,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Orbitron',
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  _buildInfoRow('Version', 'Neural Detector'),
+                  _buildInfoRow('Last Updated', lastUpdated),
+                  _buildInfoRow('Database Size', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
+                  _buildInfoRow('AI Model', 'Tensor Flow Lite'),
+                ],
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  // Try to parse various size string formats into bytes.
-  // Accepts raw bytes as string, or values with units like '247.3 MB', '12 KB', etc.
   int? _parseSizeToBytes(String? input) {
     if (input == null) return null;
     final s = input.trim();
     if (s.isEmpty) return null;
 
-    // Try plain integer bytes
     try {
       return int.parse(s);
     } catch (_) {}
 
-    // Try to match number + unit
     final regex = RegExp(r"([0-9]+(?:\.[0-9]+)?)\s*([kKmMgG][bB])");
     final m = regex.firstMatch(s);
     if (m != null) {
@@ -876,122 +1070,108 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+            ),
           ),
           Text(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'Courier'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontFamily: 'Courier',
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActionButtons() {
-    // Action buttons removed per design request. Keep layout space minimal.
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildCyberButton({
-    required String text,
-    required IconData icon,
-    required VoidCallback onPressed,
-    required Color color,
-  }) {
-    return AnimatedBuilder(
-      animation: _controller ?? const AlwaysStoppedAnimation(0.0),
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            gradient: LinearGradient(
-              colors: [
-                color.withOpacity(0.3),
-                color.withOpacity(0.1),
-              ],
-            ),
-            border: Border.all(
-              color: color.withOpacity(_glowAnimation?.value ?? 0.6),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.2),
-                blurRadius: 10,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
-            child: InkWell(
-              onTap: onPressed,
-              borderRadius: BorderRadius.circular(15),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, color: color, size: 20),
-                    const SizedBox(width: 10),
-                    Text(
-                      text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCornerBorders() {
+  Widget _buildCyberpunkFrame() {
     return IgnorePointer(
       child: Stack(
         children: [
+          // Top border
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             child: Container(
-              height: 1,
-              decoration: const BoxDecoration(
+              height: 2,
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.pink,
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
                     Colors.transparent,
                   ],
                 ),
               ),
             ),
           ),
+          // Bottom border
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              height: 1,
-              decoration: const BoxDecoration(
+              height: 2,
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Colors.transparent,
-                    Colors.pink,
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Left border
+          Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Right border
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
                     Colors.transparent,
                   ],
                 ),
@@ -1004,44 +1184,118 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _clearHistory() {
-    // Ask for confirmation then clear history
     showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.black87,
-        title: const Text('Confirm'),
-        content: const Text('Are you sure you want to delete ALL scan history? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(AppLocalizations.t('cancel')),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(25),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.red.shade900.withOpacity(0.9),
+                Colors.deepOrange.shade900.withOpacity(0.9),
+              ],
+            ),
+            border: Border.all(
+              color: Colors.red.withOpacity(_glowAnimation.value),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(_glowAnimation.value * 0.5),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop(true);
-            },
-            child: Text(AppLocalizations.t('clear_scan_history')),
+          child: Padding(
+            padding: const EdgeInsets.all(30),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.red, Colors.deepOrange],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.warning,
+                    color: Colors.white,
+                    size: 35,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Confirm Deletion',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade300,
+                    fontFamily: 'Orbitron',
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  'Are you sure you want to delete ALL scan history? This action cannot be undone.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 25),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCyberButton(
+                        text: 'CANCEL',
+                        icon: Icons.close,
+                        onPressed: () => Navigator.of(context).pop(false),
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _buildCyberButton(
+                        text: 'DELETE',
+                        icon: Icons.delete,
+                        onPressed: () async {
+                          Navigator.of(context).pop(true);
+                          await HistoryManager.clearHistory();
+                          _showDialog('History Cleared', 'All scan history has been removed.');
+                        },
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     ).then((confirmed) async {
       if (confirmed == true) {
         await HistoryManager.clearHistory();
-        // show a small confirmation dialog
         _showDialog('History Cleared', 'All scan history has been removed.');
       }
     });
   }
 
   void _exportData() {
-    // Gather history, map to exporter rows, prompt folder picker and save files
     HistoryManager.loadHistory().then((list) async {
       if (list.isEmpty) {
-        _showDialog(AppLocalizations.t('export_data'), AppLocalizations.t('no_history_to_export'));
+        _showDialog('Export Data', 'No history to export');
         return;
       }
 
-      // Convert ScanHistory objects to the map shape expected by Exporter
       final rows = list.map((ScanHistory h) {
         DateTime? parsedDate;
         try {
@@ -1075,14 +1329,12 @@ class _SettingsScreenState extends State<SettingsScreen>
 
       final path = await Exporter.exportToFolder(rows, suggestedName: 'scan_history');
       if (path == null) {
-        _showDialog(AppLocalizations.t('export_data'), AppLocalizations.t('export_cancelled'));
+        _showDialog('Export Data', 'Export cancelled');
       } else {
-        _showDialog(AppLocalizations.t('export_data'), AppLocalizations.t('export_saved_to') + '\n$path');
+        _showDialog('Export Data', 'Data saved to:\n$path');
       }
     });
   }
-
-  // Action buttons were removed; no reset/save methods required.
 
   void _showDialog(String title, String message) {
     showDialog(
@@ -1091,7 +1343,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         backgroundColor: Colors.transparent,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1100,30 +1352,58 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Colors.purple.shade900.withOpacity(0.9),
               ],
             ),
-            border: Border.all(color: Colors.cyan, width: 2),
+            border: Border.all(
+              color: Colors.cyan.withOpacity(_glowAnimation.value),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(25),
+            padding: const EdgeInsets.all(30),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, color: Colors.cyan, size: 50),
-                const SizedBox(height: 15),
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.cyan, Colors.pink],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Colors.white,
+                    size: 35,
+                  ),
+                ),
+                const SizedBox(height: 20),
                 Text(
                   title,
                   style: TextStyle(
-                    color: Colors.cyan.shade300,
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: Colors.cyan.shade300,
+                    fontFamily: 'Orbitron',
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 15),
                 Text(
                   message,
-                  style: const TextStyle(color: Colors.white70),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
                 _buildCyberButton(
                   text: 'OK',
                   icon: Icons.done,
@@ -1137,57 +1417,125 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
   }
-}
 
-class _CyberpunkBackgroundPainter extends CustomPainter {
-  final Animation<double> animation;
-
-  _CyberpunkBackgroundPainter({required this.animation});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.purple.shade900.withOpacity(0.1),
-          Colors.blue.shade900.withOpacity(0.1),
-          Colors.black,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
-
-    final linePaint = Paint()
-      ..color = Colors.cyan.withOpacity(0.2 * animation.value)
-      ..strokeWidth = 1;
-
-    for (int i = 0; i < size.width; i += 30) {
-      final x = i + animation.value * 30;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
-    }
+  Widget _buildCyberButton({
+    required String text,
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color color,
+  }) {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [
+                color.withOpacity(0.3),
+                color.withOpacity(0.1),
+              ],
+            ),
+            border: Border.all(
+              color: color.withOpacity(_glowAnimation.value),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 15,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, color: color, size: 22),
+                    const SizedBox(width: 12),
+                    Text(
+                      text,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        letterSpacing: 1.2,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.1)
+      ..color = Colors.cyan.withOpacity(0.05)
       ..strokeWidth = 0.5;
 
-    for (double x = 0; x < size.width; x += 35) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    const gridSize = 30.0;
+
+    // Draw vertical lines
+    for (double x = 0; x < size.width; x += gridSize) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        paint,
+      );
     }
-    for (double y = 0; y < size.height; y += 35) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+
+    // Draw horizontal lines
+    for (double y = 0; y < size.height; y += gridSize) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        paint,
+      );
     }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ParticlesPainter extends CustomPainter {
+  final double animationValue;
+  
+  _ParticlesPainter(this.animationValue);
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.cyan.withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+    
+    final random = math.Random(42); // Fixed seed for consistent particles
+    
+    for (int i = 0; i < 20; i++) {
+      final x = (random.nextDouble() * size.width);
+      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
+      final radius = random.nextDouble() * 2 + 1;
+      
+      canvas.drawCircle(Offset(x, y), radius, paint);
+    }
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
