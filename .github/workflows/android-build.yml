@@ -123,6 +123,10 @@ jobs:
             esac
           }
 
+          # Accept licenses up-front to avoid interactive prompts during installs
+          echo "Accepting Android SDK licenses (pre-install)"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+
           for pkg in "${PKGS[@]}"; do
             i=0
             until [ $i -ge $MAX_RETRIES ]; do
