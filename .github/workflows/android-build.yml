@@ -381,10 +381,28 @@ jobs:
           fi
       - name: List build outputs (debug)
         run: |
-          echo "Listing build/app/outputs"
+          echo "Searching repository for any APK files (debug)"
+          # Look in both Flutter output locations and native Android gradle outputs
+          echo "-> build/app/outputs (if present)"
           ls -la build/app/outputs || true
-          echo "Recursively listing APK files"
+          echo "-> android/app/build/outputs (if present)"
+          ls -la android/app/build/outputs || true
+
+          echo "Recursively list APKs under common output directories"
           find build/app/outputs -type f -name "*.apk" -print || true
+          find android/app/build/outputs -type f -name "*.apk" -print || true
+
+          echo "Also search whole repo for any APK files as a last resort"
+          find . -type f -name "*.apk" -print || true
+
+          echo "Copying any found APKs into ci-apks/ for consistent artifact upload"
+          mkdir -p ci-apks || true
+          find build/app/outputs -type f -name "*.apk" -exec cp --parents {} ci-apks/ \; || true
+          find android/app/build/outputs -type f -name "*.apk" -exec cp --parents {} ci-apks/ \; || true
+          # Also copy any other APKs found anywhere
+          find . -type f -name "*.apk" -not -path "./ci-apks/*" -exec cp --parents {} ci-apks/ \; || true
+          echo "ci-apks contents:"
+          ls -la ci-apks || true
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
@@ -392,6 +410,8 @@ jobs:
           name: apk-artifacts
           path: |
             build/app/outputs/**/*.apk
+            android/app/build/outputs/**/*.apk
+            ci-apks/**
           if-no-files-found: warn
 
       - name: Upload build logs
