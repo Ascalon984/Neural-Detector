@@ -71,6 +71,14 @@ jobs:
             ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
             exit 1
           fi
+          echo "Debug: listing cmdline-tools latest/lib contents"
+          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib" || true
+          echo "--- sdkmanager wrapper (first 200 lines) ---"
+          sed -n '1,200p' "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" || true
+          echo "Attempting to run SdkManagerCli directly with java - capture output"
+          java -cp "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib/*" com.android.sdklib.tool.sdkmanager.SdkManagerCli --version > sdkmanager_direct.log 2>&1 || true
+          echo "--- sdkmanager_direct.log ---"
+          tail -n 200 sdkmanager_direct.log || true
 
       - name: Install Android SDK components (with retry)
         run: |
