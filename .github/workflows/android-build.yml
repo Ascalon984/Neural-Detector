@@ -50,9 +50,26 @@ jobs:
           echo "Ownership/permissions fixed. Summary (top-level):"
           ls -la "$ANDROID_SDK_ROOT" || true
 
+      - name: Detect and use system Android SDK if present
+        run: |
+          set -euo pipefail
+          SYS_SDK=/usr/local/lib/android/sdk
+          if [ -d "$SYS_SDK/platforms/android-33" ]; then
+            echo "System SDK with android-33 found at $SYS_SDK; using it to avoid reinstall"
+            echo "ANDROID_SDK_ROOT=$SYS_SDK" >> $GITHUB_ENV
+            echo "use_system=true" > use_system.txt
+          else
+            echo "use_system=false" > use_system.txt
+          fi
+          cat use_system.txt
+
       - name: Install Android SDK command-line tools (robust)
         run: |
           set -euo pipefail
+          if [ -f use_system.txt ] && grep -q 'use_system=true' use_system.txt; then
+            echo "System SDK present; skipping manual cmdline-tools install"
+            exit 0
+          fi
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           # Always replace the 'latest' cmdline-tools to avoid using a possibly corrupted cached copy
           if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
