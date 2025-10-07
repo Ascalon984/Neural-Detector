@@ -301,6 +301,24 @@ jobs:
             flutter pub run flutter_launcher_icons:main
           fi
 
+      - name: Align Android SDK env and accept licenses (container compatibility)
+        run: |
+          set -euo pipefail
+          # The cirrusci/flutter container commonly has the SDK at /opt/android-sdk-linux.
+          # Make sure both ANDROID_SDK_ROOT and ANDROID_HOME point to the same path so
+          # Flutter and sdkmanager agree on the SDK location.
+          if [ -d /opt/android-sdk-linux ]; then
+            echo "Detected container SDK at /opt/android-sdk-linux; aligning env vars"
+            echo "ANDROID_SDK_ROOT=/opt/android-sdk-linux" >> $GITHUB_ENV
+            echo "ANDROID_HOME=/opt/android-sdk-linux" >> $GITHUB_ENV
+          fi
+          # Try accepting licenses via flutter (non-interactive) and sdkmanager as a fallback.
+          # Some environments require both to be accepted.
+          yes | flutter doctor --android-licenses || true
+          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          fi
+
       - name: Build APK (arm64)
         run: |
           set -euo pipefail
@@ -311,9 +329,10 @@ jobs:
           echo "=== flutter pub get ==="
           flutter pub get --verbose || true
           echo "=== flutter build apk (arm64) - start ==="
-          # Capture full build output to a log file for debugging
-          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose > build_apk_arm64.log 2>&1
-          BUILD_EXIT_CODE=$?
+          # Stream full build output to console and write to a log file for debugging
+          # so failures are visible in the step log and also preserved as an artifact.
+          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose 2>&1 | tee build_apk_arm64.log
+          BUILD_EXIT_CODE=${PIPESTATUS[0]:-${PIPESTATUS:-0}}
           echo "Build exit code: $BUILD_EXIT_CODE"
           if [ $BUILD_EXIT_CODE -ne 0 ]; then
             echo "flutter build failed; printing last 500 lines of log for quick inspection"
