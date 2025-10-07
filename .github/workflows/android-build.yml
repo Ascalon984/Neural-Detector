@@ -75,7 +75,7 @@ jobs:
           PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973")
           # Ensure sdk root is owned by the current user so sdkmanager can write files
           sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
-          MAX_RETRIES=3
+          MAX_RETRIES=5
 
           install_platform_tools_fallback() {
             echo "Attempting direct download of platform-tools (fallback)"
@@ -147,8 +147,8 @@ jobs:
                 fi
               fi
               i=$((i+1))
-              echo "Install $pkg failed, retrying in 10s..."
-              sleep 10
+              echo "Install $pkg failed, retrying in $((20 * i))s..."
+              sleep $((20 * i))
             done
             if [ $i -ge $MAX_RETRIES ]; then
               echo "Failed to install $pkg after $MAX_RETRIES attempts"
@@ -158,6 +158,35 @@ jobs:
 
           echo "Accepting Android SDK licenses (non-interactive)"
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+
+      - name: Collect sdkmanager debug info and logs
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "Collecting sdkmanager logs and environment snapshot"
+          echo "SDK root: $ANDROID_SDK_ROOT" > sdk_snapshot.txt
+          echo "Top-level SDK contents:" >> sdk_snapshot.txt
+          ls -la "$ANDROID_SDK_ROOT" >> sdk_snapshot.txt || true
+          echo "Disk usage:" > disk_usage.txt
+          df -h >> disk_usage.txt || true
+          # Append last 500 lines of any sdkmanager logs
+          for f in sdkmanager_*.log; do
+            if [ -f "$f" ]; then
+              echo "---- $f ----" >> sdk_snapshot.txt
+              tail -n 500 "$f" >> sdk_snapshot.txt
+            fi
+          done
+
+      - name: Upload sdkmanager logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdkmanager-logs
+          path: |
+            sdk_snapshot.txt
+            disk_usage.txt
+            sdkmanager_*.log
+          if-no-files-found: warn
 
       - name: Install dependencies
         run: |
