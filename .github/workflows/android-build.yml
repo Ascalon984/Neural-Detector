@@ -11,9 +11,12 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # Run inside a container that already includes Flutter and the Android SDK to avoid sdkmanager failures
+    container:
+      image: cirrusci/flutter:stable
     env:
-      # Use a runner-writable SDK root under HOME to avoid permission issues when restoring caches
-      ANDROID_SDK_ROOT: $HOME/android-sdk
+      # Use the container's Android SDK location (common default)
+      ANDROID_SDK_ROOT: /opt/android/sdk
       JAVA_TOOL_OPTIONS: -Xmx4g
     steps:
       - name: Checkout
