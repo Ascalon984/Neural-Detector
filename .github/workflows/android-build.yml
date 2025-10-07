@@ -12,7 +12,8 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     env:
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      # Use a runner-writable SDK root under HOME to avoid permission issues when restoring caches
+      ANDROID_SDK_ROOT: $HOME/android-sdk
       JAVA_TOOL_OPTIONS: -Xmx4g
     steps:
       - name: Checkout
@@ -39,6 +40,19 @@ jobs:
             ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools
             ${{ env.ANDROID_SDK_ROOT }}/ndk
           key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Repair Android SDK permissions after cache restore
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "Fixing ownership and permissions for ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          # Make sure the SDK root exists
+          sudo mkdir -p "$ANDROID_SDK_ROOT"
+          # Ensure the runner user owns the SDK tree and can write/read as needed
+          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
+          sudo chmod -R a+rX "$ANDROID_SDK_ROOT" || true
+          echo "Ownership/permissions fixed. Summary (top-level):"
+          ls -la "$ANDROID_SDK_ROOT" || true
 
       - name: Install Android SDK command-line tools (robust)
         run: |
