@@ -50,129 +50,16 @@ jobs:
           echo "Ownership/permissions fixed. Summary (top-level):"
           ls -la "$ANDROID_SDK_ROOT" || true
 
-      - name: Install Android SDK command-line tools (robust)
-        run: |
-          set -euo pipefail
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          # Always replace the 'latest' cmdline-tools to avoid using a possibly corrupted cached copy
-          if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            echo 'Removing existing cmdline-tools/latest to force a fresh install'
-            sudo rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
-          fi
-          echo 'Downloading Android cmdline-tools (with resume)'
-          curl -C - -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
-          unzip -q tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
-          mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-          # Make SDK root writable by the runner to allow sdkmanager to install components
-          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT"
-          # Verify sdkmanager exists and is runnable
-          if [ ! -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "ERROR: sdkmanager missing or not executable in $ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
-            ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
-            exit 1
-          fi
-          echo "Debug: listing cmdline-tools latest/lib contents"
-          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib" || true
-          echo "--- sdkmanager wrapper (first 200 lines) ---"
-          sed -n '1,200p' "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" || true
-          echo "Attempting to run SdkManagerCli directly with java - capture output"
-          java -cp "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib/*" com.android.sdklib.tool.sdkmanager.SdkManagerCli --version > sdkmanager_direct.log 2>&1 || true
-          echo "--- sdkmanager_direct.log ---"
-          tail -n 200 sdkmanager_direct.log || true
-
-      - name: Install Android SDK components (with retry)
-        run: |
-          set -euo pipefail
-          PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973")
-          # Ensure sdk root is owned by the current user so sdkmanager can write files
-          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
-          MAX_RETRIES=5
-
-          install_platform_tools_fallback() {
-            echo "Attempting direct download of platform-tools (fallback)"
-            curl -C - -fSL --retry 3 --retry-delay 5 \
-              "https://dl.google.com/android/repository/platform-tools-latest-linux.zip" \
-              -o platform-tools.zip
-
-            TMP_DIR=$(mktemp -d)
-            unzip -q platform-tools.zip -d "$TMP_DIR"
-
-            # Remove any existing install so we won't get interactive prompts
-            sudo rm -rf "$ANDROID_SDK_ROOT/platform-tools"
-            sudo mkdir -p "$ANDROID_SDK_ROOT/platform-tools"
-
-            # Move extracted files into place (preserve mode, avoid interactive prompts)
-            sudo cp -a "$TMP_DIR/platform-tools/." "$ANDROID_SDK_ROOT/platform-tools/"
-            sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT/platform-tools"
-            sudo chmod -R a+rX "$ANDROID_SDK_ROOT/platform-tools"
-
-            rm -rf platform-tools.zip "$TMP_DIR"
-            echo "Platform-tools installed successfully (fallback)"
-          }
-
-          package_installed_check() {
-            pkg="$1"
-            case "$pkg" in
-              "platform-tools")
-                [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && return 0 || return 1
-                ;;
-              platforms\;*)
-                ver=${pkg#platforms;}
-                [ -d "$ANDROID_SDK_ROOT/platforms/$ver" ] && return 0 || return 1
-                ;;
-              build-tools\;*)
-                ver=${pkg#build-tools;}
-                [ -d "$ANDROID_SDK_ROOT/build-tools/$ver" ] && return 0 || return 1
-                ;;
-              ndk\;*)
-                ver=${pkg#ndk;}
-                [ -d "$ANDROID_SDK_ROOT/ndk/$ver" ] && return 0 || return 1
-                ;;
-              *)
-                return 1
-                ;;
-            esac
-          }
-
-          # Accept licenses up-front to avoid interactive prompts during installs
-          echo "Accepting Android SDK licenses (pre-install)"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
-
-          for pkg in "${PKGS[@]}"; do
-            i=0
-            until [ $i -ge $MAX_RETRIES ]; do
-              echo "Installing $pkg (attempt $((i+1))/$MAX_RETRIES)..."
-              if [ "$pkg" = "platform-tools" ]; then
-                # Try sdkmanager first; if it fails we'll fall back to direct download
-                echo "Running sdkmanager for $pkg (logged to sdkmanager_${pkg//;/_}.log)"
-                yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" > "sdkmanager_${pkg//;/_}.log" 2>&1 || true
-                if package_installed_check "$pkg"; then
-                  echo "Installed $pkg"
-                  break
-                else
-                  echo "sdkmanager did not install $pkg; will try direct download fallback"
-                  install_platform_tools_fallback && break
-                fi
-              else
-                echo "Running sdkmanager for $pkg (logged to sdkmanager_${pkg//;/_}.log)"
-                yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" > "sdkmanager_${pkg//;/_}.log" 2>&1 || true
-                if package_installed_check "$pkg"; then
-                  echo "Installed $pkg"
-                  break
-                fi
-              fi
-              i=$((i+1))
-              echo "Install $pkg failed, retrying in $((20 * i))s..."
-              sleep $((20 * i))
-            done
-            if [ $i -ge $MAX_RETRIES ]; then
-              echo "Failed to install $pkg after $MAX_RETRIES attempts"
-              exit 1
-            fi
-          done
-
-          echo "Accepting Android SDK licenses (non-interactive)"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+      - name: Setup Android SDK and required components
+        uses: google-github-actions/setup-android@v2
+        with:
+          sdk_root: ${{ env.ANDROID_SDK_ROOT }}
+          components: |
+            platform-tools
+            platforms;android-33
+            build-tools;33.0.2
+          accept-licenses: true
+          update: true
 
       - name: Collect sdkmanager debug info and logs
         if: always()
