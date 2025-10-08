@@ -4,9 +4,10 @@ import 'package:permission_handler/permission_handler.dart';
 // provider not used in this screen
 import '../config/animation_config.dart';
 // theme_provider not used here
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, compute;
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:image/image.dart' as img;
 // OCR handled in isolate via robust_worker
 import '../models/scan_history.dart' as Model;
 import '../utils/history_manager.dart';
@@ -16,6 +17,35 @@ import '../widgets/cyber_notification.dart';
 // localizations not used here
 // sensitivity applied in worker
 import '../utils/robust_worker.dart';
+
+// Compute function to run in a background isolate: returns fraction of strong edges
+double _edgeDensityCompute(Uint8List bytes) {
+  try {
+    final image = img.decodeImage(bytes);
+    if (image == null) return 0.0;
+
+    // downscale for performance
+    final resized = img.copyResize(image, width: 200);
+
+    // convert to grayscale and apply simple sobel filter
+    final gray = img.grayscale(resized);
+    final sobel = img.sobel(gray);
+
+    int strong = 0;
+    for (int y = 0; y < sobel.height; y++) {
+      for (int x = 0; x < sobel.width; x++) {
+        final p = sobel.getPixel(x, y);
+        final lum = img.getLuminance(p);
+        if (lum > 100) strong++;
+      }
+    }
+
+    final total = sobel.width * sobel.height;
+    return total == 0 ? 0.0 : (strong / total);
+  } catch (_) {
+    return 0.0;
+  }
+}
 
 class CameraScanScreen extends StatefulWidget {
   const CameraScanScreen({super.key});
@@ -1147,6 +1177,52 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       _analysisProgress = 0.0;
     });
 
+    // Stage 1: Quick heuristic check to avoid running OCR on non-text images
+    // This uses a small edge-density check run in a background isolate via compute.
+    bool likelyText = true;
+    try {
+      final density = await compute(_edgeDensityCompute, _lastCapturedBytes!);
+      // threshold: if fewer than 2% of pixels are strong edges, probably not text
+      likelyText = density >= 0.02;
+    } catch (_) {
+      likelyText = true; // if compute fails, fall back to attempting OCR
+    }
+
+    // If unlikely to contain text, skip heavy OCR/analysis and mark as human-written
+    if (!likelyText) {
+      setState(() {
+        _isAnalyzing = true;
+        _analysisProgress = 1.0;
+        _aiPct = 0.0;
+        _humanPct = 100.0;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 400));
+      setState(() {
+        _isAnalyzing = false;
+      });
+
+      // save to history as Completed (no text detected)
+      final sized = _lastCapturedBytes != null ? _formatBytes(_lastCapturedBytes!.length) : '-';
+      final dateStr = _formatDate(DateTime.now());
+      final existing = await HistoryManager.loadHistory();
+      final scanNumber = existing.length + 1;
+      final entry = Model.ScanHistory(
+        id: 'Scan $scanNumber',
+        fileName: 'camera_capture_$scanNumber',
+        date: dateStr,
+        aiDetection: _aiPct.round(),
+        humanWritten: _humanPct.round(),
+        status: 'Completed',
+        fileSize: sized,
+      );
+      await HistoryManager.addEntry(entry);
+
+      if (!mounted) return;
+      _showAnalysisDialog(_aiPct, _humanPct);
+      return;
+    }
+
     // Stage 1: OCR (simulate with short steps, weight 40%)
     for (int i = 0; i <= 40; i += 4) {
       await Future.delayed(const Duration(milliseconds: 60));
@@ -1168,7 +1244,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     // Stage 3: Analysis (weight 40%) - offload to isolate (OCR + analysis)
     try {
       final level = await SettingsManager.getSensitivityLevel();
-      final adjusted = await runAnalysisIsolate(filePath: _lastCapturedPath, bytes: _lastCapturedBytes, sensitivityLevel: level);
+      // runAnalysisIsolate performs OCR on the caller isolate then offloads heavy
+      // analysis into a spawned isolate. Add a timeout to avoid hanging.
+      final adjusted = await runAnalysisIsolate(filePath: _lastCapturedPath, bytes: _lastCapturedBytes, sensitivityLevel: level)
+          .timeout(const Duration(seconds: 10), onTimeout: () => {'ai_detection': 0.0, 'human_written': 100.0});
+
       _aiPct = adjusted['ai_detection'] ?? 0.0;
       _humanPct = adjusted['human_written'] ?? 0.0;
     } catch (e) {
