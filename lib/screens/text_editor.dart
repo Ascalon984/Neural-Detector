@@ -140,6 +140,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Get screen size for responsive design
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -161,7 +165,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           // Main content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
               child: ScrollConfiguration(
                 behavior: const MaterialScrollBehavior().copyWith(
                   scrollbars: false,
@@ -173,11 +177,11 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildHeader(),
-                      const SizedBox(height: 25),
+                      SizedBox(height: isSmallScreen ? 15 : 25),
                       _buildTextEditorArea(),
-                      const SizedBox(height: 25),
+                      SizedBox(height: isSmallScreen ? 15 : 25),
                       _buildStatsBar(),
-                      const SizedBox(height: 25),
+                      SizedBox(height: isSmallScreen ? 15 : 25),
                       _buildActionButtons(),
                     ],
                   ),
@@ -374,6 +378,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   Widget _buildTextEditorArea() {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
@@ -381,8 +388,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           scale: _pulseAnimation.value,
           child: Container(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.5,
-              minHeight: 250,
+              maxHeight: screenSize.height * 0.5,
+              minHeight: isSmallScreen ? 200 : 250,
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(25),
@@ -431,7 +438,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   ),
                 
                 Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -439,16 +446,20 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'QUANTUM TEXT INPUT',
-                            style: TextStyle(
-                              color: Colors.cyan.shade300,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                              fontFamily: 'Orbitron',
+                          Flexible(
+                            child: Text(
+                              'INPUT TEKS',
+                              style: TextStyle(
+                                color: Colors.cyan.shade300,
+                                fontSize: isSmallScreen ? 14 : 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                                fontFamily: 'Orbitron',
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const SizedBox(width: 10),
                           AnimatedBuilder(
                             animation: _glowAnimation,
                             builder: (context, child) {
@@ -463,10 +474,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                                   ),
                                 ),
                                 child: Text(
-                                  '${_textController.text.length} CHARS',
+                                  '${_textController.text.length} Karakter',
                                   style: TextStyle(
                                     color: Colors.cyan.shade300,
-                                    fontSize: 11,
+                                    fontSize: isSmallScreen ? 10 : 11,
                                     fontWeight: FontWeight.bold,
                                     fontFamily: 'Courier',
                                   ),
@@ -477,7 +488,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         ],
                       ),
                       
-                      const SizedBox(height: 15),
+                      SizedBox(height: isSmallScreen ? 10 : 15),
                       
                       // Text field
                       Expanded(
@@ -495,8 +506,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             expands: true,
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 16,
-                              fontFamily: 'Courier',
+                              fontSize: isSmallScreen ? 14 : 16,
+                              fontFamily: 'Times New Roman',
                               shadows: [
                                 Shadow(
                                   color: Colors.cyan.withOpacity(_textGlowAnimation.value),
@@ -504,14 +515,15 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                                 ),
                               ],
                             ),
-                            decoration: const InputDecoration(
-                              hintText: 'Initiate neural text input...\n\n• Real-time AI detection\n• Quantum processing\n• Neural network analysis',
+                            decoration: InputDecoration(
+                              hintText: 'Mulai input teks...',
                               hintStyle: TextStyle(
                                 color: Colors.white38,
-                                fontSize: 14,
+                                fontSize: isSmallScreen ? 12 : 14,
+                                fontFamily: 'Times New Roman',
                               ),
                               border: InputBorder.none,
-                              contentPadding: EdgeInsets.all(20),
+                              contentPadding: EdgeInsets.all(isSmallScreen ? 15 : 20),
                             ),
                             focusNode: _textFocusNode,
                             onChanged: (value) {
@@ -616,11 +628,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   Widget _buildStatsBar() {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
@@ -646,9 +661,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem('WORDS', _countWords().toString(), Icons.text_fields, Colors.cyan),
-              _buildStatItem('LINES', _countLines().toString(), Icons.format_line_spacing, Colors.pink),
-              _buildStatItem('DENSITY', '${_calculateDensity()}%', Icons.analytics, Colors.purple),
+              _buildStatItem('KATA', _countWords().toString(), Icons.text_fields, Colors.cyan, isSmallScreen),
+              _buildStatItem('BARIS', _countLines().toString(), Icons.format_line_spacing, Colors.pink, isSmallScreen),
+              _buildStatItem('KEPADATAN', '${_calculateDensity()}%', Icons.analytics, Colors.purple, isSmallScreen),
             ],
           ),
         );
@@ -656,7 +671,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
+  Widget _buildStatItem(String label, String value, IconData icon, Color color, bool isSmallScreen) {
     return Column(
       children: [
         Container(
@@ -676,14 +691,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               ),
             ],
           ),
-          child: Icon(icon, color: color, size: 22),
+          child: Icon(icon, color: color, size: isSmallScreen ? 20 : 22),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: isSmallScreen ? 6 : 8),
         Text(
           value,
           style: TextStyle(
             color: color,
-            fontSize: 18,
+            fontSize: isSmallScreen ? 16 : 18,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
             letterSpacing: 1,
@@ -691,9 +706,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         ),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white70,
-            fontSize: 11,
+            fontSize: isSmallScreen ? 10 : 11,
             fontWeight: FontWeight.w300,
             letterSpacing: 1.5,
           ),
@@ -703,26 +718,31 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   Widget _buildActionButtons() {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     return Row(
       children: [
         Expanded(
           child: _buildCyberButton(
-            text: 'CLEAR',
+            text: 'HAPUS',
             icon: Icons.delete_sweep,
             onPressed: _clearText,
             color: Colors.red,
             isDisabled: _textController.text.isEmpty,
+            isSmallScreen: isSmallScreen,
           ),
         ),
-        const SizedBox(width: 15),
+        SizedBox(width: isSmallScreen ? 10 : 15),
         Expanded(
           flex: 2,
           child: _buildCyberButton(
-            text: _isAnalyzing ? 'ANALYZING...' : 'QUANTUM ANALYSIS',
+            text: _isAnalyzing ? 'MENGANALISIS...' : 'ANALISIS TEKS',
             icon: _isAnalyzing ? Icons.psychology : Icons.auto_awesome,
             onPressed: _textController.text.isEmpty ? null : _analyzeText,
             color: Colors.cyan,
             isAnalyzing: _isAnalyzing,
+            isSmallScreen: isSmallScreen,
           ),
         ),
       ],
@@ -736,6 +756,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     required Color color,
     bool isDisabled = false,
     bool isAnalyzing = false,
+    bool isSmallScreen = false,
   }) {
     return AnimatedBuilder(
       animation: _glowAnimation,
@@ -768,7 +789,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               onTap: isDisabled ? null : onPressed,
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 18),
+                padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 14 : 18),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -783,16 +804,20 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         ),
                       )
                     else
-                      Icon(icon, color: color, size: 22),
-                    const SizedBox(width: 12),
-                    Text(
-                      text,
-                      style: TextStyle(
-                        color: isDisabled ? Colors.white30 : Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        letterSpacing: 1.2,
-                        fontFamily: 'Orbitron',
+                      Icon(icon, color: color, size: isSmallScreen ? 20 : 22),
+                    SizedBox(width: isSmallScreen ? 8 : 12),
+                    Flexible(
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          color: isDisabled ? Colors.white30 : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: isSmallScreen ? 12 : 14,
+                          letterSpacing: 1.2,
+                          fontFamily: 'Orbitron',
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                   ],
@@ -947,7 +972,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       try {
         final notify = await SettingsManager.getNotifications();
         if (notify && mounted) {
-          CyberNotification.show(context, 'Analysis complete', 'Text analysis finished');
+          CyberNotification.show(context, 'Analisis selesai', 'Analisis teks selesai');
         }
       } catch (_) {}
 
@@ -962,11 +987,15 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   void _showAnalysisResult() {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    
     showDialog(
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         child: Container(
+          width: isSmallScreen ? screenSize.width * 0.9 : null,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
@@ -994,13 +1023,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(30),
+            padding: EdgeInsets.all(isSmallScreen ? 20 : 30),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 90,
-                  height: 90,
+                  width: isSmallScreen ? 70 : 90,
+                  height: isSmallScreen ? 70 : 90,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -1017,26 +1046,27 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.verified,
                     color: Colors.white,
-                    size: 45,
+                    size: isSmallScreen ? 35 : 45,
                   ),
                 ),
-                const SizedBox(height: 25),
+                SizedBox(height: isSmallScreen ? 15 : 25),
                 Text(
-                  'NEURAL ANALYSIS COMPLETE',
+                  'ANALISIS NEURAL SELESAI',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: isSmallScreen ? 16 : 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.cyan.shade300,
                     fontFamily: 'Orbitron',
                     letterSpacing: 1.5,
                   ),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: isSmallScreen ? 15 : 20),
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.4),
                     borderRadius: BorderRadius.circular(15),
@@ -1051,7 +1081,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'AI Detection:',
+                            'Deteksi AI:',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 16,
@@ -1068,12 +1098,12 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 15),
+                      SizedBox(height: isSmallScreen ? 10 : 15),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Human Written:',
+                            'Ditulis Manusia:',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 16,
@@ -1093,12 +1123,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 25),
+                SizedBox(height: isSmallScreen ? 15 : 25),
                 _buildCyberButton(
-                  text: 'CLOSE',
+                  text: 'TUTUP',
                   icon: Icons.close,
                   onPressed: () => Navigator.pop(context),
                   color: Colors.cyan,
+                  isSmallScreen: isSmallScreen,
                 ),
               ],
             ),

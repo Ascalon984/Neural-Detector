@@ -43,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-  _searchController.addListener(_onSearchChanged);
+    _searchController.addListener(_onSearchChanged);
     // initialize search filters
     _searchFilters = {
       'source': 'all', // all/history/upload/camera/editor
@@ -499,7 +499,7 @@ class _HomeScreenState extends State<HomeScreen>
                             fontSize: 16,
                           ),
                           decoration: const InputDecoration(
-                            hintText: 'Initiate neural scan...',
+                            hintText: 'Telusuri hasil pemindaian...',
                             hintStyle: TextStyle(
                               color: Colors.white38,
                               fontSize: 16,
@@ -649,25 +649,25 @@ class _HomeScreenState extends State<HomeScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Filters', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Orbitron')),
+                        const Text('Filter', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Orbitron')),
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, null),
                           style: TextButton.styleFrom(foregroundColor: Colors.white70),
-                          child: const Text('Cancel'),
+                          child: const Text('Batal'),
                         ),
                       ]),
                       const SizedBox(height: 10),
-                      const Text('Source', style: TextStyle(color: Colors.white70)),
+                      const Text('Sumber', style: TextStyle(color: Colors.white70)),
                       const SizedBox(height: 8),
                       Wrap(spacing: 8, runSpacing: 8, children: [
-                        _neonChip('all', 'All', source, (v) => setC(() => source = v)),
-                        _neonChip('history', 'History', source, (v) => setC(() => source = v)),
-                        _neonChip('upload', 'Upload', source, (v) => setC(() => source = v)),
-                        _neonChip('camera', 'Camera', source, (v) => setC(() => source = v)),
+                        _neonChip('all', 'Semua', source, (v) => setC(() => source = v)),
+                        _neonChip('history', 'Riwayat', source, (v) => setC(() => source = v)),
+                        _neonChip('upload', 'Unggah', source, (v) => setC(() => source = v)),
+                        _neonChip('camera', 'Kamera', source, (v) => setC(() => source = v)),
                         _neonChip('editor', 'Editor', source, (v) => setC(() => source = v)),
                       ]),
                       const SizedBox(height: 12),
-                      Text('Min confidence: $minConf%', style: const TextStyle(color: Colors.white70)),
+                      Text('Kepercayaan minimum: $minConf%', style: const TextStyle(color: Colors.white70)),
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           activeTrackColor: Colors.purpleAccent,
@@ -679,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen>
                         child: Slider(value: minConf.toDouble(), min: 50, max: 100, divisions: 50, label: '$minConf%', onChanged: (v) => setC(() => minConf = v.round())),
                       ),
                       const SizedBox(height: 8),
-                      Text('Sensitivity override: $sensitivity', style: const TextStyle(color: Colors.white70)),
+                      Text('Penggantian sensitivitas: $sensitivity', style: const TextStyle(color: Colors.white70)),
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           activeTrackColor: Colors.cyanAccent,
@@ -702,15 +702,17 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Text('Only AI-detected', style: TextStyle(color: Colors.white70)),
+                        const Flexible(
+                          child: Text('Hanya yang terdeteksi AI', style: TextStyle(color: Colors.white70)),
+                        ),
                       ]),
                       const SizedBox(height: 8),
-                      const Text('Sort by', style: TextStyle(color: Colors.white70)),
+                      const Text('Urutkan berdasarkan', style: TextStyle(color: Colors.white70)),
                       const SizedBox(height: 8),
                       Wrap(spacing: 8, children: [
-                        _neonChip('relevance', 'Relevance', sort, (v) => setC(() => sort = v)),
-                        _neonChip('newest', 'Newest', sort, (v) => setC(() => sort = v)),
-                        _neonChip('confidence', 'Confidence', sort, (v) => setC(() => sort = v)),
+                        _neonChip('relevance', 'Relevansi', sort, (v) => setC(() => sort = v)),
+                        _neonChip('newest', 'Terbaru', sort, (v) => setC(() => sort = v)),
+                        _neonChip('confidence', 'Kepercayaan', sort, (v) => setC(() => sort = v)),
                       ]),
                       const SizedBox(height: 16),
                       Row(children: [
@@ -757,7 +759,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 shadowColor: Colors.transparent,
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                               ),
-                              child: const Text('Apply', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                              child: const Text('Terapkan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ),
@@ -933,32 +935,32 @@ class _HomeScreenState extends State<HomeScreen>
       children: [
         _buildFeatureCard(
           icon: Icons.edit,
-          title: 'TEXT EDITOR',
-          subtitle: 'Real-time AI detection while typing',
+          title: 'EDITOR TEKS',
+          subtitle: 'Deteksi AI real-time saat mengetik',
           gradient: [Colors.cyan, Colors.blue],
           onTap: () => _navigateTo(1),
         ),
         const SizedBox(height: 15),
         _buildFeatureCard(
           icon: Icons.upload_file,
-          title: 'UPLOAD FILE',
-          subtitle: 'Advanced neural document analysis',
+          title: 'UNGGAH FILE',
+          subtitle: 'Analisis dokumen neural lanjutan',
           gradient: [Colors.purple, Colors.pink],
           onTap: () => _navigateTo(2),
         ),
         const SizedBox(height: 15),
         _buildFeatureCard(
           icon: Icons.camera_alt,
-          title: 'SCANNER',
-          subtitle: 'OCR with quantum neural processing',
+          title: 'PEMINDAI',
+          subtitle: 'OCR pemindaian real time',
           gradient: [Colors.pink, Colors.cyan],
           onTap: () => _navigateTo(3),
         ),
         const SizedBox(height: 15),
         _buildFeatureCard(
           icon: Icons.history,
-          title: 'DATA ARCHIVE',
-          subtitle: 'Complete scan history database',
+          title: 'ARSIP DATA',
+          subtitle: 'Database riwayat pemindaian lengkap',
           gradient: [Colors.blue, Colors.purple],
           onTap: () => _navigateTo(4),
         ),
@@ -1059,6 +1061,8 @@ class _HomeScreenState extends State<HomeScreen>
                               color: Colors.white70,
                               fontSize: 12,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),

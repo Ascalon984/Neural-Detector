@@ -38,6 +38,10 @@ class _HistoryScreenState extends State<HistoryScreen>
   int _humanAvg = 0;
   SortOption _currentSort = SortOption.newest;
   final ScrollController _scrollController = ScrollController();
+  // show/hide history graph
+  bool _showGraph = false;
+  // grouped history keyed by 'YYYY-MM-DD HH' -> list of scans
+  Map<String, List<Model.ScanHistory>> _groupedHistory = {};
 
   @override
   void initState() {
@@ -158,8 +162,17 @@ class _HistoryScreenState extends State<HistoryScreen>
     } else {
       list = await HistoryManager.loadHistory();
     }
+    // Build grouping by date-hour (YYYY-MM-DD HH)
+    final Map<String, List<Model.ScanHistory>> grouped = {};
+    for (var item in list) {
+      final dt = _parseDate(item.date);
+      final key = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}';
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+
     setState(() {
       _scanHistory = list;
+      _groupedHistory = grouped;
       if (_scanHistory.isNotEmpty) {
         final aiTotal = _scanHistory.map((e) => e.aiDetection).reduce((a, b) => a + b);
         final humanTotal = _scanHistory.map((e) => e.humanWritten).reduce((a, b) => a + b);
@@ -215,6 +228,8 @@ class _HistoryScreenState extends State<HistoryScreen>
                           SizedBox(height: screenHeight * 0.03),
                           _buildStatsOverview(),
                           SizedBox(height: screenHeight * 0.025),
+                          // Conditional history graph
+                          if (_showGraph) buildHistoryGraph(_groupedHistory, _glowAnimation.value),
                           _buildListHeader(),
                           SizedBox(height: screenHeight * 0.02),
 
@@ -546,8 +561,10 @@ class _HistoryScreenState extends State<HistoryScreen>
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
-        return Container(
-          padding: const EdgeInsets.all(20),
+        return Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
@@ -570,14 +587,36 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
             ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('Total Scans', '${_scanHistory.length}', Icons.analytics, Colors.cyan),
-              _buildStatItem('AI Avg', '${_aiAvg}%', Icons.psychology, Colors.pink),
-              _buildStatItem('Human Avg', '${_humanAvg}%', Icons.person, Colors.purple),
-            ],
-          ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem('Total Scans', '${_scanHistory.length}', Icons.analytics, Colors.cyan),
+                  _buildStatItem('AI Avg', '${_aiAvg}%', Icons.psychology, Colors.pink),
+                  _buildStatItem('Human Avg', '${_humanAvg}%', Icons.person, Colors.purple),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: () => setState(() => _showGraph = !_showGraph),
+                child: AnimatedRotation(
+                  turns: _showGraph ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.cyan.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.cyan.withOpacity(_glowAnimation.value)),
+                    ),
+                    child: Icon(Icons.keyboard_arrow_down, color: Colors.cyan.shade300, size: 20),
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -1399,6 +1438,262 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Top-level builder for the history graph so it can be called from the widget tree
+Widget buildHistoryGraph(Map<String, List<Model.ScanHistory>> groupedHistory, double glow) {
+  if (groupedHistory.isEmpty) return const SizedBox.shrink();
+
+  final sortedKeys = groupedHistory.keys.toList()..sort();
+
+  // determine max scans in any slot for scaling
+  final maxScans = groupedHistory.values.map((l) => l.length).fold<int>(0, (p, n) => math.max(p, n));
+
+  return AnimatedContainer(
+    duration: const Duration(milliseconds: 300),
+    margin: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(12),
+      color: Colors.black.withOpacity(0.4),
+      border: Border.all(color: Colors.cyan.withOpacity(glow)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('SCAN HISTORY GRAPH', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 180,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: sortedKeys.map((key) {
+              final scans = groupedHistory[key]!;
+              final total = scans.length;
+              final aiTotal = scans.map((e) => e.aiDetection).fold<int>(0, (p, n) => p + n);
+              final humanTotal = scans.map((e) => e.humanWritten).fold<int>(0, (p, n) => p + n);
+              final aiAvg = (aiTotal / scans.length).round();
+              final humanAvg = (humanTotal / scans.length).round();
+
+              final barHeight = maxScans > 0 ? (total / maxScans) * 150 : 0.0;
+
+              return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: _GraphBar(
+                      height: barHeight,
+                      label: key,
+                      totalScans: total,
+                      aiAvg: aiAvg,
+                      humanAvg: humanAvg,
+                      glow: glow,
+                      fileName: scans.length == 1 ? scans.first.fileName : null,
+                    ),
+                  ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _GraphBar extends StatefulWidget {
+  final double height;
+  final String label; // 'YYYY-MM-DD HH'
+  final int totalScans;
+  final int aiAvg;
+  final int humanAvg;
+  final double glow;
+  final String? fileName;
+
+  const _GraphBar({required this.height, required this.label, required this.totalScans, required this.aiAvg, required this.humanAvg, required this.glow, this.fileName});
+
+  @override
+  State<_GraphBar> createState() => _GraphBarState();
+}
+
+class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  // hover state no longer required (handled via overlay)
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _anim = Tween<double>(begin: 0, end: widget.height).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String _formatLabel(String key) {
+    // key is 'YYYY-MM-DD HH'
+    try {
+      final parts = key.split(' ');
+      final date = parts[0].split('-');
+      final month = date[1];
+      final day = date[2];
+      final hour = parts.length > 1 ? parts[1] : '00';
+      return '$month/$day ${hour}:00';
+    } catch (_) {
+      return key;
+    }
+  }
+
+  String _displayFileName() {
+    if (widget.fileName == null) return '';
+    const max = 18;
+    if (widget.fileName!.length <= max) return widget.fileName!;
+    return '${widget.fileName!.substring(0, max - 3)}...';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _showTooltip(),
+      onExit: (_) => _removeOverlay(),
+      child: GestureDetector(
+        onTap: () {
+          // toggle tooltip on tap for mobile
+          if (_overlayEntry == null) {
+            _showTooltip();
+          } else {
+            _removeOverlay();
+          }
+        },
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // bar area with stacked segments
+            AnimatedBuilder(
+              animation: _anim,
+              builder: (context, child) {
+                final totalHeight = _anim.value;
+                final aiFrac = widget.aiAvg.toDouble().clamp(0.0, 100.0) / 100.0;
+                final aiHeight = totalHeight * aiFrac;
+                final humanHeight = (totalHeight - aiHeight).clamp(0.0, totalHeight);
+
+                return Container(
+                  height: totalHeight,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: _overlayEntry != null ? 10 : 4)],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                            // human (cyan) at bottom
+                            Container(
+                              height: humanHeight,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [Colors.cyan.shade400, Colors.cyan.shade700]),
+                              ),
+                            ),
+                            // AI (pink) on top
+                            Container(
+                              height: aiHeight,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [Colors.pink.shade400, Colors.pink.shade700]),
+                              ),
+                            ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 6),
+            Text(_formatLabel(widget.label), style: const TextStyle(color: Colors.white70, fontSize: 9)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTooltip() {
+    // if already showing, do nothing
+    if (_overlayEntry != null) return;
+
+  final overlay = Overlay.of(context);
+
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    final tooltipWidth = 180.0;
+    final tooltipHeight = 90.0;
+
+    // prefer above the bar, fallback below if not enough space
+    final screenSize = MediaQuery.of(context).size;
+    double top = offset.dy - tooltipHeight - 8;
+    if (top < MediaQuery.of(context).padding.top + 8) {
+      top = offset.dy + size.height + 8; // place below
+    }
+
+    double left = offset.dx + (size.width / 2) - (tooltipWidth / 2);
+    // clamp within screen horizontally but allow slight overflow if necessary
+    left = left.clamp(8.0, screenSize.width - tooltipWidth - 8.0);
+
+    _overlayEntry = OverlayEntry(builder: (context) {
+      return Positioned(
+        top: top,
+        left: left,
+        width: tooltipWidth,
+        child: Material(
+          color: Colors.transparent,
+          child: GestureDetector(
+            onTap: _removeOverlay,
+            behavior: HitTestBehavior.translucent,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.cyan.withOpacity(widget.glow)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.fileName != null) ...[
+                    Text(_displayFileName(), style: TextStyle(color: Colors.cyan.shade300, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                  ],
+                  Text(_formatLabel(widget.label), style: TextStyle(color: Colors.cyan.shade300, fontSize: 11)),
+                  const SizedBox(height: 6),
+                  Text('Scans: ${widget.totalScans}', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('AI: ${widget.aiAvg}%', style: TextStyle(color: Colors.pink.shade300, fontSize: 12)),
+                      Text('Human: ${widget.humanAvg}%', style: TextStyle(color: Colors.cyan.shade300, fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
 }
 
 class _ParticlesPainter extends CustomPainter {

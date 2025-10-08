@@ -111,6 +111,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    final isVerySmallScreen = screenSize.width < 360;
+    
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -136,24 +140,23 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               builder: (context, constraints) {
                 final screenHeight = constraints.maxHeight;
                 final screenWidth = constraints.maxWidth;
-                final isSmallScreen = screenWidth < 360;
                 
                 return SingleChildScrollView(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(minHeight: screenHeight),
                     child: Padding(
-                      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                      padding: EdgeInsets.all(isVerySmallScreen ? 12 : isSmallScreen ? 16 : 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildHeader(isSmallScreen),
-                          SizedBox(height: isSmallScreen ? 15 : 20),
+                          _buildHeader(isVerySmallScreen, isSmallScreen),
+                          SizedBox(height: isVerySmallScreen ? 15 : 20),
                           SizedBox(
                             height: screenHeight * 0.5,
-                            child: _buildUploadArea(isSmallScreen),
+                            child: _buildUploadArea(isVerySmallScreen, isSmallScreen),
                           ),
-                          SizedBox(height: isSmallScreen ? 15 : 20),
-                          _buildActionButtons(isSmallScreen),
+                          SizedBox(height: isVerySmallScreen ? 15 : 20),
+                          _buildActionButtons(isVerySmallScreen, isSmallScreen),
                         ],
                       ),
                     ),
@@ -281,15 +284,15 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildHeader(bool isSmallScreen) {
+  Widget _buildHeader(bool isVerySmallScreen, bool isSmallScreen) {
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
         return Row(
           children: [
             Container(
-              width: isSmallScreen ? 40 : 50,
-              height: isSmallScreen ? 40 : 50,
+              width: isVerySmallScreen ? 40 : isSmallScreen ? 50 : 60,
+              height: isVerySmallScreen ? 40 : isSmallScreen ? 50 : 60,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -299,16 +302,16 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+                borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                    blurRadius: isSmallScreen ? 12 : 15,
+                    blurRadius: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20,
                     spreadRadius: 2,
                   ),
                   BoxShadow(
                     color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: isSmallScreen ? 8 : 10,
+                    blurRadius: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 15,
                     spreadRadius: 1,
                   ),
                 ],
@@ -316,10 +319,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               child: Icon(
                 Icons.cloud_upload,
                 color: Colors.white,
-                size: isSmallScreen ? 20 : 25,
+                size: isVerySmallScreen ? 20 : isSmallScreen ? 25 : 30,
               ),
             ),
-            SizedBox(width: isSmallScreen ? 12 : 15),
+            SizedBox(width: isVerySmallScreen ? 12 : 15),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,26 +335,26 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       ],
                     ).createShader(bounds),
                     child: Text(
-                      'QUANTUM UPLOAD',
+                      'UNGGAH FILE',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 16 : (MediaQuery.of(context).size.width < 360 ? 20 : 24),
+                        fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 20 : 24,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
-                        letterSpacing: isSmallScreen ? 1 : 2,
+                        letterSpacing: isVerySmallScreen ? 1 : 2,
                         fontFamily: 'Orbitron',
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  SizedBox(height: isSmallScreen ? 2 : 3),
+                  SizedBox(height: isVerySmallScreen ? 2 : 3),
                   Text(
-                    'NEURAL FILE PROCESSING',
+                    'FILE PROCESSING',
                     style: TextStyle(
                       color: Colors.pink.shade300,
-                      fontSize: isSmallScreen ? 8 : 10,
+                      fontSize: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12,
                       fontWeight: FontWeight.w300,
-                      letterSpacing: isSmallScreen ? 1 : 2,
+                      letterSpacing: isVerySmallScreen ? 1 : 2,
                       fontFamily: 'Courier',
                     ),
                     maxLines: 1,
@@ -366,7 +369,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildUploadArea(bool isSmallScreen) {
+  Widget _buildUploadArea(bool isVerySmallScreen, bool isSmallScreen) {
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
@@ -375,7 +378,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           child: Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
+              borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -392,7 +395,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               boxShadow: [
                 BoxShadow(
                   color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                  blurRadius: isSmallScreen ? 15 : 20,
+                  blurRadius: isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25,
                   spreadRadius: 5,
                 ),
               ],
@@ -421,33 +424,33 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 
                 // Content
                 Padding(
-                  padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
+                  padding: EdgeInsets.all(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       // Upload icon with animation
-                      _buildUploadIcon(isSmallScreen),
+                      _buildUploadIcon(isVerySmallScreen, isSmallScreen),
                       
-                      SizedBox(height: isSmallScreen ? 15 : 20),
+                      SizedBox(height: isVerySmallScreen ? 15 : 20),
                       
                       // File info or placeholder
-                      _buildFileInfo(isSmallScreen),
+                      _buildFileInfo(isVerySmallScreen, isSmallScreen),
                       
-                      SizedBox(height: isSmallScreen ? 12 : 15),
+                      SizedBox(height: isVerySmallScreen ? 12 : 15),
                       
                       // Progress bar if uploading
-                      if (_isUploading) _buildProgressBar(isSmallScreen),
+                      if (_isUploading) _buildProgressBar(isVerySmallScreen, isSmallScreen),
                       
-                      SizedBox(height: isSmallScreen ? 12 : 15),
+                      SizedBox(height: isVerySmallScreen ? 12 : 15),
                       
                       // Status indicator
-                      _buildStatusIndicator(isSmallScreen),
+                      _buildStatusIndicator(isVerySmallScreen, isSmallScreen),
                     ],
                   ),
                 ),
                 
                 // Corner accents
-                ..._buildUploadAreaCorners(isSmallScreen),
+                ..._buildUploadAreaCorners(isVerySmallScreen, isSmallScreen),
               ],
             ),
           ),
@@ -456,7 +459,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.3);
   }
 
-  Widget _buildUploadIcon(bool isSmallScreen) {
+  Widget _buildUploadIcon(bool isVerySmallScreen, bool isSmallScreen) {
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -465,8 +468,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           animation: _glowAnimation,
           builder: (context, child) {
             return Container(
-              width: isSmallScreen ? 80 : 100,
-              height: isSmallScreen ? 80 : 100,
+              width: isVerySmallScreen ? 80 : isSmallScreen ? 100 : 120,
+              height: isVerySmallScreen ? 80 : isSmallScreen ? 100 : 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
@@ -488,8 +491,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             return Transform.rotate(
               angle: _rotateController.value * 2 * math.pi,
               child: Container(
-                width: isSmallScreen ? 70 : 85,
-                height: isSmallScreen ? 70 : 85,
+                width: isVerySmallScreen ? 70 : isSmallScreen ? 85 : 100,
+                height: isVerySmallScreen ? 70 : isSmallScreen ? 85 : 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
@@ -507,8 +510,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           animation: _glowAnimation,
           builder: (context, child) {
             return Container(
-              width: isSmallScreen ? 50 : 65,
-              height: isSmallScreen ? 50 : 65,
+              width: isVerySmallScreen ? 50 : isSmallScreen ? 65 : 80,
+              height: isVerySmallScreen ? 50 : isSmallScreen ? 65 : 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -520,7 +523,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 boxShadow: [
                   BoxShadow(
                     color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                    blurRadius: isSmallScreen ? 12 : 15,
+                    blurRadius: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20,
                     spreadRadius: 3,
                   ),
                 ],
@@ -528,7 +531,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               child: Icon(
                 _selectedFileName != null ? Icons.description : Icons.cloud_upload,
                 color: Colors.white,
-                size: isSmallScreen ? 25 : 32,
+                size: isVerySmallScreen ? 25 : isSmallScreen ? 32 : 40,
               ),
             );
           },
@@ -537,29 +540,29 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildFileInfo(bool isSmallScreen) {
+  Widget _buildFileInfo(bool isVerySmallScreen, bool isSmallScreen) {
     return Column(
       children: [
         Text(
-          _selectedFileName ?? 'DRAG & DROP OR CLICK TO UPLOAD',
+          _selectedFileName ?? 'SERET & LEPAS ATAU KLIK UNTUK MENGUNGGAH',
           style: TextStyle(
-            fontSize: isSmallScreen ? 12 : (MediaQuery.of(context).size.width < 360 ? 14 : 16),
+            fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 14 : 16,
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            letterSpacing: isSmallScreen ? 0.8 : 1,
+            letterSpacing: isVerySmallScreen ? 0.8 : 1,
             fontFamily: 'Orbitron',
           ),
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        SizedBox(height: isSmallScreen ? 6 : 8),
+        SizedBox(height: isVerySmallScreen ? 6 : 8),
         if (_selectedFileName != null) ...[
           Text(
             '${_formatBytes(_selectedFileSize ?? 0)} • ${_formatDate(_selectedFileDate)}',
             style: TextStyle(
               color: Colors.white70,
-              fontSize: isSmallScreen ? 10 : 12,
+              fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,
               fontWeight: FontWeight.w300,
             ),
             textAlign: TextAlign.center,
@@ -568,12 +571,12 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           ),
         ] else ...[
           Text(
-            'SUPPORTED: PDF, DOC, DOCX, TXT',
+            'DIDUKUNG: PDF, DOC, DOCX, TXT',
             style: TextStyle(
               color: Colors.cyan.shade300,
-              fontSize: isSmallScreen ? 10 : 12,
+              fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,
               fontWeight: FontWeight.w300,
-              letterSpacing: isSmallScreen ? 0.8 : 1,
+              letterSpacing: isVerySmallScreen ? 0.8 : 1,
             ),
             textAlign: TextAlign.center,
             maxLines: 1,
@@ -584,13 +587,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildProgressBar(bool isSmallScreen) {
+  Widget _buildProgressBar(bool isVerySmallScreen, bool isSmallScreen) {
     return Column(
       children: [
         Container(
-          height: isSmallScreen ? 4 : 6,
+          height: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(isSmallScreen ? 2 : 3),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 2 : isSmallScreen ? 3 : 4),
             color: Colors.black.withOpacity(0.5),
           ),
           child: Stack(
@@ -598,9 +601,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               // Progress track
               Container(
                 width: double.infinity,
-                height: isSmallScreen ? 4 : 6,
+                height: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(isSmallScreen ? 2 : 3),
+                  borderRadius: BorderRadius.circular(isVerySmallScreen ? 2 : isSmallScreen ? 3 : 4),
                   color: Colors.blue.shade900.withOpacity(0.3),
                 ),
               ),
@@ -610,10 +613,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 animation: _glowAnimation,
                 builder: (context, child) {
                   return Container(
-                    width: (MediaQuery.of(context).size.width - (isSmallScreen ? 60 : 80)) * _uploadProgress,
-                    height: isSmallScreen ? 4 : 6,
+                    width: (MediaQuery.of(context).size.width - (isVerySmallScreen ? 60 : isSmallScreen ? 80 : 100)) * _uploadProgress,
+                    height: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(isSmallScreen ? 2 : 3),
+                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 2 : isSmallScreen ? 3 : 4),
                       gradient: LinearGradient(
                         colors: [
                           Colors.cyan.withOpacity(_glowAnimation.value),
@@ -623,7 +626,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       boxShadow: [
                         BoxShadow(
                           color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                          blurRadius: isSmallScreen ? 4 : 6,
+                          blurRadius: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
                           spreadRadius: 1,
                         ),
                       ],
@@ -634,15 +637,15 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             ],
           ),
         ),
-        SizedBox(height: isSmallScreen ? 6 : 8),
+        SizedBox(height: isVerySmallScreen ? 6 : 8),
         Text(
-          'QUANTUM PROCESSING: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+          'PROSES KUANTUM: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
           style: TextStyle(
             color: Colors.cyan.shade300,
-            fontSize: isSmallScreen ? 9 : 11,
+            fontSize: isVerySmallScreen ? 9 : isSmallScreen ? 11 : 13,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
-            letterSpacing: isSmallScreen ? 0.8 : 1,
+            letterSpacing: isVerySmallScreen ? 0.8 : 1,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -651,7 +654,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildStatusIndicator(bool isSmallScreen) {
+  Widget _buildStatusIndicator(bool isVerySmallScreen, bool isSmallScreen) {
     if (_selectedFileName == null) return const SizedBox();
     
     return AnimatedBuilder(
@@ -659,12 +662,12 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       builder: (context, child) {
         return Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 12 : 15, 
-            vertical: isSmallScreen ? 6 : 8
+            horizontal: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 18, 
+            vertical: isVerySmallScreen ? 6 : isSmallScreen ? 8 : 10
           ),
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
             border: Border.all(
               color: Colors.cyan.withOpacity(_glowAnimation.value),
               width: 1.5,
@@ -672,7 +675,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             boxShadow: [
               BoxShadow(
                 color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: isSmallScreen ? 6 : 8,
+                blurRadius: isVerySmallScreen ? 6 : isSmallScreen ? 8 : 10,
                 spreadRadius: 1,
               ),
             ],
@@ -683,17 +686,17 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               Icon(
                 Icons.verified,
                 color: Colors.cyan.shade300,
-                size: isSmallScreen ? 14 : 16,
+                size: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
               ),
-              SizedBox(width: isSmallScreen ? 4 : 6),
+              SizedBox(width: isVerySmallScreen ? 4 : 6),
               Text(
-                'QUANTUM READY',
+                'Berhasil Di unggah',
                 style: TextStyle(
                   color: Colors.cyan.shade300,
-                  fontSize: isSmallScreen ? 9 : 11,
+                  fontSize: isVerySmallScreen ? 9 : isSmallScreen ? 11 : 13,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Orbitron',
-                  letterSpacing: isSmallScreen ? 0.8 : 1,
+                  letterSpacing: isVerySmallScreen ? 0.8 : 1,
                 ),
               ),
             ],
@@ -703,9 +706,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  List<Widget> _buildUploadAreaCorners(bool isSmallScreen) {
-    final cornerSize = isSmallScreen ? 20.0 : 25.0;
-    final borderWidth = isSmallScreen ? 2.0 : 3.0;
+  List<Widget> _buildUploadAreaCorners(bool isVerySmallScreen, bool isSmallScreen) {
+    final cornerSize = isVerySmallScreen ? 20.0 : isSmallScreen ? 25.0 : 30.0;
+    final borderWidth = isVerySmallScreen ? 2.0 : isSmallScreen ? 2.5 : 3.0;
     
     return [
       // Top Left
@@ -763,27 +766,29 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildActionButtons(bool isSmallScreen) {
+  Widget _buildActionButtons(bool isVerySmallScreen, bool isSmallScreen) {
     return Row(
       children: [
         Expanded(
           child: _buildCyberButton(
-            text: 'OPEN',
+            text: 'BUKA',
             icon: Icons.folder_open,
             onPressed: _pickFile,
             color: Colors.blue,
+            isVerySmallScreen: isVerySmallScreen,
             isSmallScreen: isSmallScreen,
           ),
         ),
         if (_selectedFileName != null) ...[
-          SizedBox(width: isSmallScreen ? 8 : 10),
+          SizedBox(width: isVerySmallScreen ? 8 : 10),
           Expanded(
             child: _buildCyberButton(
-              text: _isUploading ? 'PROCESSING' : 'ANALYZE',
+              text: _isUploading ? 'MEMPROSES' : 'ANALISIS',
               icon: _isUploading ? Icons.hourglass_top : Icons.psychology,
               onPressed: _isUploading ? null : _analyzeFile,
               color: Colors.cyan,
               isAnalyzing: _isUploading,
+              isVerySmallScreen: isVerySmallScreen,
               isSmallScreen: isSmallScreen,
             ),
           ),
@@ -798,6 +803,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     required VoidCallback? onPressed,
     required Color color,
     bool isAnalyzing = false,
+    bool isVerySmallScreen = false,
     bool isSmallScreen = false,
   }) {
     return AnimatedBuilder(
@@ -805,7 +811,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
             gradient: LinearGradient(
               colors: [
                 color.withOpacity(0.3),
@@ -819,29 +825,29 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             boxShadow: [
               BoxShadow(
                 color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: isSmallScreen ? 8 : 10,
+                blurRadius: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 15,
                 spreadRadius: 1,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+              borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 12 : 15, 
-                  vertical: isSmallScreen ? 12 : 14
+                  horizontal: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 18, 
+                  vertical: isVerySmallScreen ? 12 : isSmallScreen ? 14 : 16
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (isAnalyzing)
                       SizedBox(
-                        width: isSmallScreen ? 16 : 18,
-                        height: isSmallScreen ? 16 : 18,
+                        width: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
+                        height: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           value: _uploadProgress,
@@ -849,16 +855,16 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                         ),
                       )
                     else
-                      Icon(icon, color: color, size: isSmallScreen ? 16 : 18),
-                    SizedBox(width: isSmallScreen ? 6 : 8),
+                      Icon(icon, color: color, size: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20),
+                    SizedBox(width: isVerySmallScreen ? 6 : 8),
                     Flexible(
                       child: Text(
                         text,
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: isSmallScreen ? 11 : 13,
-                          letterSpacing: isSmallScreen ? 0.8 : 1,
+                          fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 13 : 15,
+                          letterSpacing: isVerySmallScreen ? 0.8 : 1,
                           fontFamily: 'Orbitron',
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -1125,20 +1131,22 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   void _showAnalysisResult(double aiPct, double humanPct) {
     if (!mounted) return;
     
-    final isSmallScreen = MediaQuery.of(context).size.width < 360;
+    final screenSize = MediaQuery.of(context).size;
+    final isSmallScreen = screenSize.width < 600;
+    final isVerySmallScreen = screenSize.width < 360;
     
     showDialog(
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+        insetPadding: EdgeInsets.all(isVerySmallScreen ? 12 : isSmallScreen ? 16 : 20),
         child: Container(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.7,
+            maxWidth: screenSize.width * 0.9,
+            maxHeight: screenSize.height * 0.7,
           ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1165,13 +1173,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           ),
           child: SingleChildScrollView(
             child: Padding(
-              padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
+              padding: EdgeInsets.all(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: isSmallScreen ? 60 : 70,
-                    height: isSmallScreen ? 60 : 70,
+                    width: isVerySmallScreen ? 60 : isSmallScreen ? 70 : 80,
+                    height: isVerySmallScreen ? 60 : isSmallScreen ? 70 : 80,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Colors.cyan, Colors.pink],
@@ -1180,7 +1188,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       boxShadow: [
                         BoxShadow(
                           color: Colors.cyan.withOpacity(0.5),
-                          blurRadius: isSmallScreen ? 12 : 15,
+                          blurRadius: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20,
                           spreadRadius: 3,
                         ),
                       ],
@@ -1188,27 +1196,27 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     child: Icon(
                       Icons.verified,
                       color: Colors.white,
-                      size: isSmallScreen ? 30 : 35,
+                      size: isVerySmallScreen ? 30 : isSmallScreen ? 35 : 40,
                     ),
                   ),
-                  SizedBox(height: isSmallScreen ? 15 : 20),
+                  SizedBox(height: isVerySmallScreen ? 15 : 20),
                   Text(
-                    'NEURAL ANALYSIS COMPLETE',
+                    'ANALISIS SELESAI',
                     style: TextStyle(
-                      fontSize: isSmallScreen ? 14 : (MediaQuery.of(context).size.width < 360 ? 16 : 18),
+                      fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.cyan.shade300,
                       fontFamily: 'Orbitron',
-                      letterSpacing: isSmallScreen ? 0.8 : 1,
+                      letterSpacing: isVerySmallScreen ? 0.8 : 1,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: isSmallScreen ? 12 : 15),
+                  SizedBox(height: isVerySmallScreen ? 12 : 15),
                   Container(
-                    padding: EdgeInsets.all(isSmallScreen ? 12 : 15),
+                    padding: EdgeInsets.all(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 15),
+                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
                       border: Border.all(
                         color: Colors.cyan.withOpacity(0.3),
                         width: 1,
@@ -1220,7 +1228,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'AI Detection:',
+                              'Deteksi AI:',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 14,
@@ -1230,19 +1238,19 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                               '${aiPct.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                                fontSize: isSmallScreen ? 14 : 16,
+                                fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: isSmallScreen ? 10 : 12),
+                        SizedBox(height: isVerySmallScreen ? 10 : 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'Human Written:',
+                              'Ditulis Manusia:',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 14,
@@ -1252,7 +1260,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                               '${humanPct.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: Colors.cyan.shade300,
-                                fontSize: isSmallScreen ? 14 : 16,
+                                fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
@@ -1262,12 +1270,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       ],
                     ),
                   ),
-                  SizedBox(height: isSmallScreen ? 15 : 20),
+                  SizedBox(height: isVerySmallScreen ? 15 : 20),
                   _buildCyberButton(
-                    text: 'CLOSE',
+                    text: 'TUTUP',
                     icon: Icons.close,
                     onPressed: () => Navigator.pop(context),
                     color: Colors.cyan,
+                    isVerySmallScreen: isVerySmallScreen,
                     isSmallScreen: isSmallScreen,
                   ),
                 ],
