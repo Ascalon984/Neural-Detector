@@ -16,7 +16,6 @@ import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
 import '../utils/app_localizations.dart';
-import '../theme/app_theme.dart';
 
 class FileUploadScreen extends StatefulWidget {
   const FileUploadScreen({super.key});
@@ -37,7 +36,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
-  late Animation<double> _rotateAnimation;
+  // removed unused _rotateAnimation
 
   String? _selectedFileName;
   int? _selectedFileSize;
@@ -94,13 +93,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         curve: Curves.easeInOut,
       ));
 
-      _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_rotateController);
+  // _rotateAnimation removed; controller left running for other uses
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _rotateAnimation = AlwaysStoppedAnimation(0.0);
+  // _rotateAnimation removed; using controllers only
     }
   }
 

@@ -4,7 +4,7 @@ import '../config/animation_config.dart';
 import '../theme/theme_provider.dart';
 import '../utils/settings_manager.dart';
 import '../utils/history_manager.dart';
-import '../utils/app_localizations.dart';
+// removed unused import '../utils/app_localizations.dart'
 import 'package:intl/intl.dart';
 import '../models/scan_history.dart';
 import '../utils/exporter.dart';
@@ -29,7 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
-  late Animation<double> _rotateAnimation;
+  // removed unused _rotateAnimation
 
   bool _notifications = true;
   bool _autoScan = false;
@@ -91,13 +91,13 @@ class _SettingsScreenState extends State<SettingsScreen>
         curve: Curves.easeInOut,
       ));
 
-      _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_rotateController);
+  // _rotateAnimation removed; controller left running for other uses
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _rotateAnimation = AlwaysStoppedAnimation(0.0);
+  // _rotateAnimation removed; using controllers only
     }
 
     _loadSensitivity();

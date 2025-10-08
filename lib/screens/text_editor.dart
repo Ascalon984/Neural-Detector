@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../config/animation_config.dart';
-import '../theme/theme_provider.dart';
-import '../theme/app_theme.dart';
 import 'dart:math' as math;
 import '../utils/text_analyzer.dart';
 import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
-import '../utils/app_localizations.dart';
+// removed unused import '../utils/app_localizations.dart'
 
 class TextEditorScreen extends StatefulWidget {
   const TextEditorScreen({super.key});
@@ -31,8 +28,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _textGlowAnimation;
-  late Animation<Color?> _textColorAnimation;
-  late Animation<double> _rotateAnimation;
+  // removed unused animations: _textColorAnimation and _rotateAnimation
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
@@ -116,22 +112,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         curve: Curves.easeInOut,
       ));
 
-      _textColorAnimation = ColorTween(
-        begin: Colors.cyan.shade300,
-        end: Colors.pink.shade300,
-      ).animate(CurvedAnimation(
-        parent: _glowController,
-        curve: Curves.easeInOut,
-      ));
-      _rotateAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_rotateController);
+      // _textColorAnimation and _rotateAnimation removed; using glow controller only
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
       _textGlowAnimation = AlwaysStoppedAnimation(0.2);
-      _textColorAnimation = AlwaysStoppedAnimation(Colors.cyan.shade300);
-      _rotateAnimation = AlwaysStoppedAnimation(0.0);
+  // _textColorAnimation and _rotateAnimation removed; using AlwaysStoppedAnimation where needed
     }
   }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:flutter/services.dart';
-import '../theme/app_theme.dart';
+// removed unused import '../theme/app_theme.dart'
 
 class CustomBottomNavBar extends StatefulWidget {
   final int currentIndex;
