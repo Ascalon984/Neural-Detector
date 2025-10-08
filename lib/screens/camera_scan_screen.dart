@@ -77,7 +77,6 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       vsync: this,
     )..repeat(reverse: true);
 
-
     _rotateController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
@@ -101,14 +100,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
-
-  // rotation animation removed
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
-  // rotation animation removed
     }
 
     _requestCameraPermission();
@@ -148,14 +144,24 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           
           // Main content
           SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(),
-                Expanded(
-                  child: _buildScannerContainer(),
-                ),
-                _buildFooter(),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Column(
+                      children: [
+                        _buildHeader(),
+                        SizedBox(
+                          height: constraints.maxHeight * 0.6,
+                          child: _buildScannerContainer(),
+                        ),
+                        _buildFooter(),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           
@@ -282,12 +288,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
               Container(
-                width: 60,
-                height: 60,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -301,23 +307,23 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                   boxShadow: [
                     BoxShadow(
                       color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                      blurRadius: 20,
-                      spreadRadius: 3,
+                      blurRadius: 15,
+                      spreadRadius: 2,
                     ),
                     BoxShadow(
                       color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                      blurRadius: 15,
-                      spreadRadius: 2,
+                      blurRadius: 10,
+                      spreadRadius: 1,
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.camera_alt,
                   color: Colors.white,
-                  size: 30,
+                  size: 25,
                 ),
               ),
-              const SizedBox(width: 20),
+              const SizedBox(width: 15),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,27 +335,31 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                           Colors.pink.withOpacity(_glowAnimation.value),
                         ],
                       ).createShader(bounds),
-                      child: const Text(
+                      child: Text(
                         'BIOMETRIC SCANNER',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: MediaQuery.of(context).size.width < 360 ? 18 : 22,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
-                          letterSpacing: 3,
+                          letterSpacing: 2,
                           fontFamily: 'Orbitron',
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
                       'NEURAL VISION ANALYSIS',
                       style: TextStyle(
                         color: Colors.pink.shade300,
-                        fontSize: 12,
+                        fontSize: 10,
                         fontWeight: FontWeight.w300,
-                        letterSpacing: 3,
+                        letterSpacing: 2,
                         fontFamily: 'Courier',
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -368,7 +378,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         builder: (context, child) {
           final screen = MediaQuery.of(context).size;
           final boxWidth = screen.width * 0.9;
-          final boxHeight = (boxWidth * 1.2).clamp(200.0, screen.height * 0.7);
+          final boxHeight = (boxWidth * 1.2).clamp(200.0, screen.height * 0.6);
 
           return Transform.scale(
             scale: _pulseAnimation.value,
@@ -376,7 +386,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
               width: boxWidth,
               height: boxHeight,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: Colors.cyan.withOpacity(_glowAnimation.value),
                   width: 2,
@@ -384,8 +394,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                 boxShadow: [
                   BoxShadow(
                     color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 20,
-                    spreadRadius: 5,
+                    blurRadius: 15,
+                    spreadRadius: 3,
                   ),
                 ],
               ),
@@ -394,7 +404,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                   // Camera preview
                   if (_isCameraInitialized && _cameraController != null)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(23),
+                      borderRadius: BorderRadius.circular(18),
                       child: SizedBox.expand(
                         child: FittedBox(
                           fit: BoxFit.cover,
@@ -414,17 +424,18 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                           Icon(
                             _hasCameraPermission ? Icons.camera_alt : Icons.no_photography,
                             color: Colors.white54,
-                            size: 48,
+                            size: 40,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           Text(
                             _hasCameraPermission 
                               ? 'INITIALIZING SCANNER'
                               : 'CAMERA PERMISSION REQUIRED',
                             style: const TextStyle(
                               color: Colors.white54,
-                              fontSize: 16,
+                              fontSize: 14,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
@@ -436,7 +447,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                     left: 0,
                     right: 0,
                     child: Container(
-                      height: 3,
+                      height: 2,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -449,8 +460,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                         boxShadow: [
                           BoxShadow(
                             color: Colors.cyan.withOpacity(0.5),
-                            blurRadius: 10,
-                            spreadRadius: 2,
+                            blurRadius: 8,
+                            spreadRadius: 1,
                           ),
                         ],
                       ),
@@ -466,97 +477,99 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(23),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                         alignment: Alignment.center,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
-                                  color: Colors.cyan.withOpacity(_glowAnimation.value),
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                                    blurRadius: 15,
-                                    spreadRadius: 3,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.cyan.withOpacity(_glowAnimation.value),
+                                    width: 2,
                                   ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(13),
-                                child: Image.memory(
-                                  _lastCapturedBytes!,
-                                  width: boxWidth * 0.8,
-                                  height: boxHeight * 0.7,
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            if (!_isKept)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildCyberButton(
-                                    text: 'KEEP',
-                                    icon: Icons.check,
-                                    onPressed: () async {
-                                      setState(() {
-                                        _isKept = true;
-                                      });
-                                      try {
-                                        final auto = await SettingsManager.getAutoScan();
-                                        if (auto && mounted) await _analyzeKeptImage();
-                                      } catch (_) {}
-                                    },
-                                    color: Colors.green,
-                                  ),
-                                  const SizedBox(width: 15),
-                                  _buildCyberButton(
-                                    text: 'CANCEL',
-                                    icon: Icons.delete,
-                                    onPressed: _cancelPicture,
-                                    color: Colors.red,
-                                  ),
-                                ],
-                              )
-                            else
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _lastCapturedBytes = null;
-                                    _isKept = false;
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Image deleted'),
-                                      backgroundColor: Colors.red,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                                      blurRadius: 12,
+                                      spreadRadius: 2,
                                     ),
-                                  );
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.2),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.red.withOpacity(_glowAnimation.value),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                    size: 24,
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.memory(
+                                    _lastCapturedBytes!,
+                                    width: boxWidth * 0.8,
+                                    height: boxHeight * 0.6,
+                                    fit: BoxFit.contain,
                                   ),
                                 ),
                               ),
-                          ],
+                              const SizedBox(height: 15),
+                              if (!_isKept)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildCyberButton(
+                                      text: 'KEEP',
+                                      icon: Icons.check,
+                                      onPressed: () async {
+                                        setState(() {
+                                          _isKept = true;
+                                        });
+                                        try {
+                                          final auto = await SettingsManager.getAutoScan();
+                                          if (auto && mounted) await _analyzeKeptImage();
+                                        } catch (_) {}
+                                      },
+                                      color: Colors.green,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    _buildCyberButton(
+                                      text: 'CANCEL',
+                                      icon: Icons.delete,
+                                      onPressed: _cancelPicture,
+                                      color: Colors.red,
+                                    ),
+                                  ],
+                                )
+                              else
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _lastCapturedBytes = null;
+                                      _isKept = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Image deleted'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.red.withOpacity(_glowAnimation.value),
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -573,26 +586,26 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     return [
       // Top Left
       Positioned(
-        top: 10,
-        left: 10,
+        top: 8,
+        left: 8,
         child: _buildCornerWidget(true, true),
       ),
       // Top Right
       Positioned(
-        top: 10,
-        right: 10,
+        top: 8,
+        right: 8,
         child: _buildCornerWidget(false, true),
       ),
       // Bottom Left
       Positioned(
-        bottom: 10,
-        left: 10,
+        bottom: 8,
+        left: 8,
         child: _buildCornerWidget(true, false),
       ),
       // Bottom Right
       Positioned(
-        bottom: 10,
-        right: 10,
+        bottom: 8,
+        right: 8,
         child: _buildCornerWidget(false, false),
       ),
     ];
@@ -603,8 +616,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          width: 30,
-          height: 30,
+          width: 25,
+          height: 25,
           decoration: BoxDecoration(
             border: Border(
               left: isLeft
@@ -628,15 +641,15 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(15),
               border: Border.all(
                 color: Colors.cyan.withOpacity(_glowAnimation.value),
                 width: 1.5,
@@ -644,8 +657,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
               boxShadow: [
                 BoxShadow(
                   color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
-                  blurRadius: 15,
-                  spreadRadius: 2,
+                  blurRadius: 12,
+                  spreadRadius: 1,
                 ),
               ],
             ),
@@ -684,8 +697,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                     animation: _pulseAnimation,
                     builder: (context, child) {
                       return Container(
-                        width: 70,
-                        height: 70,
+                        width: 60,
+                        height: 60,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
@@ -697,8 +710,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                           boxShadow: [
                             BoxShadow(
                               color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                              blurRadius: 20,
-                              spreadRadius: 3,
+                              blurRadius: 15,
+                              spreadRadius: 2,
                             ),
                           ],
                         ),
@@ -710,7 +723,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                             : const Icon(
                                 Icons.camera_alt,
                                 color: Colors.white,
-                                size: 30,
+                                size: 25,
                               ),
                       );
                     },
@@ -729,16 +742,16 @@ class _CameraScanScreenState extends State<CameraScanScreen>
               ],
             ),
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 12),
           if (_isAnalyzing)
             AnimatedBuilder(
               animation: _glowAnimation,
               builder: (context, child) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: Colors.cyan.withOpacity(_glowAnimation.value),
                       width: 1,
@@ -748,23 +761,26 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           value: _analysisProgress,
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
                         ),
                       ),
-                      const SizedBox(width: 15),
-                      Text(
-                        'NEURAL PROCESSING: ${(_analysisProgress * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          color: Colors.cyan.shade300,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Orbitron',
-                          letterSpacing: 1.5,
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          'NEURAL PROCESSING: ${(_analysisProgress * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            color: Colors.cyan.shade300,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Orbitron',
+                            letterSpacing: 1,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -786,7 +802,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         return Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -802,26 +818,26 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                 boxShadow: [
                   BoxShadow(
                     color: color.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 2,
+                    blurRadius: 8,
+                    spreadRadius: 1,
                   ),
                 ],
               ),
               child: Icon(
                 icon,
                 color: color,
-                size: 24,
+                size: 20,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
                 color: color,
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
-                letterSpacing: 1.5,
+                letterSpacing: 1,
               ),
             ),
           ],
@@ -841,7 +857,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(15),
             gradient: LinearGradient(
               colors: [
                 color.withOpacity(0.3),
@@ -855,31 +871,31 @@ class _CameraScanScreenState extends State<CameraScanScreen>
             boxShadow: [
               BoxShadow(
                 color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 15,
-                spreadRadius: 2,
+                blurRadius: 10,
+                spreadRadius: 1,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(15),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(15),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: color, size: 20),
-                    const SizedBox(width: 10),
+                    Icon(icon, color: color, size: 18),
+                    const SizedBox(width: 8),
                     Text(
                       text,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        letterSpacing: 1.2,
+                        fontSize: 12,
+                        letterSpacing: 1,
                         fontFamily: 'Orbitron',
                       ),
                     ),
@@ -1207,9 +1223,14 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       barrierDismissible: false,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
         child: Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1234,111 +1255,114 @@ class _CameraScanScreenState extends State<CameraScanScreen>
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(30),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.cyan, Colors.pink],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyan.withOpacity(0.5),
-                        blurRadius: 15,
-                        spreadRadius: 3,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.cyan, Colors.pink],
                       ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.verified,
-                    color: Colors.white,
-                    size: 45,
-                  ),
-                ),
-                const SizedBox(height: 25),
-                Text(
-                  'NEURAL ANALYSIS COMPLETE',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.cyan.shade300,
-                    fontFamily: 'Orbitron',
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: Colors.cyan.withOpacity(0.3),
-                      width: 1,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.cyan.withOpacity(0.5),
+                          blurRadius: 15,
+                          spreadRadius: 3,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.verified,
+                      color: Colors.white,
+                      size: 35,
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'AI Detection:',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            '${aiPct.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Human Written:',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            '${humanPct.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              color: Colors.cyan.shade300,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  const SizedBox(height: 20),
+                  Text(
+                    'NEURAL ANALYSIS COMPLETE',
+                    style: TextStyle(
+                      fontSize: MediaQuery.of(context).size.width < 360 ? 16 : 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.cyan.shade300,
+                      fontFamily: 'Orbitron',
+                      letterSpacing: 1,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                const SizedBox(height: 25),
-                _buildCyberButton(
-                  text: 'CLOSE',
-                  icon: Icons.close,
-                  onPressed: () => Navigator.of(context).pop(),
-                  color: Colors.cyan,
-                ),
-              ],
+                  const SizedBox(height: 15),
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: Colors.cyan.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'AI Detection:',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              '${aiPct.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Human Written:',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              '${humanPct.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                color: Colors.cyan.shade300,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildCyberButton(
+                    text: 'CLOSE',
+                    icon: Icons.close,
+                    onPressed: () => Navigator.of(context).pop(),
+                    color: Colors.cyan,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
