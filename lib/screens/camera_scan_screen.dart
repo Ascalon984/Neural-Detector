@@ -137,6 +137,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
     }
 
+
     _requestCameraPermission();
   }
 
@@ -148,8 +149,13 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     _pulseController.dispose();
     _rotateController.dispose();
     _cameraController?.dispose();
+    // nothing extra to close here
     super.dispose();
   }
+
+  // No direct CameraImage->InputImage helper: we prefer using saved file paths
+  // and the existing OCR.extractText(filePath: ...) implementation which uses
+  // InputImage.fromFilePath on mobile. This avoids dealing with plane metadata here.
 
   @override
   Widget build(BuildContext context) {

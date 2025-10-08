@@ -37,6 +37,16 @@ Future<Map<String, double>> runAnalysisIsolate({String? filePath, Uint8List? byt
   return result;
 }
 
+/// Runs the analysis isolate given already-extracted text. This avoids
+/// calling OCR twice when the caller already performed text extraction.
+Future<Map<String, double>> runAnalysisWithText(String extractedText, int sensitivityLevel) async {
+  final p = ReceivePort();
+  await Isolate.spawn<_IsolateMessage>(_isolateEntry, _IsolateMessage(extractedText, sensitivityLevel, p.sendPort));
+  final result = await p.first as Map<String, double>;
+  p.close();
+  return result;
+}
+
 void _isolateEntry(_IsolateMessage msg) async {
   try {
     // perform text analysis (uses routing inside TextAnalyzer)
