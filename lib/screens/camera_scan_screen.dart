@@ -17,6 +17,8 @@ import '../widgets/cyber_notification.dart';
 // localizations not used here
 // sensitivity applied in worker
 import '../utils/robust_worker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 // Compute function to run in a background isolate: returns fraction of strong edges
 double _edgeDensityCompute(Uint8List bytes) {
@@ -1247,12 +1249,37 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       });
     }
 
-    // Stage 3: Analysis (weight 40%) - offload to isolate (OCR + analysis)
+    // Stage 3: Analysis (weight 40%) - compute ROI and run OCR+analysis on crop
     try {
       final level = await SettingsManager.getSensitivityLevel();
-      // runAnalysisIsolate performs OCR on the caller isolate then offloads heavy
-      // analysis into a spawned isolate. Add a timeout to avoid hanging.
-      final adjusted = await runAnalysisIsolate(filePath: _lastCapturedPath, bytes: _lastCapturedBytes, sensitivityLevel: level)
+
+      // Compute adaptive ROI in background
+      Map<String, int>? roi;
+      try {
+        roi = await compute(_adaptiveRoiCompute, _lastCapturedBytes!);
+      } catch (_) {
+        roi = null;
+      }
+
+      String? analysisFilePath = _lastCapturedPath;
+
+      if (roi != null) {
+        try {
+          final full = img.decodeImage(_lastCapturedBytes!);
+          if (full != null) {
+            final crop = img.copyCrop(full, x: roi['left']!, y: roi['top']!, width: roi['right']! - roi['left']!, height: roi['bottom']! - roi['top']!);
+            final jpg = img.encodeJpg(crop, quality: 85);
+            final dir = await getTemporaryDirectory();
+            final f = File('${dir.path}/crop_${DateTime.now().millisecondsSinceEpoch}.jpg');
+            await f.writeAsBytes(jpg);
+            analysisFilePath = f.path;
+          }
+        } catch (_) {
+          analysisFilePath = _lastCapturedPath;
+        }
+      }
+
+      final adjusted = await runAnalysisIsolate(filePath: analysisFilePath, bytes: null, sensitivityLevel: level)
           .timeout(const Duration(seconds: 10), onTimeout: () => {'ai_detection': 0.0, 'human_written': 100.0});
 
       _aiPct = adjusted['ai_detection'] ?? 0.0;
@@ -1527,4 +1554,77 @@ class _ParticlesPainter extends CustomPainter {
   
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// Adaptive ROI detector: returns bbox in original image coords or null
+Map<String, int>? _adaptiveRoiCompute(Uint8List bytes) {
+  try {
+    final image = img.decodeImage(bytes);
+    if (image == null) return null;
+
+    final int tile = 32;
+    final double edgeThreshold = 0.02;
+    final double mergePadding = 0.12;
+
+    // downscale for speed
+    final int maxDim = 640;
+    final img.Image small = img.copyResize(image, width: image.width > image.height ? maxDim : null, height: image.height >= image.width ? maxDim : null);
+
+    final img.Image edges = img.sobel(img.grayscale(small));
+
+    final cols = (small.width / tile).ceil();
+    final rows = (small.height / tile).ceil();
+
+    int minCol = cols, minRow = rows, maxCol = -1, maxRow = -1;
+
+    for (int ry = 0; ry < rows; ry++) {
+      for (int cx = 0; cx < cols; cx++) {
+        int x0 = cx * tile;
+        int y0 = ry * tile;
+        int x1 = math.min(x0 + tile, small.width);
+        int y1 = math.min(y0 + tile, small.height);
+        int strong = 0;
+        int total = (x1 - x0) * (y1 - y0);
+        if (total <= 0) continue;
+        for (int y = y0; y < y1; y++) {
+          for (int x = x0; x < x1; x++) {
+            final p = edges.getPixel(x, y);
+            final l = img.getLuminance(p);
+            if (l > 25) strong++;
+          }
+        }
+        final density = strong / total;
+        if (density >= edgeThreshold) {
+          minCol = math.min(minCol, cx);
+          minRow = math.min(minRow, ry);
+          maxCol = math.max(maxCol, cx);
+          maxRow = math.max(maxRow, ry);
+        }
+      }
+    }
+
+    if (maxCol < 0) return null;
+
+    final scaleX = image.width / small.width;
+    final scaleY = image.height / small.height;
+
+    int xMin = ((minCol * tile) * scaleX).clamp(0, image.width).toInt();
+    int yMin = ((minRow * tile) * scaleY).clamp(0, image.height).toInt();
+    int xMax = (((maxCol + 1) * tile) * scaleX).clamp(0, image.width).toInt();
+    int yMax = (((maxRow + 1) * tile) * scaleY).clamp(0, image.height).toInt();
+
+    final w = xMax - xMin;
+    final h = yMax - yMin;
+    final padW = (w * mergePadding).toInt();
+    final padH = (h * mergePadding).toInt();
+
+    final rx0 = math.max(0, xMin - padW);
+    final ry0 = math.max(0, yMin - padH);
+    final rx1 = math.min(image.width, xMax + padW);
+    final ry1 = math.min(image.height, yMax + padH);
+
+    return {'left': rx0, 'top': ry0, 'right': rx1, 'bottom': ry1};
+  } catch (_) {
+    return null;
+  }
 }
