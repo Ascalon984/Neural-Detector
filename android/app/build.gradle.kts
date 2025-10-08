@@ -37,15 +37,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
-            // Enable code shrinking and resource shrinking to reduce APK size.
-            // Disabled temporarily in CI because R8 (minification) is failing with
-            // "Missing classes detected while running R8" (see build logs). This
-            // prevents APKs from being produced. A proper fix is to add the
-            // generated keep rules from build/app/outputs/mapping/release/missing_rules.txt
-            // or to update dependencies that require additional keep rules.
-            // For now disable shrinking/minification so CI can produce an APK reliably.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Control minification/shrinking via Gradle property 'enableMinify'.
+            // This allows us to gate enabling R8 (minify + shrinkResources) in CI
+            // while iterating on required keep rules. Defaults to false to avoid
+            // unexpected CI failures.
+            val enableMinify = (project.findProperty("enableMinify") as String?)?.toBoolean() ?: false
+            isMinifyEnabled = enableMinify
+            isShrinkResources = enableMinify
             // Use default optimize proguard file and project rules
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

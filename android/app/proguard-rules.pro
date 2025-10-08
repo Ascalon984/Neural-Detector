@@ -10,3 +10,15 @@
 # Keep other known plugin packages (add more if you see missing-class at runtime)
 -keep class com.bumptech.glide.** { *; }
 -dontwarn com.bumptech.glide.**
+
+# Keep application package classes (adjust if your package differs)
+-keep class com.example.ai_text_checker.** { *; }
+
+# Keep OkHttp if present (some plugins use it)
+-keep class okhttp3.** { *; }
+-dontwarn okhttp3.**
+
+# Keep classes referenced via reflection/JNI (safe default; narrow later)
+-keepclassmembers class * {
+	@android.webkit.JavascriptInterface <methods>;
+}
