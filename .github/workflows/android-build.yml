@@ -41,10 +41,14 @@ jobs:
       - name: Mark Flutter toolcache as safe for git
         run: |
           # The flutter-action uses a preinstalled Flutter in the container which can trigger
-          # 'detected dubious ownership' errors from git. Mark that path as safe.
+          # 'detected dubious ownership' errors from git. Mark likely toolcache paths as safe.
           # Add both system-level and current-user safe.directory entries so git won't block
           sudo git config --system --add safe.directory /__t/flutter/stable-3.35.5-x64 || true
           git config --global --add safe.directory /__t/flutter/stable-3.35.5-x64 || true
+          # Some hosted runners or cached tool versions may use a slightly different path
+          # (observed /__t/flutter/stable-3.35.6-x64 in logs). Add that too to be robust.
+          sudo git config --system --add safe.directory /__t/flutter/stable-3.35.6-x64 || true
+          git config --global --add safe.directory /__t/flutter/stable-3.35.6-x64 || true
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
