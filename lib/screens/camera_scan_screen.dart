@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../config/animation_config.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, compute;
 import 'dart:math' as math;
@@ -38,6 +39,8 @@ class TextDetectionResult {
       characteristics: ImageCharacteristics.fromMap(m['characteristics'] as Map<String, dynamic>? ?? {}),
     );
   }
+
+  
   
   Map<String, dynamic> toMap() => {
     'hasText': hasText,
@@ -851,6 +854,65 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   late Animation<double> _pulseAnimation;
   
   CameraController? _cameraController;
+    // ML Kit text recognizer for quick text detection
+    TextRecognizer? _textRecognizer;
+    bool _isProcessingFrame = false;
+    int _throttleMs = 300; // process one frame every 300ms
+    DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
+  
+  // Camera image stream handler: throttled + prefilter + ML Kit detection
+  void _handleCameraImage(CameraImage image) async {
+    final now = DateTime.now();
+    if (now.difference(_lastProcessed).inMilliseconds < _throttleMs) return;
+    _lastProcessed = now;
+
+    if (_isProcessingFrame) return;
+
+    // Quick prefilter on Y plane
+    if (!_quickHasEdges(image)) return;
+
+    // Mark processing and capture a still image for reliable OCR
+    _isProcessingFrame = true;
+    try {
+      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+      if (_isCapturing) return; // avoid collision with manual capture
+
+      _isCapturing = true;
+      final XFile file = await _cameraController!.takePicture();
+      _isCapturing = false;
+
+      if (_textRecognizer == null) return;
+      final inputImage = InputImage.fromFilePath(file.path);
+      final recognized = await _textRecognizer!.processImage(inputImage);
+
+      if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 2) {
+        debugPrint('Camera detected text (from still): ${recognized.text.length} chars');
+        // handle detected text (e.g., save, analyze, UI update)
+      }
+
+      // Optionally delete temp file if desired
+      try { await File(file.path).delete(); } catch (_) {}
+    } catch (e) {
+      debugPrint('Camera capture/processing error: $e');
+      _isCapturing = false;
+    } finally {
+      _isProcessingFrame = false;
+    }
+  }
+
+  bool _quickHasEdges(CameraImage image, {int sampleStride = 20, int threshold = 6}) {
+    final plane = image.planes[0];
+    final bytes = plane.bytes;
+    int count = 0;
+    for (int i = 0; i + sampleStride < bytes.length; i += sampleStride) {
+      final diff = (bytes[i] - bytes[i + sampleStride]).abs();
+      if (diff > 25) count++;
+      if (count >= threshold) return true;
+    }
+    return false;
+  }
+
+  // _concatenatePlanes removed — we capture still images for ML processing instead
   bool _isCameraInitialized = false;
   bool _hasCameraPermission = false;
   Uint8List? _lastCapturedBytes;
@@ -992,7 +1054,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     _pulseController.dispose();
     _rotateController.dispose();
     
-    // Dispose camera controller
+    // Stop image stream if running and dispose camera controller
+    try {
+      _cameraController?.stopImageStream();
+    } catch (_) {}
+    _textRecognizer?.close();
     _cameraController?.dispose();
     
     super.dispose();
@@ -1213,7 +1279,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                         ],
                       ).createShader(bounds),
                       child: Text(
-                        'PEMINDAIAN KAMERA',
+                        'OCR KAMERA',
                         style: TextStyle(
                           fontSize: MediaQuery.of(context).size.width < 360 ? 18 : 22,
                           fontWeight: FontWeight.w900,
@@ -1649,7 +1715,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                       const SizedBox(width: 12),
                       Flexible(
                         child: Text(
-                          'PROSES NEURAL: ${(_analysisProgress * 100).toStringAsFixed(0)}%',
+                          'MEMPROSES: ${(_analysisProgress * 100).toStringAsFixed(0)}%',
                           style: TextStyle(
                             color: Colors.cyan.shade300,
                             fontSize: 12,
@@ -1896,11 +1962,25 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
       _cameraController = CameraController(
         cameras[0],
-        ResolutionPreset.high,
+        ResolutionPreset.medium,
         enableAudio: false,
       );
 
       await _cameraController?.initialize();
+
+      // Initialize ML Kit text recognizer (native) for fast text detection
+      try {
+        _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      } catch (_) {
+        _textRecognizer = null;
+      }
+
+      // Start image stream for quick pre-filter + ML Kit detection
+      try {
+        await _cameraController?.startImageStream(_handleCameraImage);
+      } catch (_) {
+        // Some platforms (web) or older camera drivers may not support streams
+      }
 
       if (!mounted) return;
 
