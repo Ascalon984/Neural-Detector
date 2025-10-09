@@ -4,7 +4,6 @@ import '../config/animation_config.dart';
 import '../theme/theme_provider.dart';
 import '../utils/settings_manager.dart';
 import '../utils/history_manager.dart';
-import 'package:intl/intl.dart';
 import '../models/scan_history.dart';
 import '../utils/exporter.dart';
 import 'dart:math' as math;
@@ -1019,7 +1018,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           dbSizeMb = totalBytes / (1024 * 1024);
         }
 
-        final lastUpdated = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+  final lastUpdated = '09 Oktober 2025';
 
         return AnimatedBuilder(
           animation: _glowAnimation,
@@ -1063,7 +1062,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _buildInfoRow('Versi', 'Neural Detector'),
+                  _buildInfoRow('Versi', 'AI Detector'),
                   _buildInfoRow('Terakhir Diperbarui', lastUpdated),
                   _buildInfoRow('Ukuran Database', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
                   _buildInfoRow('Model AI', 'Tensor Flow Lite'),
@@ -1377,11 +1376,11 @@ class _SettingsScreenState extends State<SettingsScreen>
         };
       }).toList();
 
-      final path = await Exporter.exportToFolder(rows, suggestedName: 'scan_history');
-      if (path == null) {
-        _showDialog('Export Data', 'Export cancelled');
+      final result = await Exporter.exportToFolder(rows, suggestedName: 'scan_history');
+      if (!result.success) {
+        _showDialog('Export Data', 'Export failed: ${result.errorMessage}');
       } else {
-        _showDialog('Export Data', 'Data saved to:\n$path');
+        _showDialog('Export Data', 'Data saved to:\n${result.filePath}');
       }
     });
   }

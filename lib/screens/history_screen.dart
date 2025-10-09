@@ -55,6 +55,8 @@ class _HistoryScreenState extends State<HistoryScreen>
   SortOption _currentSort = SortOption.newest;
   final ScrollController _scrollController = ScrollController();
   bool _showGraph = false;
+  // This map is populated for potential grouped views; currently not read in all code paths.
+  // ignore: unused_field
   Map<String, List<Model.ScanHistory>> _groupedHistory = {};
 
   @override
@@ -1520,7 +1522,6 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: limitedHistory.asMap().entries.map((entry) {
-                    final index = entry.key;
                     final history = entry.value;
                     
                     return Padding(
@@ -1662,20 +1663,7 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
     super.dispose();
   }
 
-  String _displayFileName() {
-    const max = 18;
-    if (widget.fileName.length <= max) return widget.fileName;
-    return '${widget.fileName.substring(0, max - 3)}...';
-  }
-
-  String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      return '${date.day}/${date.month}';
-    } catch (_) {
-      return dateStr.substring(0, 5);
-    }
-  }
+  // ...existing code...
 
   @override
   Widget build(BuildContext context) {

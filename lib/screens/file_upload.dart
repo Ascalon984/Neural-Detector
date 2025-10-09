@@ -139,7 +139,6 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final screenHeight = constraints.maxHeight;
-                final screenWidth = constraints.maxWidth;
                 
                 return SingleChildScrollView(
                   child: ConstrainedBox(

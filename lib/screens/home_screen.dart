@@ -410,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen>
                       ],
                     ).createShader(bounds),
                     child: const Text(
-                      'NEURAL',
+                      'AI',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
