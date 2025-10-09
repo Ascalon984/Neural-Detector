@@ -8,7 +8,7 @@ class SettingsManager {
   static const _kLanguageKey = 'app_language';
 
   // cached current language code ('en' or 'id')
-  static String currentLanguage = 'en';
+  static String currentLanguage = 'id';
 
   /// Sensitivity level stored as integer 1..10. Default is 5.
   static Future<int> getSensitivityLevel() async {
@@ -54,7 +54,7 @@ class SettingsManager {
 
   static Future<String> getLanguage() async {
     final prefs = await SharedPreferences.getInstance();
-    final lang = prefs.getString(_kLanguageKey) ?? 'en';
+    final lang = prefs.getString(_kLanguageKey) ?? 'id';
     currentLanguage = lang;
     return lang;
   }
