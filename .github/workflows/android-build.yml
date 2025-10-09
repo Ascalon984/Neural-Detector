@@ -1,511 +1,132 @@
-name: Build Android APK
+# Nama Workflow yang akan muncul di GitHub Actions
+name: Flutter Build & Optimize
 
+# Trigger: Kapan workflow ini dijalankan?
 on:
+  # 1. Jalankan otomatis saat ada push ke branch main/master
+  push:
+    branches: [ main, master ]
+
+  # 2. Jalankan otomatis saat ada Pull Request yang menargetkan main/master
+  pull_request:
+    branches: [ main, master ]
+
+  # 3. Izinkan untuk dijalankan secara manual dari halaman Actions
   workflow_dispatch:
     inputs:
-      quick_artifact:
-        description: 'If true, skip heavy shrink build & big logs and only produce APK artifacts'
-        required: false
-        default: 'false'
-  push:
-    branches: [ main, master, optimize/android-size ]
+      build_type:
+        description: 'Pilih jenis build yang ingin dijalankan'
+        required: true
+        default: 'quick_apk'
+        type: choice
+        options:
+          - quick_apk          # Cepat: Hanya build APK dasar untuk testing
+          - full_release_aab   # Lengkap: Build AAB & APK ter-optimasi untuk rilis
+          - all                # Jalankan semua jenis build
+      flutter_channel:
+        description: 'Pilih channel Flutter'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - beta
+          - master
 
-defaults:
-  run:
-    shell: bash -l {0}
+# Variabel lingkungan global
+env:
+  JAVA_TOOL_OPTIONS: -Xmx4g # Berikan lebih banyak memori untuk Gradle
+  FLUTTER_CHANNEL: ${{ github.event.inputs.flutter_channel || 'stable' }}
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'quick_apk' }}
 
-permissions:
-  contents: read
-
+# Definisi Job
 jobs:
-  build-apk:
+  build:
+    name: Build & Analyze
     runs-on: ubuntu-latest
-    # Run inside a container that already includes Flutter and the Android SDK to avoid sdkmanager failures
-    container:
-      image: cirrusci/flutter:stable
-    env:
-      # Use the container's Android SDK location (common default)
-      ANDROID_SDK_ROOT: /opt/android/sdk
-      JAVA_TOOL_OPTIONS: -Xmx4g
-      QUICK_ARTIFACT: ${{ github.event.inputs.quick_artifact || 'false' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Setup Java JDK (Java 11 for sdkmanager compatibility)
+    steps:
+      # Langkah 1: Checkout kode sumber
+      # - Menggunakan action resmi, versi dipin (diamankan) untuk kestabilan
+      - name: Checkout repository
+        uses: actions/checkout@v4 # Pin ke versi spesifik untuk keamanan
+
+      # Langkah 2: Setup Java JDK
+      # - Flutter membutuhkan Java. Versi 17 adalah pilihan yang aman dan modern.
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install jq (required by some setup scripts)
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y jq
+      # Langkah 3: Setup Android SDK
+      # - **GANTI BESAR**: Menggunakan action resmi yang menggantikan semua skrip instalasi SDK yang panjang dan rentan error.
+      # - Jauh lebih andal, cepat, dan mudah dikelola.
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3 # Pin ke versi spesifik
 
-      - name: Mark Flutter toolcache as safe for git
-        run: |
-          # The flutter-action uses a preinstalled Flutter in the container which can trigger
-          # 'detected dubious ownership' errors from git. Mark likely toolcache paths as safe.
-          # Add both system-level and current-user safe.directory entries so git won't block
-          sudo git config --system --add safe.directory /__t/flutter/stable-3.35.5-x64 || true
-          git config --global --add safe.directory /__t/flutter/stable-3.35.5-x64 || true
-          # Some hosted runners or cached tool versions may use a slightly different path
-          # (observed /__t/flutter/stable-3.35.6-x64 in logs). Add that too to be robust.
-          sudo git config --system --add safe.directory /__t/flutter/stable-3.35.6-x64 || true
-          git config --global --add safe.directory /__t/flutter/stable-3.35.6-x64 || true
-
+      # Langkah 4: Setup Flutter
+      # - Menggunakan action resmi untuk setup Flutter dengan caching otomatis.
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-          # intentionally not pinning flutter-version to allow GitHub runner to use latest stable Flutter
-          # which provides a newer Dart SDK compatible with current plugin versions
 
-      # NOTE: caching the full Android SDK (especially under /usr/local or a system path)
-      # can produce permission/utime issues when the cache is restored. We avoid caching
-      # the SDK here to ensure a clean cmdline-tools install on each run.
-
-      - name: Repair Android SDK permissions after cache restore
-        if: always()
-        run: |
-          set -euo pipefail
-          echo "Fixing ownership and permissions for ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-          # Make sure the SDK root exists
-          sudo mkdir -p "$ANDROID_SDK_ROOT"
-          # Ensure the runner user owns the SDK tree and can write/read as needed
-          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
-          sudo chmod -R a+rX "$ANDROID_SDK_ROOT" || true
-          echo "Ownership/permissions fixed. Summary (top-level):"
-          ls -la "$ANDROID_SDK_ROOT" || true
-
-      - name: Detect and use system Android SDK if present
-        run: |
-          set -euo pipefail
-          SYS_SDK=/usr/local/lib/android/sdk
-          if [ -d "$SYS_SDK/platforms/android-33" ]; then
-            echo "System SDK with android-33 found at $SYS_SDK; using it to avoid reinstall"
-            echo "ANDROID_SDK_ROOT=$SYS_SDK" >> $GITHUB_ENV
-            echo "use_system=true" > use_system.txt
-          else
-            echo "use_system=false" > use_system.txt
-          fi
-          cat use_system.txt
-
-      - name: Install Android SDK command-line tools (robust)
-        run: |
-          set -euo pipefail
-          if [ -f use_system.txt ] && grep -q 'use_system=true' use_system.txt; then
-            echo "System SDK present; skipping manual cmdline-tools install"
-            exit 0
-          fi
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          # Always replace the 'latest' cmdline-tools to avoid using a possibly corrupted cached copy
-          if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            echo 'Removing existing cmdline-tools/latest to force a fresh install'
-            sudo rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
-          fi
-          echo 'Downloading Android cmdline-tools (with resume)'
-          TMP_DL=$(mktemp -d)
-          curl -C - -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o "$TMP_DL/tools.zip"
-          unzip -q "$TMP_DL/tools.zip" -d "$TMP_DL"
-          # Move contents into cmdline-tools/latest consistently regardless of zip internal layout
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-          if [ -d "$TMP_DL/cmdline-tools" ]; then
-            # most zips contain a top-level cmdline-tools/ directory
-            cp -a "$TMP_DL/cmdline-tools/." "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
-          else
-            # fallback: copy everything
-            cp -a "$TMP_DL/." "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
-          fi
-          rm -rf "$TMP_DL"
-          # Make SDK root writable by the runner to allow sdkmanager to install components
-          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT"
-          # Verify sdkmanager exists and is runnable
-          if [ ! -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "ERROR: sdkmanager missing or not executable in $ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
-            ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
-            exit 1
-          fi
-          echo "Debug: listing cmdline-tools latest/lib contents"
-          ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib" || true
-          # Verify jars exist
-          if ! ls "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib"/*.jar >/dev/null 2>&1; then
-            echo "ERROR: no jar files found in $ANDROID_SDK_ROOT/cmdline-tools/latest/lib — cmdline-tools extraction may have failed"
-            ls -la "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
-            exit 1
-          fi
-          echo "--- sdkmanager wrapper (first 200 lines) ---"
-          sed -n '1,200p' "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" || true
-          echo "Attempting to run SdkManagerCli directly with java - capture output"
-          java -cp "$ANDROID_SDK_ROOT/cmdline-tools/latest/lib/*" com.android.sdklib.tool.sdkmanager.SdkManagerCli --version > sdkmanager_direct.log 2>&1 || true
-          echo "--- sdkmanager_direct.log ---"
-          tail -n 200 sdkmanager_direct.log || true
-
-      - name: Install Android SDK components (with retry)
-        run: |
-          set -euo pipefail
-          PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;27.0.12077973")
-          # Ensure sdk root is owned by the current user so sdkmanager can write files
-          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
-          MAX_RETRIES=5
-
-          install_platform_tools_fallback() {
-            echo "Attempting direct download of platform-tools (fallback)"
-            curl -C - -fSL --retry 3 --retry-delay 5 \
-              "https://dl.google.com/android/repository/platform-tools-latest-linux.zip" \
-              -o platform-tools.zip
-
-            TMP_DIR=$(mktemp -d)
-            unzip -q platform-tools.zip -d "$TMP_DIR"
-
-            # Remove any existing install so we won't get interactive prompts
-            sudo rm -rf "$ANDROID_SDK_ROOT/platform-tools"
-            sudo mkdir -p "$ANDROID_SDK_ROOT/platform-tools"
-
-            # Move extracted files into place (preserve mode, avoid interactive prompts)
-            sudo cp -a "$TMP_DIR/platform-tools/." "$ANDROID_SDK_ROOT/platform-tools/"
-            sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT/platform-tools"
-            sudo chmod -R a+rX "$ANDROID_SDK_ROOT/platform-tools"
-
-            rm -rf platform-tools.zip "$TMP_DIR"
-            echo "Platform-tools installed successfully (fallback)"
-          }
-
-          package_installed_check() {
-            pkg="$1"
-            case "$pkg" in
-              "platform-tools")
-                [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && return 0 || return 1
-                ;;
-              platforms\;*)
-                ver=${pkg#platforms;}
-                [ -d "$ANDROID_SDK_ROOT/platforms/$ver" ] && return 0 || return 1
-                ;;
-              build-tools\;*)
-                ver=${pkg#build-tools;}
-                [ -d "$ANDROID_SDK_ROOT/build-tools/$ver" ] && return 0 || return 1
-                ;;
-              ndk\;*)
-                ver=${pkg#ndk;}
-                [ -d "$ANDROID_SDK_ROOT/ndk/$ver" ] && return 0 || return 1
-                ;;
-              *)
-                return 1
-                ;;
-            esac
-          }
-
-          # Accept licenses up-front to avoid interactive prompts during installs
-          echo "Accepting Android SDK licenses (pre-install)"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
-
-          for pkg in "${PKGS[@]}"; do
-            i=0
-            until [ $i -ge $MAX_RETRIES ]; do
-              echo "Installing $pkg (attempt $((i+1))/$MAX_RETRIES)..."
-              if [ "$pkg" = "platform-tools" ]; then
-                # Try sdkmanager first; if it fails we'll fall back to direct download
-                echo "Running sdkmanager for $pkg (logged to sdkmanager_${pkg//;/_}.log)"
-                yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" > "sdkmanager_${pkg//;/_}.log" 2>&1 || true
-                if package_installed_check "$pkg"; then
-                  echo "Installed $pkg"
-                  break
-                else
-                  echo "sdkmanager did not install $pkg; will try direct download fallback"
-                  install_platform_tools_fallback && break
-                fi
-              else
-                echo "Running sdkmanager for $pkg (logged to sdkmanager_${pkg//;/_}.log)"
-                yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" > "sdkmanager_${pkg//;/_}.log" 2>&1 || true
-                if package_installed_check "$pkg"; then
-                  echo "Installed $pkg"
-                  break
-                fi
-              fi
-              i=$((i+1))
-              echo "Install $pkg failed, retrying in $((20 * i))s..."
-              sleep $((20 * i))
-            done
-            if [ $i -ge $MAX_RETRIES ]; then
-              echo "Failed to install $pkg after $MAX_RETRIES attempts"
-              exit 1
-            fi
-          done
-
-          echo "Accepting Android SDK licenses (non-interactive)"
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
-
-      - name: Collect sdkmanager debug info and logs
-        if: always()
-        run: |
-          set -euo pipefail
-          echo "Collecting sdkmanager logs and environment snapshot"
-          echo "SDK root: $ANDROID_SDK_ROOT" > sdk_snapshot.txt
-          echo "Top-level SDK contents:" >> sdk_snapshot.txt
-          ls -la "$ANDROID_SDK_ROOT" >> sdk_snapshot.txt || true
-          echo "Disk usage:" > disk_usage.txt
-          df -h >> disk_usage.txt || true
-          # Append last 500 lines of any sdkmanager logs
-          for f in sdkmanager_*.log; do
-            if [ -f "$f" ]; then
-              echo "---- $f ----" >> sdk_snapshot.txt
-              tail -n 500 "$f" >> sdk_snapshot.txt
-            fi
-          done
-
-      - name: Upload sdkmanager logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdkmanager-logs
-          path: |
-            sdk_snapshot.txt
-            disk_usage.txt
-            sdkmanager_*.log
-          if-no-files-found: warn
-
-      - name: Install dependencies
-        run: |
-          # Debug info
-          echo "Current directory structure:"
-          pwd
-          ls -la
-          
-          echo "Environment variables:"
-          env
-          
-          echo "Flutter and Dart versions:"
-          flutter --version
-          dart --version
-          
-          # Try running pub get with full debug output
-          echo "Running pub get with debug..."
-          flutter pub get --verbose 2>&1 | tee pub_get_log.txt
-          
-          if [ $? -ne 0 ]; then
-            echo "Error during pub get. Detailed debugging:"
-            echo "1. Checking pubspec.yaml..."
-            cat pubspec.yaml
-            
-            echo "2. Running pub outdated to check compatibility..."
-            flutter pub outdated || true
-            
-            echo "3. Running pub deps to show dependency tree..."
-            flutter pub deps || true
-            
-            echo "4. Checking for conflicting dependencies..."
-            flutter pub deps | grep -i conflict || true
-            
-            echo "5. Full pub get log:"
-            cat pub_get_log.txt
-            
-            exit 1
-          fi
-          
-      - name: Generate launcher icons
-        run: |
-          if [ -f "pubspec.yaml" ] && grep -q "flutter_launcher_icons:" "pubspec.yaml"; then
-            flutter pub run flutter_launcher_icons:main
-          fi
-
-      - name: Align Android SDK env and accept licenses (container compatibility)
-        run: |
-          set -euo pipefail
-          # The cirrusci/flutter container commonly has the SDK at /opt/android-sdk-linux.
-          # Make sure both ANDROID_SDK_ROOT and ANDROID_HOME point to the same path so
-          # Flutter and sdkmanager agree on the SDK location.
-          if [ -d /opt/android-sdk-linux ]; then
-            echo "Detected container SDK at /opt/android-sdk-linux; aligning env vars"
-            echo "ANDROID_SDK_ROOT=/opt/android-sdk-linux" >> $GITHUB_ENV
-            echo "ANDROID_HOME=/opt/android-sdk-linux" >> $GITHUB_ENV
-          fi
-          # Try accepting licenses via flutter (non-interactive) and sdkmanager as a fallback.
-          # Some environments require both to be accepted.
-          yes | flutter doctor --android-licenses || true
-          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
-          fi
-
-      - name: Pre-build diagnostics (Java / Gradle / Flutter)
-        run: |
-          set -euo pipefail
-          echo "--- Environment snapshot ---"
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "Which java:"; which java || true
-          echo "java -version:"; java -version || true
-          echo "javac -version:"; javac -version || true
-          echo "--- Flutter and Dart ---"
-          flutter --version || true
-          dart --version || true
-          echo "--- Gradle wrapper info (if available) ---"
-          if [ -f android/gradlew ]; then
-            chmod +x android/gradlew || true
-            (cd android && ./gradlew --version) || true
-          else
-            echo "android/gradlew not found"
-          fi
-          echo "--- PATH and key envs ---"
-          echo "PATH=$PATH"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_HOME=${ANDROID_HOME:-<not-set>}"
-          echo "--- end diagnostics ---"
-
-      - name: Build APK (arm64)
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          echo "=== flutter doctor ==="
-          flutter doctor -v || true
-          echo "=== flutter clean ==="
-          flutter clean || true
-          echo "=== flutter pub get ==="
-          flutter pub get --verbose || true
-          echo "=== flutter build apk (arm64) - start ==="
-          # Stream full build output to console and write to a log file for debugging
-          # so failures are visible in the step log and also preserved as an artifact.
-          flutter build apk --release --target-platform android-arm64 --no-shrink --verbose 2>&1 | tee build_apk_arm64.log
-          BUILD_EXIT_CODE=${PIPESTATUS[0]:-${PIPESTATUS:-0}}
-          echo "Build exit code: $BUILD_EXIT_CODE"
-          if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            echo "flutter build failed; printing last 500 lines of log for quick inspection"
-            tail -n 500 build_apk_arm64.log || true
-            # Do not exit the step here; allow following debug steps to run by using continue-on-error
-            echo "$BUILD_EXIT_CODE" > ../.flutter_build_exit_code || true
-          fi
-          echo "--- Last 200 lines of build log ---"
-          tail -n 200 build_apk_arm64.log || true
-      - name: Debug Gradle assembleRelease (stacktrace)
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          echo "Running Gradle assembleRelease to capture stacktrace (if flutter build failed)"
-          if [ -d android ]; then
-            chmod +x android/gradlew || true
-            (cd android && ./gradlew assembleRelease --stacktrace --no-daemon) > gradle_assemble_release.log 2>&1 || true
-            echo "Gradle debug log saved to gradle_assemble_release.log"
-          else
-            echo "android directory not found; skipping Gradle debug run"
-          fi
-      - name: List build outputs (debug)
-        run: |
-          echo "Searching repository for any APK files (debug)"
-          # Look in both Flutter output locations and native Android gradle outputs
-          echo "-> build/app/outputs (if present)"
-          ls -la build/app/outputs || true
-          echo "-> android/app/build/outputs (if present)"
-          ls -la android/app/build/outputs || true
-
-          echo "Recursively list APKs under common output directories"
-          find build/app/outputs -type f -name "*.apk" -print || true
-          find android/app/build/outputs -type f -name "*.apk" -print || true
-
-          echo "Also search whole repo for any APK files as a last resort"
-          find . -type f -name "*.apk" -print || true
-
-          echo "Copying any found APKs into ci-apks/ for consistent artifact upload"
-          mkdir -p ci-apks || true
-          find build/app/outputs -type f -name "*.apk" -exec cp --parents {} ci-apks/ \; || true
-          find android/app/build/outputs -type f -name "*.apk" -exec cp --parents {} ci-apks/ \; || true
-          # Also copy any other APKs found anywhere
-          find . -type f -name "*.apk" -not -path "./ci-apks/*" -exec cp --parents {} ci-apks/ \; || true
-          echo "ci-apks contents:"
-          ls -la ci-apks || true
-
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-artifacts
-          path: |
-            ci-apks/**
-            build/app/outputs/**/*.apk
-            android/app/build/outputs/**/*.apk
-          if-no-files-found: warn
-
-      - name: Upload build logs
-        if: env.QUICK_ARTIFACT != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            build_apk_arm64.log
-            build/**
-            gradle_assemble_release.log
-            gradle/**
-          if-no-files-found: warn
-
-      # --- Attempt a shrink-enabled build for debugging (uploads mapping & missing rules) ---
-      - name: Attempt shrink-enabled build (enableMinify=true)
-        if: always() && env.QUICK_ARTIFACT != 'true'
-        run: |
-          set -euo pipefail
-          echo "Enabling minify for this CI run"
-          # Write property so Gradle picks it up
-          echo "enableMinify=true" >> android/gradle.properties
-          flutter clean || true
-          flutter pub get --verbose || true
-          mkdir -p build/symbols
-          echo "Starting shrink-enabled build (split per ABI, obfuscate, split-debug-info)"
-          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
-            --obfuscate --split-debug-info=build/symbols --tree-shake-icons 2>&1 | tee build_apk_shrink.log || true
-          echo "Shrink-enabled build completed (exit code: ${PIPESTATUS[0]:-${PIPESTATUS:-0}})"
-          tail -n 200 build_apk_shrink.log || true
-
-      - name: Upload shrink build artifacts & logs
-        if: always() && env.QUICK_ARTIFACT != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: shrink-debug-artifacts
-          path: |
-            build_apk_shrink.log
-            build/symbols/**
-            android/app/build/outputs/mapping/release/**
-            android/app/build/outputs/mapping/**/missing_rules.txt
-          if-no-files-found: warn
-
-  optimize-size:
-    name: Optimize Android size (AAB + split-per-abi)
-    runs-on: ubuntu-latest
-    needs: build-apk
-    if: github.ref == 'refs/heads/optimize/android-size' || startsWith(github.head_ref, 'optimize/android-size')
-    env:
-      JAVA_TOOL_OPTIONS: -Xmx4g
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 'stable'
-
-      - name: Install dependencies
+      # Langkah 5: Install dependensi Flutter
+      - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Debug Gradle assembleRelease (stacktrace)
-        continue-on-error: true
+      # --- LOGIKA BUILD KONDISIONAL ---
+      # Langkah-langkah berikut hanya akan dijalankan berdasarkan input `build_type`
+
+      # Build 1: APK Cepat (untuk testing cepat)
+      - name: 🚀 Build Quick APK (arm64)
+        if: env.BUILD_TYPE == 'quick_apk' || env.BUILD_TYPE == 'all'
         run: |
-          set -euo pipefail
-          cd android
-          ./gradlew assembleRelease --stacktrace --no-daemon > ../gradle_assemble_release.log 2>&1 || true
+          echo "Building quick APK for arm64..."
+          flutter build apk --release --target-platform android-arm64
 
-      - name: Upload Gradle debug log
+      # Build 2: AAB Rilis Lengkap (untuk publikasi ke Play Store)
+      - name: 📦 Build Full Release AAB (with Obfuscation & Size Analysis)
+        if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
+        run: |
+          echo "Building optimized AAB for release..."
+          flutter build appbundle \
+            --release \
+            --obfuscate \
+            --split-debug-info=build/symbols \
+            --analyze-size \
+            --tree-shake-icons
+
+      # Build 3: APK Split-per-ABI (untuk distribusi manual)
+      - name: 📱 Build Split-per-ABI APKs (with Obfuscation)
+        if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
+        run: |
+          echo "Building optimized split-per-ABI APKs..."
+          flutter build apk \
+            --release \
+            --split-per-abi \
+            --obfuscate \
+            --split-debug-info=build/symbols \
+            --tree-shake-icons
+
+      # --- UPLOAD ARTEFAK ---
+      # Langkah terakhir: Unggah semua hasil build dan log
+
+      - name: Upload Build Artifacts
+        # `if: always()` memastikan langkah ini tetap berjalan meskipun build gagal,
+        # sehingga kita bisa mengumpulkan log untuk debugging.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-debug-log
-          path: gradle_assemble_release.log
-
-      - name: Build AppBundle and analyze size
-        run: flutter build appbundle --release --analyze-size
-
-      - name: Build split-per-ABI APKs
-        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --tree-shake-icons
-
-      - name: Upload artifacts (AAB, APKs, size report)
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-artifacts
+          # Nama artefak menjadi unik untuk setiap run
+          name: build-artifacts-${{ env.BUILD_TYPE }}-${{ github.run_number }}
+          # Path menggunakan wildcard untuk menangkap semua output yang relevan
           path: |
-            build/app/outputs/**/*.aab
             build/app/outputs/**/*.apk
+            build/app/outputs/**/*.aab
             build/**/app_size_*.json
+            build/symbols/**
+          # Jika tidak ada file yang ditemukan, jangan gagalkan langkahnya
+          if-no-files-found: warn
