@@ -1054,7 +1054,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                 ),
                 SizedBox(height: isSmallScreen ? 15 : 25),
                 Text(
-                  'ANALISIS NEURAL SELESAI',
+                  'ANALISIS SELESAI',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: isSmallScreen ? 16 : 20,

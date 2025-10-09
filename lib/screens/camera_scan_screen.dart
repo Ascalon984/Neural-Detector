@@ -2366,7 +2366,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'ANALISIS NEURAL SELESAI',
+                    'ANALISIS SELESAI',
                     style: TextStyle(
                       fontSize: MediaQuery.of(context).size.width < 360 ? 16 : 18,
                       fontWeight: FontWeight.bold,

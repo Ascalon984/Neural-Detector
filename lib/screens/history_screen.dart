@@ -1489,7 +1489,7 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
             Icon(Icons.bar_chart, color: Colors.cyan.shade300, size: 16),
             const SizedBox(width: 8),
             Text(
-              'INDIVIDUAL SCAN ANALYSIS',
+              'RIWAYAT ANALISIS',
               style: TextStyle(
                 color: Colors.cyan.shade300,
                 fontWeight: FontWeight.bold,
@@ -1500,7 +1500,7 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
             ),
             const Spacer(),
             Text(
-              'Total Scans: ${scanHistory.length}',
+              'Total: ${scanHistory.length}',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 10,

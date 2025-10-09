@@ -392,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
               child: const Icon(
-                Icons.psychology,
+                Icons.home,
                 color: Colors.white,
                 size: 35,
               ),
@@ -410,25 +410,7 @@ class _HomeScreenState extends State<HomeScreen>
                       ],
                     ).createShader(bounds),
                     child: const Text(
-                      'AI',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 3,
-                        fontFamily: 'Orbitron',
-                      ),
-                    ),
-                  ),
-                  ShaderMask(
-                    shaderCallback: (bounds) => LinearGradient(
-                      colors: [
-                        Colors.pink.withOpacity(_glowAnimation.value),
-                        Colors.cyan.withOpacity(_glowAnimation.value),
-                      ],
-                    ).createShader(bounds),
-                    child: const Text(
-                      'DETECTOR',
+                      'BERANDA',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,

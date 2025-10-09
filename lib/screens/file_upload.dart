@@ -543,7 +543,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     return Column(
       children: [
         Text(
-          _selectedFileName ?? 'SERET & LEPAS ATAU KLIK UNTUK MENGUNGGAH',
+          _selectedFileName ?? 'KLIK UNTUK MENGUNGGAH',
           style: TextStyle(
             fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 14 : 16,
             fontWeight: FontWeight.bold,
@@ -570,7 +570,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           ),
         ] else ...[
           Text(
-            'DIDUKUNG: PDF, DOC, DOCX, TXT',
+            'MENDUKUNG: PDF, DOC, DOCX, TXT',
             style: TextStyle(
               color: Colors.cyan.shade300,
               fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,

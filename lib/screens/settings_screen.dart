@@ -1062,7 +1062,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _buildInfoRow('Versi', 'AI Detector'),
+                  _buildInfoRow('Versi', '1.0.0'),
                   _buildInfoRow('Terakhir Diperbarui', lastUpdated),
                   _buildInfoRow('Ukuran Database', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
                   _buildInfoRow('Model AI', 'Tensor Flow Lite'),
