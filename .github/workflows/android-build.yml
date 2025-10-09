@@ -2,6 +2,11 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      quick_artifact:
+        description: 'If true, skip heavy shrink build & big logs and only produce APK artifacts'
+        required: false
+        default: 'false'
   push:
     branches: [ main, master, optimize/android-size ]
 
@@ -22,6 +27,7 @@ jobs:
       # Use the container's Android SDK location (common default)
       ANDROID_SDK_ROOT: /opt/android/sdk
       JAVA_TOOL_OPTIONS: -Xmx4g
+      QUICK_ARTIFACT: ${{ github.event.inputs.quick_artifact || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -413,12 +419,13 @@ jobs:
         with:
           name: apk-artifacts
           path: |
+            ci-apks/**
             build/app/outputs/**/*.apk
             android/app/build/outputs/**/*.apk
-            ci-apks/**
           if-no-files-found: warn
 
       - name: Upload build logs
+        if: env.QUICK_ARTIFACT != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
@@ -431,7 +438,7 @@ jobs:
 
       # --- Attempt a shrink-enabled build for debugging (uploads mapping & missing rules) ---
       - name: Attempt shrink-enabled build (enableMinify=true)
-        if: always()
+        if: always() && env.QUICK_ARTIFACT != 'true'
         run: |
           set -euo pipefail
           echo "Enabling minify for this CI run"
@@ -447,7 +454,7 @@ jobs:
           tail -n 200 build_apk_shrink.log || true
 
       - name: Upload shrink build artifacts & logs
-        if: always()
+        if: always() && env.QUICK_ARTIFACT != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: shrink-debug-artifacts
