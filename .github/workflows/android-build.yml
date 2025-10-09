@@ -1,5 +1,7 @@
 name: Build Android APK
 
+# retrigger: tiny comment to force a new push event and re-run CI
+
 on:
   workflow_dispatch:
   push:
