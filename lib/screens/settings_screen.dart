@@ -34,9 +34,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _highAccuracy = false;
   double _scanSensitivity = 0.5;
   double _previousSensitivity = 0.5;
-  String _selectedLanguage = 'English';
+  String _selectedLanguage = 'Indonesia';
 
-  final List<String> _languages = ['English', 'Indonesian'];
+  final List<String> _languages = ['Indonesia', 'English'];
 
   @override
   void initState() {
@@ -115,7 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       final code = await SettingsManager.getLanguage();
       if (mounted) {
         setState(() {
-          _selectedLanguage = (code == 'id') ? 'Indonesian' : 'English';
+          _selectedLanguage = (code == 'id') ? 'Indonesia' : 'English';
         });
       }
     } catch (_) {}
@@ -390,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ],
                     ).createShader(bounds),
                     child: Text(
-                      'SYSTEM CONFIG',
+                      'PENGATURAN',
                       style: TextStyle(
                         fontSize: MediaQuery.of(context).size.width < 360 ? 20 : 24,
                         fontWeight: FontWeight.w900,
@@ -404,7 +404,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'NEURAL NETWORK SETTINGS',
+                    'PENGATURAN APLIKASI & SISTEM',
                     style: TextStyle(
                       color: Colors.pink.shade300,
                       fontSize: 10,
@@ -455,10 +455,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _buildSectionHeader('DETECTION SETTINGS'),
+                _buildSectionHeader('PENGATURAN DETEKSI'),
                 _buildSettingSwitch(
-                  title: 'High Accuracy Mode',
-                  subtitle: 'Maximum detection precision (slower)',
+                  title: 'Mode Akurasi Tinggi',
+                  subtitle: 'Presisi deteksi maksimum (lebih lambat)',
                   value: _highAccuracy,
                   onChanged: (value) async {
                     if (value) {
@@ -483,8 +483,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                   color: Colors.cyan,
                 ),
                 _buildSettingSwitch(
-                  title: 'Auto-scan Documents',
-                  subtitle: 'Automatically scan uploaded files',
+                  title: 'Pindai Dokumen Otomatis',
+                  subtitle: 'Secara otomatis pindai file yang diunggah',
                   value: _autoScan,
                   onChanged: (value) async {
                     setState(() => _autoScan = value);
@@ -496,11 +496,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 _buildSensitivitySlider(),
                 const SizedBox(height: 15),
                 
-                _buildSectionHeader('SYSTEM PREFERENCES'),
+                _buildSectionHeader('PREFERENSI SISTEM'),
                 Consumer<ThemeProvider>(
                   builder: (context, themeProvider, child) => _buildSettingSwitch(
-                    title: 'Dark Mode',
-                    subtitle: 'Cyberpunk interface theme',
+                    title: 'Mode Gelap',
+                    subtitle: 'Tema antarmuka Cyberpunk',
                     value: themeProvider.isDarkMode,
                     onChanged: (value) => themeProvider.toggleTheme(),
                     icon: Icons.dark_mode,
@@ -508,8 +508,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ),
                 _buildSettingSwitch(
-                  title: 'Notifications',
-                  subtitle: 'Receive scan completion alerts',
+                  title: 'Notifikasi',
+                  subtitle: 'Terima pemberitahuan penyelesaian pemindaian',
                   value: _notifications,
                   onChanged: (value) async {
                     setState(() => _notifications = value);
@@ -521,17 +521,17 @@ class _SettingsScreenState extends State<SettingsScreen>
                 _buildLanguageSelector(),
                 const SizedBox(height: 15),
                 
-                _buildSectionHeader('DATA & PRIVACY'),
+                _buildSectionHeader('DATA & PRIVASI'),
                 _buildSettingButton(
-                  title: 'Clear Scan History',
-                  subtitle: 'Remove all previous scan data',
+                  title: 'Hapus Riwayat Pemindaian',
+                  subtitle: 'Hapus semua data pemindaian sebelumnya',
                   icon: Icons.delete,
                   color: Colors.red,
                   onTap: _clearHistory,
                 ),
                 _buildSettingButton(
-                  title: 'Export Data',
-                  subtitle: 'Download all analysis results',
+                  title: 'Ekspor Data',
+                  subtitle: 'Unduh semua hasil analisis',
                   icon: Icons.download,
                   color: Colors.green,
                   onTap: _exportData,
@@ -715,7 +715,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Detection Sensitivity',
+                      'Sensivitas Deteksi',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -783,7 +783,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'LOW',
+                    'RENDAH',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 11,
@@ -791,7 +791,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   Text(
-                    'HIGH',
+                    'TINGGI',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 11,
@@ -844,7 +844,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   Icon(Icons.language, color: Colors.cyan.shade300, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Language',
+                    'Bahasa',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1053,7 +1053,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'SYSTEM INFORMATION',
+                    'INFORMASI SISTEM',
                     style: TextStyle(
                       color: Colors.cyan.shade300,
                       fontSize: MediaQuery.of(context).size.width < 360 ? 14 : 16,
@@ -1063,10 +1063,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _buildInfoRow('Version', 'Neural Detector'),
-                  _buildInfoRow('Last Updated', lastUpdated),
-                  _buildInfoRow('Database Size', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
-                  _buildInfoRow('AI Model', 'Tensor Flow Lite'),
+                  _buildInfoRow('Versi', 'Neural Detector'),
+                  _buildInfoRow('Terakhir Diperbarui', lastUpdated),
+                  _buildInfoRow('Ukuran Database', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
+                  _buildInfoRow('Model AI', 'Tensor Flow Lite'),
                 ],
               ),
             );

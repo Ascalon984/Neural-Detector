@@ -349,7 +349,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   ),
                   SizedBox(height: isVerySmallScreen ? 2 : 3),
                   Text(
-                    'FILE PROCESSING',
+                    'PEMROSESAN FILE',
                     style: TextStyle(
                       color: Colors.pink.shade300,
                       fontSize: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12,

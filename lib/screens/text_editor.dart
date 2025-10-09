@@ -347,7 +347,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       ],
                     ).createShader(bounds),
                     child: const Text(
-                      'NEURAL EDITOR',
+                      'EDITOR TEKS',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
@@ -359,7 +359,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    'REAL-TIME AI ANALYSIS',
+                    'MULAI DENGAN TEKS',
                     style: TextStyle(
                       color: Colors.pink.shade300,
                       fontSize: 12,

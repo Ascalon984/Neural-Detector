@@ -936,7 +936,7 @@ class _HomeScreenState extends State<HomeScreen>
         _buildFeatureCard(
           icon: Icons.edit,
           title: 'EDITOR TEKS',
-          subtitle: 'Deteksi AI real-time saat mengetik',
+          subtitle: 'Deteksi AI saat mengetik',
           gradient: [Colors.cyan, Colors.blue],
           onTap: () => _navigateTo(1),
         ),
@@ -944,7 +944,7 @@ class _HomeScreenState extends State<HomeScreen>
         _buildFeatureCard(
           icon: Icons.upload_file,
           title: 'UNGGAH FILE',
-          subtitle: 'Analisis dokumen neural lanjutan',
+          subtitle: 'Mulai analisis dokumen',
           gradient: [Colors.purple, Colors.pink],
           onTap: () => _navigateTo(2),
         ),
@@ -952,7 +952,7 @@ class _HomeScreenState extends State<HomeScreen>
         _buildFeatureCard(
           icon: Icons.camera_alt,
           title: 'PEMINDAI',
-          subtitle: 'OCR pemindaian real time',
+          subtitle: 'OCR pemindaian secara langsung',
           gradient: [Colors.pink, Colors.cyan],
           onTap: () => _navigateTo(3),
         ),
@@ -960,7 +960,7 @@ class _HomeScreenState extends State<HomeScreen>
         _buildFeatureCard(
           icon: Icons.history,
           title: 'ARSIP DATA',
-          subtitle: 'Database riwayat pemindaian lengkap',
+          subtitle: 'Database riwayat pemindaian',
           gradient: [Colors.blue, Colors.purple],
           onTap: () => _navigateTo(4),
         ),

@@ -1213,7 +1213,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                         ],
                       ).createShader(bounds),
                       child: Text(
-                        'BIOMETRIC SCANNER',
+                        'PEMINDAIAN KAMERA',
                         style: TextStyle(
                           fontSize: MediaQuery.of(context).size.width < 360 ? 18 : 22,
                           fontWeight: FontWeight.w900,
@@ -1227,7 +1227,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'NEURAL VISION ANALYSIS',
+                      'ANALISIS FOTO DENGAN AI',
                       style: TextStyle(
                         color: Colors.pink.shade300,
                         fontSize: 10,

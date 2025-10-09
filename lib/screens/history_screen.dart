@@ -7,6 +7,23 @@ import 'dart:math' as math;
 import '../data/search_index.dart';
 import '../utils/search_bridge.dart';
 
+// Global tooltip manager: ensures only one overlay tooltip is visible at a time
+OverlayEntry? _activeTooltipOverlay;
+void _showGlobalTooltip(OverlayEntry entry, OverlayState overlay) {
+  // remove any existing tooltip first
+  try {
+    _activeTooltipOverlay?.remove();
+  } catch (_) {}
+  _activeTooltipOverlay = entry;
+  overlay.insert(entry);
+}
+void _hideGlobalTooltip() {
+  try {
+    _activeTooltipOverlay?.remove();
+  } catch (_) {}
+  _activeTooltipOverlay = null;
+}
+
 class HistoryScreen extends StatefulWidget {
   final String? initialQuery;
   final Map<String, dynamic>? initialFilters;
@@ -30,7 +47,6 @@ class _HistoryScreenState extends State<HistoryScreen>
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
-  // kept only necessary animations
   late Animation<double> _glitchAnimation;
 
   List<Model.ScanHistory> _scanHistory = [];
@@ -38,16 +54,13 @@ class _HistoryScreenState extends State<HistoryScreen>
   int _humanAvg = 0;
   SortOption _currentSort = SortOption.newest;
   final ScrollController _scrollController = ScrollController();
-  // show/hide history graph
   bool _showGraph = false;
-  // grouped history keyed by 'YYYY-MM-DD HH' -> list of scans
   Map<String, List<Model.ScanHistory>> _groupedHistory = {};
 
   @override
   void initState() {
     super.initState();
     
-    // Initialize multiple animation controllers for different effects
     _backgroundController = AnimationController(
       duration: const Duration(seconds: 10),
       vsync: this,
@@ -78,7 +91,6 @@ class _HistoryScreenState extends State<HistoryScreen>
       vsync: this,
     );
     
-    // Initialize animation objects (use AlwaysStoppedAnimation when animations are disabled)
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
 
@@ -96,15 +108,12 @@ class _HistoryScreenState extends State<HistoryScreen>
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
-
-      // reuse existing controllers; rotation and fade handled by controllers below
       
       _glitchAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
         parent: _glitchController,
         curve: Curves.easeInOut,
       ));
       
-      // Randomly trigger glitch effect
       Future.delayed(const Duration(seconds: 5), () {
         if (mounted) {
           _triggerGlitch();
@@ -115,7 +124,6 @@ class _HistoryScreenState extends State<HistoryScreen>
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
-  // animations disabled
       _glitchAnimation = AlwaysStoppedAnimation(0.0);
     }
 
@@ -128,7 +136,6 @@ class _HistoryScreenState extends State<HistoryScreen>
         _glitchController.reverse();
       });
       
-      // Schedule next glitch
       Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
         if (mounted) {
           _triggerGlitch();
@@ -162,7 +169,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     } else {
       list = await HistoryManager.loadHistory();
     }
-    // Build grouping by date-hour (YYYY-MM-DD HH)
+    
     final Map<String, List<Model.ScanHistory>> grouped = {};
     for (var item in list) {
       final dt = _parseDate(item.date);
@@ -194,22 +201,12 @@ class _HistoryScreenState extends State<HistoryScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Animated cyberpunk background
           _buildAnimatedBackground(),
-          
-          // Grid overlay effect
           _buildGridOverlay(),
-          
-          // Scan line effect
           _buildScanLine(),
-          
-          // Glitch effect overlay
           _buildGlitchEffect(),
-          
-          // Floating particles effect
           _buildFloatingParticles(),
           
-          // Main content
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -223,17 +220,14 @@ class _HistoryScreenState extends State<HistoryScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Fixed top area
                           _buildHeader(),
                           SizedBox(height: screenHeight * 0.03),
                           _buildStatsOverview(),
                           SizedBox(height: screenHeight * 0.025),
-                          // Conditional history graph
-                          if (_showGraph) buildHistoryGraph(_groupedHistory, _glowAnimation.value),
+                          if (_showGraph) buildHistoryGraph(_scanHistory, _glowAnimation.value),
                           _buildListHeader(),
                           SizedBox(height: screenHeight * 0.02),
 
-                          // Scrollable history list only
                           Expanded(
                             child: _scanHistory.isEmpty
                                 ? _buildEmptyState()
@@ -250,7 +244,6 @@ class _HistoryScreenState extends State<HistoryScreen>
             ),
           ),
           
-          // Cyberpunk frame borders
           _buildCyberpunkFrame(),
         ],
       ),
@@ -423,7 +416,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         ],
                       ).createShader(bounds),
                       child: const Text(
-                        'DATA ARCHIVE',
+                        'ARSIP DATA',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
@@ -435,7 +428,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'SCAN HISTORY DATABASE',
+                      'DATA RIWAYAT PEMINDAIAN',
                       style: TextStyle(
                         color: Colors.pink.shade300,
                         fontSize: 10,
@@ -541,7 +534,6 @@ class _HistoryScreenState extends State<HistoryScreen>
     try {
       final d = DateTime.tryParse(s);
       if (d != null) return d;
-      // fallback parsing for 'YYYY-MM-DD HH:mm'
       final parts = s.split(' ');
       if (parts.length >= 2) {
         final dateParts = parts[0].split('-');
@@ -682,7 +674,7 @@ class _HistoryScreenState extends State<HistoryScreen>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'RECENT SCANS',
+          'PEMINDAIAN TERBARU',
           style: TextStyle(
             color: Colors.cyan.shade300,
             fontSize: 16,
@@ -702,7 +694,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             ),
           ),
           child: Text(
-            '${_scanHistory.length} ITEMS',
+            '${_scanHistory.length} ENTRI',
             style: TextStyle(
               color: Colors.pink.shade300,
               fontSize: 10,
@@ -714,8 +706,6 @@ class _HistoryScreenState extends State<HistoryScreen>
       ],
     );
   }
-
-  // history list is rendered inline in build() as an Expanded ListView
 
   Widget _buildEmptyState() {
     return Container(
@@ -816,12 +806,10 @@ class _HistoryScreenState extends State<HistoryScreen>
                   padding: const EdgeInsets.all(15),
                   child: Row(
                     children: [
-                      // File icon with status
                       _buildFileIcon(history),
                       
                       const SizedBox(width: 15),
                       
-                      // File info
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,7 +840,6 @@ class _HistoryScreenState extends State<HistoryScreen>
                       
                       const SizedBox(width: 10),
                       
-                      // Status indicator
                       _buildStatusIndicator(history),
                     ],
                   ),
@@ -919,12 +906,12 @@ class _HistoryScreenState extends State<HistoryScreen>
             width: 14,
             height: 14,
             decoration: BoxDecoration(
-              color: history.aiDetection < 20 ? Colors.green : Colors.orange,
+              color: _getAiLevelColor(history.aiDetection),
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: history.aiDetection < 20 ? Colors.green : Colors.orange,
+                  color: _getAiLevelColor(history.aiDetection),
                   blurRadius: 5,
                   spreadRadius: 1,
                 ),
@@ -947,7 +934,6 @@ class _HistoryScreenState extends State<HistoryScreen>
           ),
           child: Stack(
             children: [
-              // Progress track
               Container(
                 width: double.infinity,
                 height: 6,
@@ -956,8 +942,6 @@ class _HistoryScreenState extends State<HistoryScreen>
                   color: Colors.blue.shade900.withOpacity(0.3),
                 ),
               ),
-              
-              // Progress bar
               Container(
                 width: MediaQuery.of(context).size.width * 0.4 * (history.aiDetection / 100),
                 height: 6,
@@ -965,13 +949,13 @@ class _HistoryScreenState extends State<HistoryScreen>
                   borderRadius: BorderRadius.circular(3),
                   gradient: LinearGradient(
                     colors: [
-                      history.aiDetection < 20 ? Colors.green : Colors.orange,
-                      history.aiDetection < 20 ? Colors.green.shade300 : Colors.orange.shade300,
+                      _getAiLevelColor(history.aiDetection),
+                      _getAiLevelColor(history.aiDetection).withOpacity(0.7),
                     ],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: history.aiDetection < 20 ? Colors.green : Colors.orange,
+                      color: _getAiLevelColor(history.aiDetection),
                       blurRadius: 5,
                       spreadRadius: 1,
                     ),
@@ -988,7 +972,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             Text(
               '${history.aiDetection}% AI',
               style: TextStyle(
-                color: history.aiDetection < 20 ? Colors.green.shade300 : Colors.orange.shade300,
+                color: _getAiLevelColor(history.aiDetection),
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
@@ -1055,7 +1039,6 @@ class _HistoryScreenState extends State<HistoryScreen>
     return IgnorePointer(
       child: Stack(
         children: [
-          // Top border
           Positioned(
             top: 0,
             left: 0,
@@ -1074,7 +1057,6 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
             ),
           ),
-          // Bottom border
           Positioned(
             bottom: 0,
             left: 0,
@@ -1093,7 +1075,6 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
             ),
           ),
-          // Left border
           Positioned(
             top: 0,
             bottom: 0,
@@ -1114,7 +1095,6 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
             ),
           ),
-          // Right border
           Positioned(
             top: 0,
             bottom: 0,
@@ -1200,7 +1180,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                             ),
                           ),
                           child: Text(
-                            history.id,
+                            history.status,
                             style: TextStyle(
                               color: Colors.green.shade300,
                               fontSize: 10,
@@ -1240,7 +1220,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              _buildResultIndicator('AI', '${history.aiDetection}%', Colors.orange),
+                              _buildResultIndicator('AI', '${history.aiDetection}%', _getAiLevelColor(history.aiDetection)),
                               _buildResultIndicator('HUMAN', '${history.humanWritten}%', Colors.cyan),
                             ],
                           ),
@@ -1406,6 +1386,32 @@ class _HistoryScreenState extends State<HistoryScreen>
       },
     );
   }
+
+  // Get color based on AI detection percentage
+  Color _getAiLevelColor(int aiPercentage) {
+    // Define color levels based on percentage
+    if (aiPercentage <= 10) {
+      return Colors.green.shade400; // Very low AI - green
+    } else if (aiPercentage <= 20) {
+      return Colors.green.shade300; // Low AI - light green
+    } else if (aiPercentage <= 30) {
+      return Colors.lime.shade400; // Low-mid AI - lime
+    } else if (aiPercentage <= 40) {
+      return Colors.yellow.shade400; // Mid-low AI - yellow
+    } else if (aiPercentage <= 50) {
+      return Colors.amber.shade400; // Mid AI - amber
+    } else if (aiPercentage <= 60) {
+      return Colors.orange.shade400; // Mid-high AI - orange
+    } else if (aiPercentage <= 70) {
+      return Colors.deepOrange.shade400; // High AI - deep orange
+    } else if (aiPercentage <= 80) {
+      return Colors.red.shade400; // Very high AI - red
+    } else if (aiPercentage <= 90) {
+      return Colors.red.shade600; // Extremely high AI - dark red
+    } else {
+      return Colors.red.shade800; // Almost all AI - very dark red
+    }
+  }
 }
 
 class _GridPainter extends CustomPainter {
@@ -1417,7 +1423,6 @@ class _GridPainter extends CustomPainter {
 
     const gridSize = 30.0;
 
-    // Draw vertical lines
     for (double x = 0; x < size.width; x += gridSize) {
       canvas.drawLine(
         Offset(x, 0),
@@ -1426,7 +1431,6 @@ class _GridPainter extends CustomPainter {
       );
     }
 
-    // Draw horizontal lines
     for (double y = 0; y < size.height; y += gridSize) {
       canvas.drawLine(
         Offset(0, y),
@@ -1440,14 +1444,14 @@ class _GridPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Top-level builder for the history graph so it can be called from the widget tree
-Widget buildHistoryGraph(Map<String, List<Model.ScanHistory>> groupedHistory, double glow) {
-  if (groupedHistory.isEmpty) return const SizedBox.shrink();
+// Enhanced history graph with individual scan bars and cyberpunk theme
+Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
+  if (scanHistory.isEmpty) return const SizedBox.shrink();
 
-  final sortedKeys = groupedHistory.keys.toList()..sort();
-
-  // determine max scans in any slot for scaling
-  final maxScans = groupedHistory.values.map((l) => l.length).fold<int>(0, (p, n) => math.max(p, n));
+  // Limit to the most recent scans for better visualization
+  final limitedHistory = scanHistory.length > 20 
+      ? scanHistory.sublist(0, 20) 
+      : scanHistory;
 
   return AnimatedContainer(
     duration: const Duration(milliseconds: 300),
@@ -1455,76 +1459,199 @@ Widget buildHistoryGraph(Map<String, List<Model.ScanHistory>> groupedHistory, do
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(12),
-      color: Colors.black.withOpacity(0.4),
-      border: Border.all(color: Colors.cyan.withOpacity(glow)),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.black.withOpacity(0.7),
+          Colors.blue.shade900.withOpacity(0.3),
+        ],
+      ),
+      border: Border.all(
+        color: Colors.cyan.withOpacity(glow),
+        width: 1.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.cyan.withOpacity(glow * 0.3),
+          blurRadius: 10,
+          spreadRadius: 1,
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('SCAN HISTORY GRAPH', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.bar_chart, color: Colors.cyan.shade300, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'INDIVIDUAL SCAN ANALYSIS',
+              style: TextStyle(
+                color: Colors.cyan.shade300,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Orbitron',
+                fontSize: 14,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              'Total Scans: ${scanHistory.length}',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+                fontFamily: 'Orbitron',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         SizedBox(
           height: 180,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: sortedKeys.map((key) {
-              final scans = groupedHistory[key]!;
-              final total = scans.length;
-              final aiTotal = scans.map((e) => e.aiDetection).fold<int>(0, (p, n) => p + n);
-              final humanTotal = scans.map((e) => e.humanWritten).fold<int>(0, (p, n) => p + n);
-              final aiAvg = (aiTotal / scans.length).round();
-              final humanAvg = (humanTotal / scans.length).round();
-
-              final barHeight = maxScans > 0 ? (total / maxScans) * 150 : 0.0;
-
-              return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: _GraphBar(
-                      height: barHeight,
-                      label: key,
-                      totalScans: total,
-                      aiAvg: aiAvg,
-                      humanAvg: humanAvg,
-                      glow: glow,
-                      fileName: scans.length == 1 ? scans.first.fileName : null,
-                    ),
-                  ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Calculate responsive bar width based on available space
+              final barWidth = math.max(15.0, (constraints.maxWidth - 20) / limitedHistory.length - 5);
+              
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: limitedHistory.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final history = entry.value;
+                    
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                      child: _IndividualScanBar(
+                        height: 150, // Fixed height for all bars
+                        width: barWidth,
+                        label: _formatDateTimeLabel(history.date),
+                        aiDetection: history.aiDetection,
+                        humanDetection: history.humanWritten,
+                        glow: glow,
+                        fileName: history.fileName,
+                        date: history.date,
+                        status: history.status,
+                      ),
+                    );
+                  }).toList(),
+                ),
               );
-            }).toList(),
+            },
           ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildLegendItem('AI Content', Colors.pink.shade400),
+            const SizedBox(width: 20),
+            _buildLegendItem('Human Content', Colors.cyan.shade400),
+          ],
         ),
       ],
     ),
   );
 }
 
-class _GraphBar extends StatefulWidget {
-  final double height;
-  final String label; // 'YYYY-MM-DD HH'
-  final int totalScans;
-  final int aiAvg;
-  final int humanAvg;
-  final double glow;
-  final String? fileName;
-
-  const _GraphBar({required this.height, required this.label, required this.totalScans, required this.aiAvg, required this.humanAvg, required this.glow, this.fileName});
-
-  @override
-  State<_GraphBar> createState() => _GraphBarState();
+// Format date and time for chart labels
+String _formatDateTimeLabel(String dateStr) {
+  try {
+    final date = DateTime.parse(dateStr);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final day = date.day.toString().padLeft(2, '0');
+    final mon = months[(date.month - 1).clamp(0, 11)];
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$day $mon · $hour:$minute';
+  } catch (_) {
+    // Fallback for different date formats
+    try {
+      final parts = dateStr.split(' ');
+      if (parts.length >= 2) {
+        final dateParts = parts[0].split('-');
+        final timeParts = parts[1].split(':');
+        final day = dateParts[2].padLeft(2, '0');
+        final monthIdx = int.tryParse(dateParts[1]) ?? 1;
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        final mon = months[(monthIdx - 1).clamp(0, 11)];
+        final hour = timeParts[0].padLeft(2, '0');
+        final minute = timeParts[1].padLeft(2, '0');
+        return '$day $mon · $hour:$minute';
+      }
+    } catch (_) {}
+    return dateStr.length > 10 ? dateStr.substring(0, 10) : dateStr;
+  }
 }
 
-class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixin {
+Widget _buildLegendItem(String label, Color color) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Text(
+        label,
+        style: TextStyle(
+          color: Colors.white70,
+          fontSize: 10,
+          fontFamily: 'Orbitron',
+        ),
+      ),
+    ],
+  );
+}
+
+class _IndividualScanBar extends StatefulWidget {
+  final double height;
+  final double width;
+  final String label;
+  final int aiDetection;
+  final int humanDetection;
+  final double glow;
+  final String fileName;
+  final String date;
+  final String status;
+
+  const _IndividualScanBar({
+    required this.height,
+    required this.width,
+    required this.label,
+    required this.aiDetection,
+    required this.humanDetection,
+    required this.glow,
+    required this.fileName,
+    required this.date,
+    required this.status,
+  });
+
+  @override
+  State<_IndividualScanBar> createState() => _IndividualScanBarState();
+}
+
+class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _anim;
-  // hover state no longer required (handled via overlay)
+  bool _isHovered = false;
   OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _anim = Tween<double>(begin: 0, end: widget.height).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _anim = Tween<double>(begin: 0, end: widget.height).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack)
+    );
     _ctrl.forward();
   }
 
@@ -1535,35 +1662,34 @@ class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixi
     super.dispose();
   }
 
-  String _formatLabel(String key) {
-    // key is 'YYYY-MM-DD HH'
-    try {
-      final parts = key.split(' ');
-      final date = parts[0].split('-');
-      final month = date[1];
-      final day = date[2];
-      final hour = parts.length > 1 ? parts[1] : '00';
-      return '$month/$day ${hour}:00';
-    } catch (_) {
-      return key;
-    }
+  String _displayFileName() {
+    const max = 18;
+    if (widget.fileName.length <= max) return widget.fileName;
+    return '${widget.fileName.substring(0, max - 3)}...';
   }
 
-  String _displayFileName() {
-    if (widget.fileName == null) return '';
-    const max = 18;
-    if (widget.fileName!.length <= max) return widget.fileName!;
-    return '${widget.fileName!.substring(0, max - 3)}...';
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}';
+    } catch (_) {
+      return dateStr.substring(0, 5);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => _showTooltip(),
-      onExit: (_) => _removeOverlay(),
+      onEnter: (_) {
+        setState(() => _isHovered = true);
+        _showTooltip();
+      },
+      onExit: (_) {
+        setState(() => _isHovered = false);
+        _removeOverlay();
+      },
       child: GestureDetector(
         onTap: () {
-          // toggle tooltip on tap for mobile
           if (_overlayEntry == null) {
             _showTooltip();
           } else {
@@ -1573,47 +1699,103 @@ class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixi
         child: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            // bar area with stacked segments
+            // Enhanced cyberpunk bar with glow effect
             AnimatedBuilder(
               animation: _anim,
               builder: (context, child) {
                 final totalHeight = _anim.value;
-                final aiFrac = widget.aiAvg.toDouble().clamp(0.0, 100.0) / 100.0;
+                final aiFrac = widget.aiDetection.toDouble().clamp(0.0, 100.0) / 100.0;
                 final aiHeight = totalHeight * aiFrac;
                 final humanHeight = (totalHeight - aiHeight).clamp(0.0, totalHeight);
 
                 return Container(
+                  width: widget.width,
                   height: totalHeight,
                   decoration: BoxDecoration(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: _overlayEntry != null ? 10 : 4)],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                            // human (cyan) at bottom
-                            Container(
-                              height: humanHeight,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: [Colors.cyan.shade400, Colors.cyan.shade700]),
-                              ),
-                            ),
-                            // AI (pink) on top
-                            Container(
-                              height: aiHeight,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: [Colors.pink.shade400, Colors.pink.shade700]),
-                              ),
-                            ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _isHovered 
+                          ? Colors.cyan.withOpacity(widget.glow * 0.8)
+                          : Colors.black.withOpacity(0.3),
+                        blurRadius: _isHovered ? 15 : 5,
+                        spreadRadius: _isHovered ? 2 : 1,
+                      ),
                     ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Human content bar (cyan)
+                        Container(
+                          height: humanHeight,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Colors.cyan.shade700,
+                                Colors.cyan.shade400,
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.cyan.withOpacity(widget.glow * 0.3),
+                                blurRadius: 3,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // AI content bar (pink with gradient based on percentage)
+                        Container(
+                          height: aiHeight,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                _getAiLevelColor(widget.aiDetection),
+                                _getAiLevelColor(widget.aiDetection).withOpacity(0.7),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _getAiLevelColor(widget.aiDetection).withOpacity(0.5),
+                                blurRadius: 3,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
             const SizedBox(height: 6),
-            Text(_formatLabel(widget.label), style: const TextStyle(color: Colors.white70, fontSize: 9)),
+            // Responsive label with font size adjustment for mobile
+            Container(
+              constraints: BoxConstraints(maxWidth: widget.width),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 9,
+                    fontFamily: 'Orbitron',
+                    fontWeight: _isHovered ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1621,27 +1803,24 @@ class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixi
   }
 
   void _showTooltip() {
-    // if already showing, do nothing
+    // remove any existing global tooltip and show this one
     if (_overlayEntry != null) return;
 
-  final overlay = Overlay.of(context);
-
+    final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
 
-    final tooltipWidth = 180.0;
-    final tooltipHeight = 90.0;
+    final tooltipWidth = math.min(200.0, MediaQuery.of(context).size.width * 0.8);
+    final tooltipHeight = 100.0; // Reduced height for simpler tooltip
 
-    // prefer above the bar, fallback below if not enough space
     final screenSize = MediaQuery.of(context).size;
     double top = offset.dy - tooltipHeight - 8;
     if (top < MediaQuery.of(context).padding.top + 8) {
-      top = offset.dy + size.height + 8; // place below
+      top = offset.dy + size.height + 8;
     }
 
     double left = offset.dx + (size.width / 2) - (tooltipWidth / 2);
-    // clamp within screen horizontally but allow slight overflow if necessary
     left = left.clamp(8.0, screenSize.width - tooltipWidth - 8.0);
 
     _overlayEntry = OverlayEntry(builder: (context) {
@@ -1655,28 +1834,94 @@ class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixi
             onTap: _removeOverlay,
             behavior: HitTestBehavior.translucent,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.cyan.withOpacity(widget.glow)),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.black.withOpacity(0.9),
+                    Colors.blue.shade900.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.cyan.withOpacity(widget.glow),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(widget.glow * 0.5),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.fileName != null) ...[
-                    Text(_displayFileName(), style: TextStyle(color: Colors.cyan.shade300, fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                  ],
-                  Text(_formatLabel(widget.label), style: TextStyle(color: Colors.cyan.shade300, fontSize: 11)),
-                  const SizedBox(height: 6),
-                  Text('Scans: ${widget.totalScans}', style: const TextStyle(color: Colors.white, fontSize: 12)),
-                  const SizedBox(height: 4),
+                  // File name with truncation
+                  Text(
+                    widget.fileName.length > 20 
+                        ? '${widget.fileName.substring(0, 20)}...' 
+                        : widget.fileName,
+                    style: TextStyle(
+                      color: Colors.cyan.shade300,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Orbitron',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  const SizedBox(height: 10),
+                  // AI and Human percentages
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('AI: ${widget.aiAvg}%', style: TextStyle(color: Colors.pink.shade300, fontSize: 12)),
-                      Text('Human: ${widget.humanAvg}%', style: TextStyle(color: Colors.cyan.shade300, fontSize: 12)),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _getAiLevelColor(widget.aiDetection),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'AI: ${widget.aiDetection}%',
+                            style: TextStyle(
+                              color: _getAiLevelColor(widget.aiDetection),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.cyan.shade400,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Human: ${widget.humanDetection}%',
+                            style: TextStyle(
+                              color: Colors.cyan.shade300,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -1687,12 +1932,38 @@ class _GraphBarState extends State<_GraphBar> with SingleTickerProviderStateMixi
       );
     });
 
-    overlay.insert(_overlayEntry!);
+    _showGlobalTooltip(_overlayEntry!, overlay);
   }
 
   void _removeOverlay() {
-    _overlayEntry?.remove();
+    _hideGlobalTooltip();
     _overlayEntry = null;
+  }
+}
+
+// Get color based on AI detection percentage
+Color _getAiLevelColor(int aiPercentage) {
+  // Define color levels based on percentage
+  if (aiPercentage <= 10) {
+    return Colors.green.shade400; // Very low AI - green
+  } else if (aiPercentage <= 20) {
+    return Colors.green.shade300; // Low AI - light green
+  } else if (aiPercentage <= 30) {
+    return Colors.lime.shade400; // Low-mid AI - lime
+  } else if (aiPercentage <= 40) {
+    return Colors.yellow.shade400; // Mid-low AI - yellow
+  } else if (aiPercentage <= 50) {
+    return Colors.amber.shade400; // Mid AI - amber
+  } else if (aiPercentage <= 60) {
+    return Colors.orange.shade400; // Mid-high AI - orange
+  } else if (aiPercentage <= 70) {
+    return Colors.deepOrange.shade400; // High AI - deep orange
+  } else if (aiPercentage <= 80) {
+    return Colors.red.shade400; // Very high AI - red
+  } else if (aiPercentage <= 90) {
+    return Colors.red.shade600; // Extremely high AI - dark red
+  } else {
+    return Colors.red.shade800; // Almost all AI - very dark red
   }
 }
 
@@ -1707,7 +1978,7 @@ class _ParticlesPainter extends CustomPainter {
       ..color = Colors.cyan.withOpacity(0.3)
       ..style = PaintingStyle.fill;
     
-    final random = math.Random(42); // Fixed seed for consistent particles
+    final random = math.Random(42);
     
     for (int i = 0; i < 15; i++) {
       final x = (random.nextDouble() * size.width);
