@@ -1,7 +1,5 @@
 name: Build Android APK
 
-# retrigger: tiny comment to force a new push event and re-run CI
-
 on:
   workflow_dispatch:
   push:
@@ -17,39 +15,202 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        build_type: [release, profile]
-        target_platform: [android-arm64, android-arm]
+    # Use container with Flutter and Android SDK pre-installed
     container:
       image: cirrusci/flutter:stable
     env:
+      # Use the container's Android SDK location
       ANDROID_SDK_ROOT: /opt/android/sdk
       JAVA_TOOL_OPTIONS: -Xmx4g
+      # Set memory limits for build process
+      _JAVA_OPTIONS: "-Xmx4g -XX:+UseStringDeduplication"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseStringDeduplication"
+    strategy:
+      matrix:
+        include:
+          - build_type: release
+            target_platform: android-arm64
+          - build_type: release
+            target_platform: android-arm
+          - build_type: profile
+            target_platform: android-arm64
     steps:
-      # ... existing steps ...
-      
-      - name: Build APK with optimized settings
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install required tools
         run: |
-          # Clean build to ensure fresh compilation
+          sudo apt-get update
+          sudo apt-get install -y jq curl unzip
+
+      - name: Mark Flutter toolcache as safe for git
+        run: |
+          sudo git config --system --add safe.directory /__t/flutter/stable-3.35.5-x64 || true
+          git config --global --add safe.directory /__t/flutter/stable-3.35.5-x64 || true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Repair Android SDK permissions
+        if: always()
+        run: |
+          sudo mkdir -p "$ANDROID_SDK_ROOT"
+          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT" || true
+          sudo chmod -R a+rX "$ANDROID_SDK_ROOT" || true
+
+      - name: Detect and use system Android SDK if present
+        run: |
+          SYS_SDK=/usr/local/lib/android/sdk
+          if [ -d "$SYS_SDK/platforms/android-33" ]; then
+            echo "ANDROID_SDK_ROOT=$SYS_SDK" >> $GITHUB_ENV
+            echo "use_system=true" > use_system.txt
+          else
+            echo "use_system=false" > use_system.txt
+          fi
+
+      - name: Install Android SDK command-line tools
+        run: |
+          if [ -f use_system.txt ] && grep -q 'use_system=true' use_system.txt; then
+            echo "System SDK present; skipping manual cmdline-tools install"
+            exit 0
+          fi
+          
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            sudo rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
+          fi
+          
+          TMP_DL=$(mktemp -d)
+          curl -C - -sSfL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o "$TMP_DL/tools.zip"
+          unzip -q "$TMP_DL/tools.zip" -d "$TMP_DL"
+          
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          if [ -d "$TMP_DL/cmdline-tools" ]; then
+            cp -a "$TMP_DL/cmdline-tools/." "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
+          else
+            cp -a "$TMP_DL/." "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
+          fi
+          rm -rf "$TMP_DL"
+          
+          sudo chown -R $(id -u):$(id -g) "$ANDROID_SDK_ROOT"
+
+      - name: Install Android SDK components
+        run: |
+          PKGS=("platform-tools" "platforms;android-33" "build-tools;33.0.2")
+          
+          # Accept licenses up-front
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+          
+          for pkg in "${PKGS[@]}"; do
+            echo "Installing $pkg..."
+            yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --no_https "$pkg" || true
+          done
+
+      - name: Configure Gradle for low-memory environments
+        run: |
+          # Create gradle.properties with memory optimizations
+          cat > android/gradle.properties << EOF
+          # Memory optimizations for low-memory environments
+          org.gradle.jvmargs=-Xmx4g -XX:+UseStringDeduplication
+          org.gradle.parallel=true
+          org.gradle.daemon=true
+          org.gradle.configureondemand=true
+          org.gradle.caching=true
+          
+          # Android build optimizations
+          android.enableR8.fullMode=true
+          android.enableR8.lint=false
+          android.enableBuildCache=true
+          
+          # APK size optimizations
+          android.enableSplitApk=true
+          android.enableApkDataBinding=false
+          android.enableR8.fullMode=true
+          EOF
+
+      - name: Install dependencies
+        run: |
+          flutter pub get --verbose
+
+      - name: Generate launcher icons
+        run: |
+          if [ -f "pubspec.yaml" ] && grep -q "flutter_launcher_icons:" "pubspec.yaml"; then
+            flutter pub run flutter_launcher_icons:main
+          fi
+
+      - name: Align Android SDK env and accept licenses
+        run: |
+          if [ -d /opt/android-sdk-linux ]; then
+            echo "ANDROID_SDK_ROOT=/opt/android-sdk-linux" >> $GITHUB_ENV
+            echo "ANDROID_HOME=/opt/android-sdk-linux" >> $GITHUB_ENV
+          fi
+          yes | flutter doctor --android-licenses || true
+          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          fi
+
+      - name: Pre-build diagnostics
+        run: |
+          echo "--- Environment snapshot ---"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "Which java:"; which java || true
+          echo "java -version:"; java -version || true
+          echo "--- Flutter and Dart ---"
+          flutter --version || true
+          dart --version || true
+          echo "--- Gradle wrapper info ---"
+          if [ -f android/gradlew ]; then
+            chmod +x android/gradlew || true
+            (cd android && ./gradlew --version) || true
+          fi
+          echo "--- Memory info ---"
+          free -h || true
+
+      - name: Clean build cache
+        run: |
           flutter clean
+          cd android && ./gradlew clean || true
+
+      - name: Build APK with optimizations for low-memory devices
+        run: |
+          echo "Building APK for ${{ matrix.target_platform }} with ${{ matrix.build_type }} configuration"
           
-          # Get dependencies with resolution strategy
-          flutter pub get --resolution overridestransient
-          
-          # Build with optimized settings based on matrix
+          # Build with optimized settings for low-memory devices
           flutter build apk --${{ matrix.build_type }} \
-            --target-platform ${ matrix.target_platform } \
-            --split-per-abi \
-            --obfuscate \
-            --split-debug-info=build/symbols \
-            --tree-shake-icons \
-            --no-pub \
-            --dart-define=FLUTTER_WEB_CANV_SKIA=true \
-            --dart-define=FLUTTER_WEB_USE_SKIA=true \
-            --dart-define=FLUTTER_WEB_AUTO_DETECT=true \
-            --dart-define=FLUTTER_WEB_CANVASKit_EXPERIMENTAL=true
-            
+            --target-platform ${{ matrix.target_platform }} \
+            --no-shrink \
+            --verbose 2>&1 | tee build_apk_${{ matrix.target_platform }}.log
+          
+          BUILD_EXIT_CODE=${PIPESTATUS[0]:-${PIPESTATUS:-0}}
+          echo "Build exit code: $BUILD_EXIT_CODE"
+          
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "Build failed; printing last 200 lines of log"
+            tail -n 200 build_apk_${{ matrix.target_platform }}.log || true
+            echo "$BUILD_EXIT_CODE" > ../.flutter_build_exit_code || true
+          fi
+
+      - name: Collect build outputs
+        run: |
+          echo "Collecting APK files"
+          mkdir -p ci-apks
+          
+          # Find all APK files and copy them to ci-apks directory
+          find build/app/outputs -type f -name "*.apk" -exec cp --parents {} ci-apks/ \; || true
+          find android/app/build/outputs -type f -name "*.apk" -exec cp --parents {} ci-apks/ \; || true
+          
+          echo "APK files collected:"
+          ls -la ci-apks/ || true
+
       - name: Analyze APK size and performance
         run: |
           # Install APK Analyzer if not available
@@ -60,9 +221,9 @@ jobs:
             export PATH=$PATH:$PWD/apkanalyzer
           fi
           
-          # Analyze APK size
+          # Analyze each APK
           mkdir -p apk_analysis
-          for apk in build/app/outputs/**/*.apk; do
+          for apk in ci-apks/*.apk; do
             if [ -f "$apk" ]; then
               apk_name=$(basename "$apk")
               echo "Analyzing $apk_name..."
@@ -75,15 +236,137 @@ jobs:
           done
           
           # Generate size comparison report
-          python3 scripts/compare_apk_sizes.py apk_analysis/ > size_comparison.txt || true
-          
-      - name: Upload artifacts
+          echo "APK Size Analysis Report" > size_analysis_report.txt
+          echo "====================" >> size_analysis_report.txt
+          cat size_report.txt >> size_analysis_report.txt
+
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apk-artifacts-${{ matrix.build_type }}-${{ matrix.target_platform }}
+          name: apk-artifacts-${{ matrix.target_platform }}-${{ matrix.build_type }}
           path: |
+            ci-apks/
+            apk_analysis/
+            size_analysis_report.txt
+          retention-days: 30
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.target_platform }}-${{ matrix.build_type }}
+          path: |
+            build_apk_${{ matrix.target_platform }}.log
+            build/
+            android/.gradle/
+          retention-days: 7
+
+  optimize-size:
+    name: Optimize Android size (AAB + split-per-abi)
+    runs-on: ubuntu-latest
+    needs: build-apk
+    if: github.ref == 'refs/heads/optimize/android-size' || startsWith(github.head_ref, 'optimize/android-size')
+    env:
+      JAVA_TOOL_OPTIONS: -Xmx4g
+      _JAVA_OPTIONS: "-Xmx4g -XX:+UseStringDeduplication"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseStringDeduplication"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Configure Gradle for optimization
+        run: |
+          # Create gradle.properties with size optimizations
+          cat > android/gradle.properties << EOF
+          # Memory optimizations
+          org.gradle.jvmargs=-Xmx4g -XX:+UseStringDeduplication
+          org.gradle.parallel=true
+          org.gradle.daemon=true
+          org.gradle.configureondemand=true
+          org.gradle.caching=true
+          
+          # Android build optimizations
+          android.enableR8.fullMode=true
+          android.enableR8.lint=false
+          android.enableBuildCache=true
+          
+          # Size optimizations
+          android.enableSplitApk=true
+          android.enableApkDataBinding=false
+          android.enableR8.fullMode=true
+          
+          # Enable shrinking
+          android.enableMinify=true
+          android.useProguard=false
+          android.enableR8.lint=true
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Clean build cache
+        run: |
+          flutter clean
+          cd android && ./gradlew clean || true
+
+      - name: Build AppBundle with size optimization
+        run: |
+          echo "Building AppBundle with size optimization"
+          flutter build appbundle --release --analyze-size --shrink --obfuscate --split-debug-info=build/symbols --tree-shake-icons
+
+      - name: Build split-per-ABI APKs with optimization
+        run: |
+          echo "Building split-per-ABI APKs with optimization"
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --shrink --obfuscate --split-debug-info=build/symbols --tree-shake-icons
+
+      - name: Analyze APK sizes
+        run: |
+          # Install APK Analyzer if not available
+          if ! command -v apk-analyzer &> /dev/null; then
+            wget -q https://dl.google.com/android/repository/apkanalyzer-8.1.1-linux.zip
+            unzip -q apkanalyzer-8.1.1-linux.zip -d apkanalyzer
+            chmod +x apkanalyzer/apkanalyzer
+            export PATH=$PATH:$PWD/apkanalyzer
+          fi
+          
+          # Analyze each APK
+          mkdir -p apk_analysis
+          for apk in build/app/outputs/**/*.apk; do
+            if [ -f "$apk" ]; then
+              apk_name=$(basename "$apk")
+              echo "Analyzing $apk_name..."
+              apk-analyzer -h text "$apk" > "apk_analysis/${apk_name%.apk}_analysis.txt"
+            fi
+          done
+          
+          # Generate size comparison report
+          echo "APK Size Optimization Report" > size_optimization_report.txt
+          echo "====================" >> size_optimization_report.txt
+          
+          # Include size information from AAB build
+          if [ -f build/app/outputs/bundle/release/app-release.aab ]; then
+            echo "AAB Size:" >> size_optimization_report.txt
+            ls -lh build/app/outputs/bundle/release/app-release.aab >> size_optimization_report.txt
+          fi
+          
+          # Include APK sizes
+          for apk in build/app/outputs/**/*.apk; do
+            if [ -f "$apk" ]; then
+              apk_name=$(basename "$apk")
+              echo "$apk_name:" >> size_optimization_report.txt
+              ls -lh "$apk" >> size_optimization_report.txt
+            fi
+          done
+
+      - name: Upload optimized artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-optimized-artifacts
+          path: |
+            build/app/outputs/**/*.aab
             build/app/outputs/**/*.apk
-            apk_analysis/**
-            size_report.txt
-            size_comparison.txt
-          if-no-files-found: warn
+            apk_analysis/
+            size_optimization_report.txt
+          retention-days: 30
