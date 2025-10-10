@@ -292,6 +292,7 @@ Uint8List? _lastCapturedBytes;
 String? _lastCapturedPath;
 bool _isKept = false;
 bool _flashOn = false;
+bool _torchAvailable = false;
 bool _isFlashHovering = false;
 bool _isCapturing = false;
 bool _isAnalyzing = false;
@@ -981,19 +982,28 @@ GestureDetector(
 onTapDown: (_) => _handleFlashHover(true),
 onTapUp: (_) => _handleFlashHover(false),
 onTapCancel: () => _handleFlashHover(false),
-onTap: () async {
-_flashOn = !_flashOn;
-try {
-await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
-if (!mounted) return;
-setState(() {});
-} catch (e) {
-if (!mounted) return;
-ScaffoldMessenger.of(context).showSnackBar(
-SnackBar(content: Text('Flash tidak tersedia: $e')),
-);
-}
-},
+								onTap: () async {
+									// If torch unavailable, show message and skip
+									if (!_torchAvailable) {
+										if (!mounted) return;
+										ScaffoldMessenger.of(context).showSnackBar(
+											const SnackBar(content: Text('Flash tidak tersedia pada kamera ini')),
+										);
+										return;
+									}
+
+									_flashOn = !_flashOn;
+									try {
+										await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
+										if (!mounted) return;
+										setState(() {});
+									} catch (e) {
+										if (!mounted) return;
+										ScaffoldMessenger.of(context).showSnackBar(
+											SnackBar(content: Text('Flash tidak tersedia: $e')),
+										);
+									}
+								},
 child: _buildControlButton(
 Icons.flash_on,
 'LAMPU',
@@ -1329,15 +1339,23 @@ return;
 }
 
 // Use lower resolution for better performance on low-memory devices
-_cameraController = CameraController(
-cameras[0],
-ResolutionPreset.low, // Changed from medium to low
-enableAudio: false,
-);
+	// Prefer a back-facing camera if available
+	CameraDescription selected = cameras[0];
+	try {
+		selected = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => cameras[0]);
+	} catch (_) {
+		selected = cameras[0];
+	}
+
+	_cameraController = CameraController(
+		selected,
+		ResolutionPreset.low, // Changed from medium to low
+		enableAudio: false,
+	);
 
 await _cameraController?.initialize();
 
-// Initialize ML Kit text recognizer
+		// Initialize ML Kit text recognizer
 try {
 _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 } catch (_) {
@@ -1350,6 +1368,22 @@ await _cameraController?.startImageStream(_handleCameraImage);
 } catch (_) {
 // Some platforms may not support streams
 }
+
+		// Probe torch (flash) availability by trying to set FlashMode.torch briefly.
+		try {
+			final prev = _cameraController?.value.flashMode ?? FlashMode.off;
+			try {
+				await _cameraController?.setFlashMode(FlashMode.torch);
+				// small delay to let platform apply
+				await Future.delayed(const Duration(milliseconds: 100));
+				await _cameraController?.setFlashMode(prev);
+				_torchAvailable = true;
+			} catch (_) {
+				_torchAvailable = false;
+			}
+		} catch (_) {
+			_torchAvailable = false;
+		}
 
 if (!mounted) return;
 
@@ -1414,12 +1448,12 @@ _isCapturing = true;
 });
 
 try {
-final shouldTorch = _flashOn || _isFlashHovering;
-if (shouldTorch) {
-try {
-await _cameraController?.setFlashMode(FlashMode.torch);
-} catch (_) {}
-}
+		final shouldTorch = _flashOn || _isFlashHovering;
+		if (shouldTorch && _torchAvailable) {
+			try {
+				await _cameraController?.setFlashMode(FlashMode.torch);
+			} catch (_) {}
+		}
 
 final XFile file = await _cameraController!.takePicture();
 final bytes = await file.readAsBytes();
@@ -1438,9 +1472,11 @@ backgroundColor: Colors.red,
 ),
 );
 } finally {
-try {
-await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
-} catch (_) {}
+		try {
+			if (_torchAvailable) {
+				await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
+			}
+		} catch (_) {}
 if (mounted) {
 setState(() {
 _isCapturing = false;
@@ -1452,9 +1488,11 @@ _isCapturing = false;
 void _handleFlashHover(bool hovering) {
 if (_isFlashHovering == hovering) return;
 _isFlashHovering = hovering;
-try {
-_cameraController?.setFlashMode(hovering || _flashOn ? FlashMode.torch : FlashMode.off);
-} catch (_) {}
+if (_torchAvailable) {
+	try {
+		_cameraController?.setFlashMode(hovering || _flashOn ? FlashMode.torch : FlashMode.off);
+	} catch (_) {}
+}
 if (mounted) setState(() {});
 }
 

@@ -14,11 +14,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.2
   file_picker: ^10.3.3
-  image_picker: ^1.0.2
   google_fonts: ^5.1.0
-  animated_text_kit: ^4.2.2
   flutter_animate: ^4.2.0
-  glass_kit: ^3.0.0
   camera: ^0.11.2
   permission_handler: ^12.0.1
   provider: ^6.0.5
@@ -32,12 +29,10 @@ dependencies:
   intl: ^0.18.1
   share_plus: ^12.0.0
   cross_file: ^0.3.4
-  device_info_plus: ^12.1.0
-  flutter_image_compress: ^2.4.0
-  image_cropper: ^11.0.0
-  flutter_isolate: ^2.1.0
   tflite_flutter: ^0.11.0
-  wakelock_plus: ^1.4.0
+  # Removed unused dependencies: image_picker, animated_text_kit, glass_kit,
+  # device_info_plus, flutter_image_compress, image_cropper, flutter_isolate,
+  # wakelock_plus
 
 dev_dependencies:
   flutter_test:

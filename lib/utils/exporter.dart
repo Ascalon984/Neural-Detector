@@ -6,13 +6,11 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:typed_data';
 import 'dart:async';
 import 'dart:isolate';
 import 'settings_manager.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 import 'package:path_provider/path_provider.dart';
 
 // Conditional import: use the web implementation when dart:html is available,
