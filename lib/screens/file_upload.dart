@@ -638,7 +638,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         ),
         SizedBox(height: isVerySmallScreen ? 6 : 8),
         Text(
-          'PROSES KUANTUM: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+          'SEDANG MEMPROSES: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
           style: TextStyle(
             color: Colors.cyan.shade300,
             fontSize: isVerySmallScreen ? 9 : isSmallScreen ? 11 : 13,

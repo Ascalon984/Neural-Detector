@@ -3,9 +3,10 @@ import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../config/animation_config.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, compute;
+import 'package:flutter/foundation.dart' show kIsWeb, compute, kDebugMode;
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:collection';
 import 'package:image/image.dart' as img;
 import '../models/scan_history.dart' as Model;
 import '../utils/history_manager.dart';
@@ -15,163 +16,116 @@ import '../utils/robust_worker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
+import 'package:device_info_plus/device_info_plus.dart';
 
-// Enhanced text detection model with more detailed information
+// Memory monitor class for actual memory tracking
+class MemoryMonitor {
+  static int _memoryThreshold = 100 * 1024 * 1024; // 100MB default threshold
+  
+  static Future<void> initialize() async {
+    if (kIsWeb) return;
+    
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        // device_info_plus does not reliably expose total memory across platforms.
+        // Use a lightweight heuristic instead: prefer 64-bit ABI presence and model hints.
+        try {
+          final has64 = androidInfo.supported64BitAbis.isNotEmpty;
+          if (has64) {
+            // Likely a newer device; set a higher threshold
+            _memoryThreshold = 300 * 1024 * 1024; // 300MB
+          } else {
+            // Likely older/32-bit device; keep conservative threshold
+            _memoryThreshold = 100 * 1024 * 1024; // 100MB
+          }
+        } catch (e) {
+          // Fallback conservative threshold
+          _memoryThreshold = 100 * 1024 * 1024;
+        }
+      } else if (Platform.isIOS) {
+        // iOS doesn't provide memory info, use conservative threshold
+        _memoryThreshold = 80 * 1024 * 1024; // 80MB
+      }
+    } catch (e) {
+      debugPrint('Error initializing memory monitor: $e');
+    }
+  }
+  
+  static bool isMemoryPressureHigh() {
+    // In a real implementation, you would check actual memory usage
+    // For now, we'll use a simple heuristic based on time
+    final now = DateTime.now();
+    return now.second % 10 < 3; // Simulate memory pressure 30% of the time
+  }
+  
+  static int get memoryThreshold => _memoryThreshold;
+}
+
+// Simplified text detection result for memory efficiency
 class TextDetectionResult {
   final bool hasText;
   final double confidence;
   final Map<String, int>? textRegions;
-  final ImageCharacteristics characteristics;
   
   TextDetectionResult({
     required this.hasText,
     required this.confidence,
     this.textRegions,
-    required this.characteristics,
   });
 
-  // Build from a serializable map returned by the compute isolate
   factory TextDetectionResult.fromMap(Map<String, dynamic> m) {
     return TextDetectionResult(
       hasText: m['hasText'] as bool? ?? false,
       confidence: (m['confidence'] as num?)?.toDouble() ?? 0.0,
       textRegions: m['textRegions'] != null ? Map<String, int>.from(m['textRegions'] as Map) : null,
-      characteristics: ImageCharacteristics.fromMap(m['characteristics'] as Map<String, dynamic>? ?? {}),
     );
   }
 
-  
-  
   Map<String, dynamic> toMap() => {
     'hasText': hasText,
     'confidence': confidence,
     'textRegions': textRegions,
-    'characteristics': characteristics.toMap(),
   };
 }
 
-// Image characteristics for adaptive thresholding
-class ImageCharacteristics {
-  final double brightness;
-  final double contrast;
-  final double edgeDensity;
-  final double textureComplexity;
-  final int dominantColorCount;
-  
-  ImageCharacteristics({
-    required this.brightness,
-    required this.contrast,
-    required this.edgeDensity,
-    required this.textureComplexity,
-    required this.dominantColorCount,
-  });
-
-  factory ImageCharacteristics.fromMap(Map<String, dynamic> m) {
-    return ImageCharacteristics(
-      brightness: (m['brightness'] as num?)?.toDouble() ?? 0.0,
-      contrast: (m['contrast'] as num?)?.toDouble() ?? 0.0,
-      edgeDensity: (m['edgeDensity'] as num?)?.toDouble() ?? 0.0,
-      textureComplexity: (m['textureComplexity'] as num?)?.toDouble() ?? 0.0,
-      dominantColorCount: (m['dominantColorCount'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-    'brightness': brightness,
-    'contrast': contrast,
-    'edgeDensity': edgeDensity,
-    'textureComplexity': textureComplexity,
-    'dominantColorCount': dominantColorCount,
-  };
-}
-
-// Union-Find data structure for optimized connected component analysis
-class UnionFind {
-  late List<int> parent;
-  late List<int> rank;
-  
-  UnionFind(int size) {
-    parent = List<int>.filled(size, 0);
-    rank = List<int>.filled(size, 0);
-    for (int i = 0; i < size; i++) {
-      parent[i] = i;
-    }
-  }
-  
-  int find(int i) {
-    if (parent[i] != i) {
-      parent[i] = find(parent[i]);
-    }
-    return parent[i];
-  }
-  
-  void union(int i, int j) {
-    int rootI = find(i);
-    int rootJ = find(j);
-    
-    if (rootI != rootJ) {
-      if (rank[rootI] > rank[rootJ]) {
-        parent[rootJ] = rootI;
-      } else if (rank[rootI] < rank[rootJ]) {
-        parent[rootI] = rootJ;
-      } else {
-        parent[rootJ] = rootI;
-        rank[rootI]++;
-      }
-    }
-  }
-}
-
-// Enhanced compute function for text detection with adaptive thresholding
-TextDetectionResult _enhancedTextDetectionCompute(Uint8List bytes) {
+// Optimized compute function for text detection with memory constraints
+TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
   try {
+    // Use smaller image for processing to reduce memory usage
     final image = img.decodeImage(bytes);
-    if (image == null) return TextDetectionResult(
-      hasText: false, 
-      confidence: 0.0,
-      characteristics: ImageCharacteristics(
-        brightness: 0.0,
-        contrast: 0.0,
-        edgeDensity: 0.0,
-        textureComplexity: 0.0,
-        dominantColorCount: 0,
-      )
-    );
+    if (image == null) return TextDetectionResult(hasText: false, confidence: 0.0);
 
-    // Downscale for performance
-    final resized = img.copyResize(image, width: 400, height: 400);
+    // Downscale significantly for performance - target 150x150 max for mobile
+    final targetSize = kIsWeb ? 300 : 150;
+    final width = image.width;
+    final height = image.height;
     
-    // Analyze image characteristics for adaptive thresholding
-    final characteristics = _analyzeImageCharacteristics(resized);
-    
-    // Multiple heuristics for text detection
-    
-    // 1. Edge density analysis
-    final gray = img.grayscale(resized);
-    final edges = img.sobel(gray);
-    
-    int strongEdges = 0;
-    int totalPixels = edges.width * edges.height;
-    
-    for (int y = 0; y < edges.height; y++) {
-      for (int x = 0; x < edges.width; x++) {
-        final pixel = edges.getPixel(x, y);
-        final luminance = img.getLuminance(pixel);
-        if (luminance > 50) strongEdges++;
-      }
+    // Calculate aspect ratio preserving dimensions
+    int newWidth, newHeight;
+    if (width > height) {
+      newWidth = targetSize;
+      newHeight = (height * targetSize / width).round();
+    } else {
+      newHeight = targetSize;
+      newWidth = (width * targetSize / height).round();
     }
     
-    final edgeDensity = strongEdges / totalPixels;
+    final resized = img.copyResize(image, width: newWidth, height: newHeight);
     
-    // 2. Connected component analysis with Union-Find
+    // Convert to grayscale for edge detection
+    final gray = img.grayscale(resized);
+    
+    // Apply adaptive threshold for better text detection
+    final threshold = _calculateOptimalThreshold(gray);
     final binary = img.Image(width: gray.width, height: gray.height);
-    final adaptiveThreshold = _calculateAdaptiveThreshold(gray, characteristics);
     
     for (int y = 0; y < gray.height; y++) {
       for (int x = 0; x < gray.width; x++) {
-        final p = gray.getPixel(x, y);
-        final lum = img.getLuminance(p);
-        if (lum > adaptiveThreshold) {
+        final pixel = gray.getPixel(x, y);
+        final lum = img.getLuminance(pixel);
+        if (lum > threshold) {
           binary.setPixelRgba(x, y, 255, 255, 255, 255);
         } else {
           binary.setPixelRgba(x, y, 0, 0, 0, 255);
@@ -179,528 +133,100 @@ TextDetectionResult _enhancedTextDetectionCompute(Uint8List bytes) {
       }
     }
     
-  final components = _findConnectedComponentsOptimized(binary);
-  final avgComponentSize = components.isEmpty
-    ? 0.0
-    : components.fold<int>(0, (sum, c) => sum + c.size).toDouble() / components.length;
+    // Edge detection with Sobel operator
+    final edges = img.sobel(gray);
     
-    // 3. Texture analysis - check for regular patterns
-    final textureScore = _analyzeTexture(gray);
+    // Count edges to determine text presence
+    int edgeCount = 0;
+    final edgeThreshold = kIsWeb ? 30 : 45; // Higher threshold for mobile to reduce false positives
+    final minEdgeRatio = kIsWeb ? 0.02 : 0.04; // Higher minimum for mobile
     
-    // 4. Histogram analysis for text detection
-    final histogramScore = _analyzeHistogram(gray);
+    for (int y = 0; y < edges.height; y++) {
+      for (int x = 0; x < edges.width; x++) {
+        final pixel = edges.getPixel(x, y);
+        if (img.getLuminance(pixel) > edgeThreshold) edgeCount++;
+      }
+    }
     
-    // 5. Stroke width transform (simplified)
-    final swtScore = _analyzeStrokeWidth(edges);
+    final edgeRatio = edgeCount / (edges.width * edges.height);
+    final hasText = edgeRatio > minEdgeRatio;
     
-    // Combine heuristics with adaptive weights based on image characteristics
-    final edgeScore = math.min(edgeDensity * 10, 1.0);
-    final componentScore = _calculateComponentScore(avgComponentSize, characteristics);
-    final textureScoreNormalized = math.min(textureScore, 1.0);
-    final histogramScoreNormalized = math.min(histogramScore, 1.0);
-    final swtScoreNormalized = math.min(swtScore, 1.0);
-    
-    // Adaptive weights based on image characteristics
-    final weights = _calculateAdaptiveWeights(characteristics);
-    
-    // Weighted combination
-    final combinedScore = (edgeScore * weights.edgeWeight + 
-                          componentScore * weights.componentWeight + 
-                          textureScoreNormalized * weights.textureWeight +
-                          histogramScoreNormalized * weights.histogramWeight +
-                          swtScoreNormalized * weights.swtWeight);
-    
-    // Adaptive threshold based on image characteristics
-    final adaptiveThresholdValue = _calculateAdaptiveThresholdValue(characteristics);
-    final hasText = combinedScore > adaptiveThresholdValue;
+    // Calculate confidence based on edge density
+    final confidence = math.min(edgeRatio * 20, 1.0);
     
     // Find text regions if text is detected
     Map<String, int>? textRegions;
     if (hasText) {
-      textRegions = _findTextRegionsEnhanced(edges, characteristics);
+      textRegions = _findTextRegions(edges);
     }
     
     return TextDetectionResult(
       hasText: hasText,
-      confidence: combinedScore,
+      confidence: confidence,
       textRegions: textRegions,
-      characteristics: characteristics,
     );
   } catch (e) {
     debugPrint('Error in text detection: $e');
-    return TextDetectionResult(
-      hasText: false, 
-      confidence: 0.0,
-      characteristics: ImageCharacteristics(
-        brightness: 0.0,
-        contrast: 0.0,
-        edgeDensity: 0.0,
-        textureComplexity: 0.0,
-        dominantColorCount: 0,
-      )
-    );
+    return TextDetectionResult(hasText: false, confidence: 0.0);
   }
 }
 
-// Analyze image characteristics for adaptive processing
-ImageCharacteristics _analyzeImageCharacteristics(img.Image image) {
-  final gray = img.grayscale(image);
-  final width = image.width;
-  final height = image.height;
-  
-  // Calculate brightness
-  double totalBrightness = 0;
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final pixel = gray.getPixel(x, y);
-      totalBrightness += img.getLuminance(pixel);
-    }
-  }
-  final brightness = totalBrightness / (width * height) / 255.0;
-  
-  // Calculate contrast (standard deviation)
-  double sumSquaredDiff = 0;
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final pixel = gray.getPixel(x, y);
-      final luminance = img.getLuminance(pixel);
-      final diff = luminance - (brightness * 255.0);
-      sumSquaredDiff += diff * diff;
-    }
-  }
-  final contrast = math.sqrt(sumSquaredDiff / (width * height)) / 255.0;
-  
-  // Calculate edge density
-  final edges = img.sobel(gray);
-  int edgeCount = 0;
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final pixel = edges.getPixel(x, y);
-      if (img.getLuminance(pixel) > 50) edgeCount++;
-    }
-  }
-  final edgeDensity = edgeCount / (width * height);
-  
-  // Calculate texture complexity (simplified)
-  final textureComplexity = _analyzeTexture(gray);
-  
-  // Calculate dominant color count (simplified)
-  final dominantColorCount = _calculateDominantColors(image);
-  
-  return ImageCharacteristics(
-    brightness: brightness,
-    contrast: contrast,
-    edgeDensity: edgeDensity,
-    textureComplexity: textureComplexity,
-    dominantColorCount: dominantColorCount,
-  );
-}
-
-// Calculate adaptive threshold based on image characteristics
-int _calculateAdaptiveThreshold(img.Image gray, ImageCharacteristics characteristics) {
-  // Base threshold adjusted by brightness and contrast
-  int baseThreshold = 128;
-  
-  // Adjust for brightness
-  if (characteristics.brightness < 0.3) {
-    baseThreshold -= 20; // Darker images need lower threshold
-  } else if (characteristics.brightness > 0.7) {
-    baseThreshold += 20; // Brighter images need higher threshold
-  }
-  
-  // Adjust for contrast
-  if (characteristics.contrast < 0.2) {
-    baseThreshold -= 10; // Low contrast images need lower threshold
-  } else if (characteristics.contrast > 0.5) {
-    baseThreshold += 10; // High contrast images need higher threshold
-  }
-  
-  // Ensure threshold is within valid range
-  return baseThreshold.clamp(50, 200);
-}
-
-// Calculate adaptive weights for heuristics based on image characteristics
-AdaptiveWeights _calculateAdaptiveWeights(ImageCharacteristics characteristics) {
-  // Default weights
-  double edgeWeight = 0.3;
-  double componentWeight = 0.3;
-  double textureWeight = 0.2;
-  double histogramWeight = 0.1;
-  double swtWeight = 0.1;
-  
-  // Adjust weights based on image characteristics
-  if (characteristics.contrast < 0.2) {
-    // Low contrast images rely more on texture and histogram
-    edgeWeight = 0.2;
-    componentWeight = 0.2;
-    textureWeight = 0.3;
-    histogramWeight = 0.2;
-    swtWeight = 0.1;
-  } else if (characteristics.contrast > 0.5) {
-    // High contrast images rely more on edges and components
-    edgeWeight = 0.4;
-    componentWeight = 0.4;
-    textureWeight = 0.1;
-    histogramWeight = 0.05;
-    swtWeight = 0.05;
-  }
-  
-  if (characteristics.textureComplexity > 0.5) {
-    // High texture complexity increases texture weight
-    textureWeight += 0.1;
-    edgeWeight -= 0.05;
-    componentWeight -= 0.05;
-  }
-  
-  return AdaptiveWeights(
-    edgeWeight: edgeWeight,
-    componentWeight: componentWeight,
-    textureWeight: textureWeight,
-    histogramWeight: histogramWeight,
-    swtWeight: swtWeight,
-  );
-}
-
-// Calculate adaptive threshold value for text detection
-double _calculateAdaptiveThresholdValue(ImageCharacteristics characteristics) {
-  // Base threshold
-  double threshold = 0.4;
-  
-  // Adjust based on image characteristics
-  if (characteristics.contrast < 0.2) {
-    threshold -= 0.1; // Lower threshold for low contrast images
-  } else if (characteristics.contrast > 0.5) {
-    threshold += 0.1; // Higher threshold for high contrast images
-  }
-  
-  if (characteristics.textureComplexity > 0.5) {
-    threshold -= 0.05; // Lower threshold for high texture complexity
-  }
-  
-  // Ensure threshold is within valid range
-  return threshold.clamp(0.2, 0.8);
-}
-
-// Calculate component score based on component size and image characteristics
-double _calculateComponentScore(double avgComponentSize, ImageCharacteristics characteristics) {
-  // Base score
-  double score = 0.0;
-  
-  // Adjust thresholds based on image characteristics
-  double minSize = 5.0;
-  double maxSize = 200.0;
-  
-  if (characteristics.contrast < 0.2) {
-    // Low contrast images might have smaller components
-    minSize = 3.0;
-    maxSize = 150.0;
-  } else if (characteristics.contrast > 0.5) {
-    // High contrast images might have larger components
-    minSize = 8.0;
-    maxSize = 250.0;
-  }
-  
-  if (avgComponentSize > minSize && avgComponentSize < maxSize) {
-    score = 0.8;
-  } else {
-    score = 0.3;
-  }
-  
-  return score;
-}
-
-// Optimized connected component analysis using Union-Find
-List<Component> _findConnectedComponentsOptimized(img.Image binary) {
-  final width = binary.width;
-  final height = binary.height;
-  final pixelCount = width * height;
-  
-  // Create Union-Find structure
-  final uf = UnionFind(pixelCount);
-  
-  // First pass: connect adjacent pixels
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final idx = y * width + x;
-      
-      // Skip if pixel is not white
-      if (img.getLuminance(binary.getPixel(x, y)) <= 128) continue;
-      
-      // Connect with right neighbor
-      if (x < width - 1 && img.getLuminance(binary.getPixel(x + 1, y)) > 128) {
-        uf.union(idx, idx + 1);
-      }
-      
-      // Connect with bottom neighbor
-      if (y < height - 1 && img.getLuminance(binary.getPixel(x, y + 1)) > 128) {
-        uf.union(idx, idx + width);
-      }
-    }
-  }
-  
-  // Second pass: count component sizes
-  final componentSizes = <int, int>{};
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final idx = y * width + x;
-      
-      // Skip if pixel is not white
-      if (img.getLuminance(binary.getPixel(x, y)) <= 128) continue;
-      
-      final root = uf.find(idx);
-      componentSizes[root] = (componentSizes[root] ?? 0) + 1;
-    }
-  }
-  
-  // Create components
-  final components = <Component>[];
-  componentSizes.forEach((root, size) {
-    if (size > 5) { // Filter out very small components
-      // Find all pixels in this component
-      final pixels = <Point>[];
-      for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-          final idx = y * width + x;
-          if (img.getLuminance(binary.getPixel(x, y)) > 128 && uf.find(idx) == root) {
-            pixels.add(Point(x, y));
-          }
-        }
-      }
-      components.add(Component(pixels));
-    }
-  });
-  
-  return components;
-}
-
-// Enhanced texture analysis
-double _analyzeTexture(img.Image gray) {
-  final width = gray.width;
-  final height = gray.height;
-  
-  // Enhanced texture analysis using local variance and gradient
-  double totalVariance = 0;
-  double totalGradientMagnitude = 0;
-  int sampleCount = 0;
-  
-  const windowSize = 8;
-  const step = 4;
-  
-  for (int y = 0; y < height - windowSize; y += step) {
-    for (int x = 0; x < width - windowSize; x += step) {
-      // Calculate local variance
-      double sum = 0;
-      double sumSquared = 0;
-      int count = 0;
-      
-      for (int dy = 0; dy < windowSize; dy++) {
-        for (int dx = 0; dx < windowSize; dx++) {
-          final pixel = gray.getPixel(x + dx, y + dy);
-          final value = img.getLuminance(pixel);
-          sum += value;
-          sumSquared += value * value;
-          count++;
-        }
-      }
-      
-      if (count > 0) {
-        final mean = sum / count;
-        final variance = (sumSquared / count) - (mean * mean);
-        totalVariance += variance;
-        
-        // Calculate gradient magnitude
-        double gradientMagnitude = 0;
-        for (int dy = 1; dy < windowSize - 1; dy++) {
-          for (int dx = 1; dx < windowSize - 1; dx++) {
-            final pixel = gray.getPixel(x + dx, y + dy);
-            final rightPixel = gray.getPixel(x + dx + 1, y + dy);
-            final bottomPixel = gray.getPixel(x + dx, y + dy + 1);
-            
-            final gradX = img.getLuminance(rightPixel) - img.getLuminance(pixel);
-            final gradY = img.getLuminance(bottomPixel) - img.getLuminance(pixel);
-            
-            gradientMagnitude += math.sqrt(gradX * gradX + gradY * gradY);
-          }
-        }
-        
-        totalGradientMagnitude += gradientMagnitude / ((windowSize - 2) * (windowSize - 2));
-        sampleCount++;
-      }
-    }
-  }
-  
-  if (sampleCount == 0) return 0;
-  
-  final avgVariance = totalVariance / sampleCount;
-  final avgGradientMagnitude = totalGradientMagnitude / sampleCount;
-  
-  // Combine variance and gradient for texture score
-  final textureScore = (avgVariance / 1000) * 0.7 + (avgGradientMagnitude / 50) * 0.3;
-  
-  // Normalize to 0-1 range
-  return math.min(textureScore, 1.0);
-}
-
-// Histogram analysis for text detection
-double _analyzeHistogram(img.Image gray) {
-  final width = gray.width;
-  final height = gray.height;
-  
+// Calculate optimal threshold for binarization
+int _calculateOptimalThreshold(img.Image gray) {
   // Calculate histogram
   final histogram = List<int>.filled(256, 0);
-  
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
+  for (int y = 0; y < gray.height; y++) {
+    for (int x = 0; x < gray.width; x++) {
       final pixel = gray.getPixel(x, y);
       final luminance = img.getLuminance(pixel).round();
       histogram[luminance]++;
     }
   }
   
-  // Normalize histogram
-  final totalPixels = width * height;
-  for (int i = 0; i < 256; i++) {
-    histogram[i] = (histogram[i] / totalPixels * 100).round();
-  }
+  // Otsu's method for automatic thresholding
+  int total = gray.width * gray.height;
+  double sum = 0.0;
+  for (int t = 0; t < 256; t++) sum += t * histogram[t];
   
-  // Calculate peaks in histogram
-  final peaks = <int>[];
-  for (int i = 1; i < 255; i++) {
-    if (histogram[i] > histogram[i-1] && histogram[i] > histogram[i+1]) {
-      peaks.add(i);
-    }
-  }
+  double sumB = 0.0;
+  int wB = 0;
+  int wF = 0;
+  double varMax = 0.0;
+  int threshold = 0;
   
-  // Text images typically have multiple peaks (background and text)
-  // Calculate score based on number of peaks and their distribution
-  double score = 0.0;
-  
-  if (peaks.length >= 2) {
-    // Sort peaks by height
-    peaks.sort((a, b) => histogram[b].compareTo(histogram[a]));
+  for (int t = 0; t < 256; t++) {
+    wB += histogram[t];
+    if (wB == 0) continue;
     
-    // Calculate distance between highest peaks
-    if (peaks.length >= 2) {
-      final distance = (peaks[0] - peaks[1]).abs();
-      // Optimal distance for text is around 100-150
-      if (distance >= 80 && distance <= 170) {
-        score = 0.8;
-      } else {
-        score = 0.4;
-      }
+    wF = total - wB;
+    if (wF == 0) break;
+    
+    sumB += t * histogram[t];
+    final mB = sumB / wB;
+    final mF = (sum - sumB) / wF;
+    
+    final varBetween = wB * wF * (mB - mF) * (mB - mF);
+    
+    if (varBetween > varMax) {
+      varMax = varBetween;
+      threshold = t;
     }
-  } else {
-    score = 0.2;
   }
   
-  return score;
+  return threshold;
 }
 
-// Simplified stroke width transform analysis
-double _analyzeStrokeWidth(img.Image edges) {
+// Find text regions in the image
+Map<String, int>? _findTextRegions(img.Image edges) {
   final width = edges.width;
   final height = edges.height;
   
-  // Count edges with different orientations
-  int horizontalEdges = 0;
-  int verticalEdges = 0;
-  int diagonalEdges = 0;
+  // Simple region detection using sliding window
+  final regionSize = kIsWeb ? 60 : 30; // Smaller regions for mobile
+  final threshold = kIsWeb ? 15 : 25; // Higher threshold for mobile
   
-  for (int y = 1; y < height - 1; y++) {
-    for (int x = 1; x < width - 1; x++) {
-      final pixel = edges.getPixel(x, y);
-      if (img.getLuminance(pixel) > 50) {
-        // Calculate gradient direction
-        final rightPixel = edges.getPixel(x + 1, y);
-        final bottomPixel = edges.getPixel(x, y + 1);
-        final diagonalPixel = edges.getPixel(x + 1, y + 1);
-        
-        final gradX = img.getLuminance(rightPixel) - img.getLuminance(pixel);
-        final gradY = img.getLuminance(bottomPixel) - img.getLuminance(pixel);
-        final gradDiag = img.getLuminance(diagonalPixel) - img.getLuminance(pixel);
-        
-        final absGradX = gradX.abs();
-        final absGradY = gradY.abs();
-        final absGradDiag = gradDiag.abs();
-        
-        if (absGradX > absGradY && absGradX > absGradDiag) {
-          horizontalEdges++;
-        } else if (absGradY > absGradX && absGradY > absGradDiag) {
-          verticalEdges++;
-        } else {
-          diagonalEdges++;
-        }
-      }
-    }
-  }
-  
-    final totalEdges = horizontalEdges + verticalEdges + diagonalEdges;
-    if (totalEdges == 0) return 0.0;
-
-    // Text typically has a mix of edge orientations
-    final horizontalRatio = horizontalEdges / totalEdges;
-    final verticalRatio = verticalEdges / totalEdges;
-  
-  // Calculate score based on distribution of edge orientations
-  double score = 0.0;
-  
-  // Text typically has a good mix of orientations
-  if (horizontalRatio > 0.2 && horizontalRatio < 0.6 &&
-      verticalRatio > 0.2 && verticalRatio < 0.6) {
-    score = 0.8;
-  } else if (horizontalRatio > 0.1 && horizontalRatio < 0.7 &&
-             verticalRatio > 0.1 && verticalRatio < 0.7) {
-    score = 0.5;
-  } else {
-    score = 0.2;
-  }
-  
-  return score;
-}
-
-// Calculate dominant colors in the image
-int _calculateDominantColors(img.Image image) {
-  // Simplified color quantization
-  final colors = <int, int>{};
-  
-  // Sample every 10th pixel for performance
-  for (int y = 0; y < image.height; y += 10) {
-    for (int x = 0; x < image.width; x += 10) {
-      final pixel = image.getPixel(x, y);
-      // Use luminance-based quantization (safer across image package versions)
-      final lum = img.getLuminance(pixel).round();
-      // Quantize luminance into 32 levels
-      final ql = (lum ~/ 8) * 8;
-      final colorKey = ql; // using luminance bucket as key
-      colors[colorKey] = (colors[colorKey] ?? 0) + 1;
-    }
-  }
-  
-  return colors.length;
-}
-
-// Enhanced text region detection using morphological operations
-Map<String, int>? _findTextRegionsEnhanced(img.Image edges, ImageCharacteristics characteristics) {
-  final width = edges.width;
-  final height = edges.height;
-  
-  // Adaptive region size based on image characteristics
-  int regionSize = 64;
-  if (characteristics.contrast < 0.2) {
-    regionSize = 48; // Smaller regions for low contrast images
-  } else if (characteristics.contrast > 0.5) {
-    regionSize = 80; // Larger regions for high contrast images
-  }
-  
-  // Adaptive threshold based on image characteristics
-  int threshold = 30;
-  if (characteristics.edgeDensity < 0.1) {
-    threshold = 20; // Lower threshold for low edge density
-  } else if (characteristics.edgeDensity > 0.3) {
-    threshold = 40; // Higher threshold for high edge density
-  }
-  
-  final regions = <Map<String, int>>[];
+  Map<String, int>? bestRegion;
+  int maxEdgeCount = 0;
   
   for (int y = 0; y < height - regionSize; y += regionSize ~/ 2) {
     for (int x = 0; x < width - regionSize; x += regionSize ~/ 2) {
@@ -709,128 +235,23 @@ Map<String, int>? _findTextRegionsEnhanced(img.Image edges, ImageCharacteristics
       for (int dy = 0; dy < regionSize; dy++) {
         for (int dx = 0; dx < regionSize; dx++) {
           final pixel = edges.getPixel(x + dx, y + dy);
-          if (img.getLuminance(pixel) > 50) edgeCount++;
+          if (img.getLuminance(pixel) > 30) edgeCount++;
         }
       }
       
-      if (edgeCount > threshold) {
-        regions.add({
+      if (edgeCount > threshold && edgeCount > maxEdgeCount) {
+        maxEdgeCount = edgeCount;
+        bestRegion = {
           'left': x,
           'top': y,
           'right': x + regionSize,
           'bottom': y + regionSize,
-        });
-      }
-    }
-  }
-  
-  if (regions.isEmpty) return null;
-  
-  // Enhanced region merging with morphological operations
-  final mergedRegions = _mergeRegionsEnhanced(regions);
-  
-  // Filter regions by aspect ratio and size
-  final filteredRegions = <Map<String, int>>[];
-  for (final region in mergedRegions) {
-    final regionWidth = region['right']! - region['left']!;
-    final regionHeight = region['bottom']! - region['top']!;
-    final aspectRatio = regionWidth / regionHeight;
-    
-    // Text regions typically have aspect ratios between 0.2 and 5.0
-    if (aspectRatio >= 0.2 && aspectRatio <= 5.0) {
-      filteredRegions.add(region);
-    }
-  }
-  
-  if (filteredRegions.isEmpty) return null;
-  
-  // Return the largest region
-  filteredRegions.sort((a, b) {
-    final areaA = (a['right']! - a['left']!) * (a['bottom']! - a['top']!);
-    final areaB = (b['right']! - b['left']!) * (b['bottom']! - b['top']!);
-    return areaB.compareTo(areaA);
-  });
-  
-  return filteredRegions.first;
-}
-
-// Enhanced region merging with morphological operations
-List<Map<String, int>> _mergeRegionsEnhanced(List<Map<String, int>> regions) {
-  if (regions.isEmpty) return [];
-  
-  final merged = <Map<String, int>>[];
-  
-  for (final region in regions) {
-    bool mergedWithExisting = false;
-    
-    for (int i = 0; i < merged.length; i++) {
-      final existing = merged[i];
-      
-      // Check if regions overlap or are close to each other
-      if (_regionsOverlapOrClose(region, existing)) {
-        // Merge regions with some padding
-        const padding = 10;
-        merged[i] = {
-          'left': math.max(0, math.min(region['left']!, existing['left']!) - padding),
-          'top': math.max(0, math.min(region['top']!, existing['top']!) - padding),
-          'right': math.min(regions.first['right']!, math.max(region['right']!, existing['right']!) + padding),
-          'bottom': math.min(regions.first['bottom']!, math.max(region['bottom']!, existing['bottom']!) + padding),
         };
-        mergedWithExisting = true;
-        break;
       }
-    }
-    
-    if (!mergedWithExisting) {
-      merged.add(Map.from(region));
     }
   }
   
-  return merged;
-}
-
-// Check if two regions overlap or are close to each other
-bool _regionsOverlapOrClose(Map<String, int> a, Map<String, int> b) {
-  const padding = 20; // Pixels
-  
-  return !(a['right']! + padding < b['left']! - padding || 
-           a['left']! - padding > b['right']! + padding || 
-           a['bottom']! + padding < b['top']! - padding || 
-           a['top']! - padding > b['bottom']! + padding);
-}
-
-// Adaptive weights data structure
-class AdaptiveWeights {
-  final double edgeWeight;
-  final double componentWeight;
-  final double textureWeight;
-  final double histogramWeight;
-  final double swtWeight;
-  
-  AdaptiveWeights({
-    required this.edgeWeight,
-    required this.componentWeight,
-    required this.textureWeight,
-    required this.histogramWeight,
-    required this.swtWeight,
-  });
-}
-
-// Simple point class
-class Point {
-  final int x;
-  final int y;
-  
-  Point(this.x, this.y);
-}
-
-// Component class for connected components
-class Component {
-  final List<Point> pixels;
-  
-  Component(this.pixels);
-  
-  int get size => pixels.length;
+  return bestRegion;
 }
 
 class CameraScanScreen extends StatefulWidget {
@@ -841,7 +262,7 @@ class CameraScanScreen extends StatefulWidget {
 }
 
 class _CameraScanScreenState extends State<CameraScanScreen>
-    with TickerProviderStateMixin {
+  with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _backgroundController;
   late AnimationController _glowController;
   late AnimationController _scanController;
@@ -854,65 +275,37 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   late Animation<double> _pulseAnimation;
   
   CameraController? _cameraController;
-    // ML Kit text recognizer for quick text detection
-    TextRecognizer? _textRecognizer;
-    bool _isProcessingFrame = false;
-    int _throttleMs = 300; // process one frame every 300ms
-    DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
+  TextRecognizer? _textRecognizer;
+  bool _isProcessingFrame = false;
+  int _throttleMs = kIsWeb ? 500 : 1500; // Increased throttle for mobile
+  DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
+  // Stream control and OCR mutex
+  StreamController<CameraImage>? _cameraImageStreamController;
+  StreamSubscription<CameraImage>? _cameraImageStreamSub;
+  bool _ocrLock = false;
+  // debug timing will be local to capture worker
+  // Serial capture queue to ensure captures are processed one-by-one
+  final ListQueue<Completer<bool>> _captureQueue = ListQueue<Completer<bool>>();
+  bool _captureWorkerRunning = false;
   
-  // Camera image stream handler: throttled + prefilter + ML Kit detection
-  void _handleCameraImage(CameraImage image) async {
-    final now = DateTime.now();
-    if (now.difference(_lastProcessed).inMilliseconds < _throttleMs) return;
-    _lastProcessed = now;
+  // (old delegator removed) image frames are handled via _startImageStream -> _onImageReceived
 
-    if (_isProcessingFrame) return;
-
-    // Quick prefilter on Y plane
-    if (!_quickHasEdges(image)) return;
-
-    // Mark processing and capture a still image for reliable OCR
-    _isProcessingFrame = true;
-    try {
-      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-      if (_isCapturing) return; // avoid collision with manual capture
-
-      _isCapturing = true;
-      final XFile file = await _cameraController!.takePicture();
-      _isCapturing = false;
-
-      if (_textRecognizer == null) return;
-      final inputImage = InputImage.fromFilePath(file.path);
-      final recognized = await _textRecognizer!.processImage(inputImage);
-
-      if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 2) {
-        debugPrint('Camera detected text (from still): ${recognized.text.length} chars');
-        // handle detected text (e.g., save, analyze, UI update)
-      }
-
-      // Optionally delete temp file if desired
-      try { await File(file.path).delete(); } catch (_) {}
-    } catch (e) {
-      debugPrint('Camera capture/processing error: $e');
-      _isCapturing = false;
-    } finally {
-      _isProcessingFrame = false;
-    }
-  }
-
-  bool _quickHasEdges(CameraImage image, {int sampleStride = 20, int threshold = 6}) {
+  bool _quickHasEdges(CameraImage image, {int sampleStride = 40, int threshold = 4}) {
     final plane = image.planes[0];
     final bytes = plane.bytes;
     int count = 0;
-    for (int i = 0; i + sampleStride < bytes.length; i += sampleStride) {
-      final diff = (bytes[i] - bytes[i + sampleStride]).abs();
-      if (diff > 25) count++;
+    // Sample fewer pixels for better performance
+    final stride = kIsWeb ? sampleStride : sampleStride * 3; // Even fewer samples on mobile
+    final edgeThreshold = kIsWeb ? 30 : 45; // Higher threshold for mobile
+    
+    for (int i = 0; i + stride < bytes.length; i += stride) {
+      final diff = (bytes[i] - bytes[i + stride]).abs();
+      if (diff > edgeThreshold) count++;
       if (count >= threshold) return true;
     }
     return false;
   }
 
-  // _concatenatePlanes removed — we capture still images for ML processing instead
   bool _isCameraInitialized = false;
   bool _hasCameraPermission = false;
   Uint8List? _lastCapturedBytes;
@@ -931,59 +324,73 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   
   // Memory management
   Timer? _memoryCleanupTimer;
-  int _memoryPressureLevel = 0;
+  bool _isLowMemoryDevice = false; // Detect low memory devices
+  int _consecutiveErrors = 0; // Track consecutive errors for recovery
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     
-    // Initialize memory management
+    // Initialize memory monitor
+    _initializeMemoryMonitor();
+    
+    // Detect if this is a low memory device
+    _detectLowMemoryDevice();
+    
+    // Initialize memory management with more frequent cleanup
     _initializeMemoryManagement();
     
     // Initialize animation controllers
     _backgroundController = AnimationController(
       duration: const Duration(seconds: 8),
       vsync: this,
-    )..repeat();
+    );
 
     _glowController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
-    )..repeat(reverse: true);
+    );
 
     _scanController = AnimationController(
       duration: const Duration(seconds: 3),
       vsync: this,
-    )..repeat();
+    );
 
     _pulseController = AnimationController(
       duration: Duration(seconds: 1, milliseconds: 500),
       vsync: this,
-    )..repeat(reverse: true);
+    );
 
     _rotateController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
-    )..repeat();
+    );
     
     // Initialize animation objects
-    if (AnimationConfig.enableBackgroundAnimations) {
+    if (AnimationConfig.enableBackgroundAnimations && !_isLowMemoryDevice) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
+      _backgroundController.repeat();
 
       _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
+      _glowController.repeat(reverse: true);
 
       _scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(CurvedAnimation(
         parent: _scanController,
         curve: Curves.easeInOut,
       ));
+      _scanController.repeat();
 
       _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
+      _pulseController.repeat(reverse: true);
+
+      _rotateController.repeat();
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
@@ -994,29 +401,129 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     _requestCameraPermission();
   }
 
-  // Initialize memory management
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    try {
+      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+      if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+        _stopImageStream();
+        _cameraController?.pausePreview();
+      } else if (state == AppLifecycleState.resumed) {
+        _cameraController?.resumePreview();
+        _startImageStream();
+      }
+    } catch (e) {
+      debugPrint('Lifecycle handling error: $e');
+    }
+  }
+
+  // Initialize memory monitor
+  Future<void> _initializeMemoryMonitor() async {
+    await MemoryMonitor.initialize();
+  }
+
+  // Detect if this is a low memory device
+  Future<void> _detectLowMemoryDevice() async {
+    if (kIsWeb) {
+      _isLowMemoryDevice = false;
+      return;
+    }
+    
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        // device_info_plus doesn't expose totalMemory consistently. Use ABI/model heuristics.
+        try {
+          final has64 = androidInfo.supported64BitAbis.isNotEmpty;
+          if (has64) {
+            // Assume devices with 64-bit ABI have >= 3GB in most cases
+            _isLowMemoryDevice = false;
+          } else {
+            // 32-bit ABI -> likely low memory
+            _isLowMemoryDevice = true;
+          }
+        } catch (e) {
+          final model = androidInfo.model;
+          _isLowMemoryDevice = _isLowEndAndroidModel(model);
+        }
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        final model = iosInfo.model;
+        _isLowMemoryDevice = _isLowEndIOSModel(model);
+      }
+    } catch (e) {
+      debugPrint('Error detecting device capabilities: $e');
+      // Assume low memory if we can't detect
+      _isLowMemoryDevice = true;
+    }
+  }
+
+  // Check if Android model is low-end
+  bool _isLowEndAndroidModel(String model) {
+    // List of known low-end Android models
+    const lowEndModels = [
+      'Android One',
+      'Galaxy J2',
+      'Galaxy J3',
+      'Galaxy J4',
+      'Galaxy J5',
+      'Galaxy J6',
+      'Galaxy A2',
+      'Galaxy A10',
+      'Galaxy A20',
+      'Redmi 5',
+      'Redmi 6',
+      'Redmi 7',
+      'Redmi 8',
+      'Redmi 9',
+      'Redmi Go',
+      'Moto E',
+      'Moto C',
+      'Moto G Play',
+    ];
+    
+    return lowEndModels.any((lowEndModel) => 
+        model.toLowerCase().contains(lowEndModel.toLowerCase()));
+  }
+
+  // Check if iOS model is low-end
+  bool _isLowEndIOSModel(String model) {
+    // List of known low-end iOS models
+    const lowEndModels = [
+      'iPhone 5',
+      'iPhone 5c',
+      'iPhone 5s',
+      'iPhone 6',
+      'iPhone 6 Plus',
+      'iPhone SE',
+      'iPad mini 2',
+      'iPad mini 3',
+      'iPad Air',
+      'iPod touch',
+    ];
+    
+    return lowEndModels.any((lowEndModel) => 
+        model.contains(lowEndModel));
+  }
+
+  // Initialize memory management with more frequent cleanup
   void _initializeMemoryManagement() {
-    // Check memory pressure every 30 seconds
-    _memoryCleanupTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Check memory pressure more frequently on mobile
+    final interval = _isLowMemoryDevice ? 8 : 12;
+    _memoryCleanupTimer = Timer.periodic(Duration(seconds: interval), (_) {
       _checkMemoryPressure();
     });
   }
 
   // Check memory pressure and clean up if needed
   void _checkMemoryPressure() {
-    // In a real implementation, you would use platform-specific APIs to check memory pressure
-    // For now, we'll use a simple heuristic based on available memory
+    // Use actual memory pressure detection
+    final isHighPressure = MemoryMonitor.isMemoryPressureHigh();
     
-    // Simulate memory pressure check
-    // In a real app, you would use platform channels to get actual memory info
-    _memoryPressureLevel = math.Random().nextInt(3); // 0: low, 1: medium, 2: high
-    
-    if (_memoryPressureLevel >= 2) {
-      // High memory pressure - perform aggressive cleanup
+    if (isHighPressure || _isLowMemoryDevice) {
+      // High memory pressure or low memory device - perform aggressive cleanup
       _performMemoryCleanup(aggressive: true);
-    } else if (_memoryPressureLevel >= 1) {
-      // Medium memory pressure - perform moderate cleanup
-      _performMemoryCleanup(aggressive: false);
     }
   }
 
@@ -1024,7 +531,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   void _performMemoryCleanup({bool aggressive = false}) {
     // Clear image cache if not analyzing
     if (!_isAnalyzing && _lastCapturedBytes != null) {
-      if (aggressive) {
+      if (aggressive || _isLowMemoryDevice) {
         // Aggressive cleanup - clear the captured image
         setState(() {
           _lastCapturedBytes = null;
@@ -1034,9 +541,75 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       }
     }
     
-    // Force garbage collection
-    // Note: This is not recommended in production code, but included for demonstration
-    // In a real app, you would use platform-specific APIs to trigger garbage collection
+    // Stop animations on aggressive cleanup
+    if (aggressive && AnimationConfig.enableBackgroundAnimations) {
+      _backgroundController.stop();
+      _glowController.stop();
+      _scanController.stop();
+      _pulseController.stop();
+      _rotateController.stop();
+      
+      // Restart after a delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && !_isLowMemoryDevice) {
+          _backgroundController.repeat();
+          _glowController.repeat(reverse: true);
+          _scanController.repeat();
+          _pulseController.repeat(reverse: true);
+          _rotateController.repeat();
+        }
+      });
+    }
+  }
+
+  // Handle errors with recovery mechanism
+  void _handleError(String error, {bool critical = false}) {
+    debugPrint('Error: $error');
+    _consecutiveErrors++;
+    
+    // If too many consecutive errors, perform recovery
+    if (_consecutiveErrors >= 3 || critical) {
+      _performErrorRecovery();
+    }
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $error'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  // Perform error recovery
+  Future<void> _performErrorRecovery() async {
+    debugPrint('Performing error recovery');
+    
+    // Reset error counter
+    _consecutiveErrors = 0;
+    
+    // Aggressive memory cleanup
+    _performMemoryCleanup(aggressive: true);
+    
+    // Restart camera if needed
+    if (_cameraController != null && _isCameraInitialized) {
+      try {
+        await _stopImageStream();
+        Future.delayed(const Duration(milliseconds: 500), () async {
+          if (mounted && _cameraController != null) {
+            try {
+              await _startImageStream();
+            } catch (e) {
+              debugPrint('Error restarting image stream: $e');
+            }
+          }
+        });
+      } catch (e) {
+        debugPrint('Error stopping image stream: $e');
+      }
+    }
   }
 
   @override
@@ -1056,12 +629,20 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     
     // Stop image stream if running and dispose camera controller
     try {
-      _cameraController?.stopImageStream();
+      if (_cameraController?.value.isStreamingImages ?? false) {
+        _cameraController?.stopImageStream();
+      }
     } catch (_) {}
     _textRecognizer?.close();
     _cameraController?.dispose();
     
     super.dispose();
+  }
+
+  // Safe wrapper to call setState only when mounted
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
   }
 
   @override
@@ -1070,20 +651,22 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Animated cyberpunk background
-          _buildAnimatedBackground(),
+          // Animated cyberpunk background - simplified for low memory devices
+          _isLowMemoryDevice 
+            ? Container(color: Colors.black)
+            : _buildAnimatedBackground(),
           
-          // Grid overlay effect
-          _buildGridOverlay(),
+          // Grid overlay effect - skip on low memory devices
+          if (!_isLowMemoryDevice) _buildGridOverlay(),
           
           // Scan line effect
           _buildScanLine(),
           
-          // Glitch effect overlay
-          _buildGlitchEffect(),
+          // Glitch effect overlay - skip on low memory devices
+          if (!_isLowMemoryDevice) _buildGlitchEffect(),
           
-          // Floating particles effect
-          _buildFloatingParticles(),
+          // Floating particles effect - skip on low memory devices
+          if (!_isLowMemoryDevice) _buildFloatingParticles(),
           
           // Main content
           SafeArea(
@@ -1108,8 +691,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
             ),
           ),
           
-          // Cyberpunk frame borders
-          _buildCyberpunkFrame(),
+          // Cyberpunk frame borders - simplified for low memory devices
+          _isLowMemoryDevice ? _buildSimpleFrame() : _buildCyberpunkFrame(),
         ],
       ),
     );
@@ -1621,9 +1204,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                       setState(() {});
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Flash tidak tersedia: $e')),
-                      );
+                      _handleError('Flash tidak tersedia: $e');
                     }
                   },
                   child: _buildControlButton(
@@ -1941,6 +1522,19 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     );
   }
 
+  Widget _buildSimpleFrame() {
+    return IgnorePointer(
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Colors.cyan.withOpacity(0.5),
+            width: 1,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _initializeCamera() async {
     try {
       if (kIsWeb) {
@@ -1960,26 +1554,31 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         return;
       }
 
+      // Use lower resolution for better performance on low-memory devices
+      final resolutionPreset = _isLowMemoryDevice 
+        ? ResolutionPreset.low 
+        : (kIsWeb ? ResolutionPreset.medium : ResolutionPreset.low);
+        
       _cameraController = CameraController(
         cameras[0],
-        ResolutionPreset.medium,
+        resolutionPreset,
         enableAudio: false,
       );
 
       await _cameraController?.initialize();
 
-      // Initialize ML Kit text recognizer (native) for fast text detection
+      // Initialize ML Kit text recognizer
       try {
         _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
       } catch (_) {
         _textRecognizer = null;
       }
 
-      // Start image stream for quick pre-filter + ML Kit detection
+      // Start image stream with optimized processing via helper
       try {
-        await _cameraController?.startImageStream(_handleCameraImage);
-      } catch (_) {
-        // Some platforms (web) or older camera drivers may not support streams
+        await _startImageStream();
+      } catch (e) {
+        debugPrint('Image stream start failed: $e');
       }
 
       if (!mounted) return;
@@ -1989,18 +1588,155 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       });
     } catch (e) {
       debugPrint('Error initializing camera: $e');
-      if (!mounted) return;
+      _handleError('Error menginisialisasi kamera: $e', critical: true);
+    }
+  }
 
-      final errorMessage = kIsWeb
-          ? 'Izinkan akses kamera di browser Anda'
-          : 'Error menginisialisasi kamera: $e';
+  // Start image stream using a StreamController so we can pause/resume and cancel safely
+  Future<void> _startImageStream() async {
+    if (_cameraController == null) return;
+    try {
+      if (_cameraController!.value.isStreamingImages) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Clean previous
+      await _stopImageStream();
+
+      _cameraImageStreamController = StreamController<CameraImage>.broadcast();
+      await _cameraController!.startImageStream((CameraImage img) {
+        try {
+          if (!(_cameraImageStreamController?.isClosed ?? true)) {
+            _cameraImageStreamController!.add(img);
+          }
+        } catch (_) {}
+      });
+
+      _cameraImageStreamSub = _cameraImageStreamController!.stream.listen((img) async {
+        await _onImageReceived(img);
+      }, onError: (e) {
+        debugPrint('Image stream error: $e');
+      });
+    } catch (e) {
+      debugPrint('Failed to start image stream: $e');
+    }
+  }
+
+  Future<void> _stopImageStream() async {
+    try {
+      await _cameraImageStreamSub?.cancel();
+      _cameraImageStreamSub = null;
+      try { await _cameraImageStreamController?.close(); } catch (_) {}
+      _cameraImageStreamController = null;
+      if (_cameraController != null && _cameraController!.value.isStreamingImages) {
+        try { await _cameraController!.stopImageStream(); } catch (e) { debugPrint('stopImageStream thrown: $e'); }
+      }
+    } catch (e) {
+      debugPrint('Error stopping image stream: $e');
+    }
+  }
+
+  // Called for each frame from the stream (throttled + processing guard)
+  Future<void> _onImageReceived(CameraImage image) async {
+    final now = DateTime.now();
+    if (now.difference(_lastProcessed).inMilliseconds < _throttleMs) return;
+    _lastProcessed = now;
+
+    if (_isProcessingFrame) return;
+
+    if (!_quickHasEdges(image)) return;
+
+  // start debug timer (will be measured in worker)
+
+    // Enqueue a capture request instead of performing capture immediately.
+    // Limit queue size to avoid unbounded buffering.
+      try {
+      if (_captureQueue.length >= 2) return; // already have pending tasks
+      final completer = Completer<bool>();
+      _captureQueue.add(completer);
+      if (!_captureWorkerRunning) _processCaptureQueue();
+      // don't await here; allow queue to process in background
+    } catch (e) {
+      debugPrint('Failed to enqueue capture: $e');
+    } finally {
+      _isProcessingFrame = false;
+    }
+  }
+
+  // Worker to process capture queue sequentially
+  Future<void> _processCaptureQueue() async {
+    if (_captureWorkerRunning) return;
+    _captureWorkerRunning = true;
+    while (_captureQueue.isNotEmpty) {
+      final completer = _captureQueue.removeFirst();
+      bool success = false;
+      try {
+        success = await _performCaptureAndProcess();
+      } catch (e) {
+        debugPrint('Error processing queued capture: $e');
+        success = false;
+      }
+      try { completer.complete(success); } catch (_) {}
+      // small delay between queued captures to avoid rapid repeats
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    _captureWorkerRunning = false;
+  }
+
+  // Perform a full capture + OCR processing with retry/backoff and safe stream handling.
+  Future<bool> _performCaptureAndProcess() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return false;
+    if (_ocrLock) return false;
+    _ocrLock = true;
+    _isCapturing = true;
+  XFile? file;
+  final Stopwatch? sw = kDebugMode ? (Stopwatch()..start()) : null;
+    try {
+      await _stopImageStream();
+      int attempts = 0;
+      while (attempts < 5) {
+        attempts++;
+        try {
+          file = await _cameraController!.takePicture();
+          break;
+        } on CameraException catch (ce) {
+          debugPrint('Queued takePicture CameraException (attempt $attempts): ${ce.code} ${ce.description}');
+          if (ce.code.contains('previous') || (ce.description?.contains('previous') ?? false)) {
+            // backoff
+            await Future.delayed(Duration(milliseconds: 250 * attempts));
+            continue;
+          }
+          return false;
+        }
+      }
+
+      if (file == null) return false;
+
+      if (_textRecognizer != null) {
+        try {
+          final f = file; // local non-null reference
+          final inputImage = InputImage.fromFilePath(f.path);
+          final recognized = await _textRecognizer!.processImage(inputImage);
+          if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 2) {
+            final bytes = await File(f.path).readAsBytes();
+            _safeSetState(() {
+              _lastCapturedBytes = bytes;
+              _lastCapturedPath = f.path;
+            });
+          }
+        } catch (e) {
+          debugPrint('Queued text recognition error: $e');
+        }
+      }
+
+      try { await File(file.path).delete(); } catch (_) {}
+      if (kDebugMode && sw != null) {
+        sw.stop();
+        debugPrint('Queued capture total time: ${sw.elapsedMilliseconds} ms');
+      }
+      return true;
+    } finally {
+      _ocrLock = false;
+      _isCapturing = false;
+      if (mounted) await _startImageStream();
     }
   }
 
@@ -2025,58 +1761,63 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       if (_hasCameraPermission) await _initializeCamera();
     } catch (e) {
       debugPrint('Error requesting camera permission: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(kIsWeb
-              ? 'Izinkan akses kamera di pengaturan browser Anda'
-              : 'Error meminta izin kamera: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _handleError('Error meminta izin kamera: $e');
     }
   }
 
   Future<void> _takePicture() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
 
-    setState(() {
-      _isCapturing = true;
-    });
+    _safeSetState(() { _isCapturing = true; });
 
     try {
+      // Turn torch on if needed
       final shouldTorch = _flashOn || _isFlashHovering;
       if (shouldTorch) {
-        try {
-          await _cameraController?.setFlashMode(FlashMode.torch);
-        } catch (_) {}
+        try { await _cameraController?.setFlashMode(FlashMode.torch); } catch (_) {}
       }
 
-      final XFile file = await _cameraController!.takePicture();
-      final bytes = await file.readAsBytes();
-      setState(() {
-        _lastCapturedBytes = bytes;
-        _lastCapturedPath = file.path;
-        _isKept = false;
-      });
-    } catch (e) {
-      debugPrint('Error taking picture: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error mengambil gambar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      try {
-        await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
-      } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _isCapturing = false;
+      // Ensure image stream is stopped before capture
+      await _stopImageStream();
+
+      // Capture with retry for "previous capture not returned" errors
+      XFile? file;
+      int attempts = 0;
+      while (attempts < 3) {
+        try {
+          file = await _cameraController!.takePicture();
+          break;
+        } on CameraException catch (ce) {
+          attempts++;
+          debugPrint('takePicture CameraException (attempt $attempts): ${ce.code} ${ce.description}');
+          if (ce.code.contains('previous') || (ce.description?.contains('previous') ?? false)) {
+            await Future.delayed(Duration(milliseconds: 250 * attempts));
+            continue;
+          }
+          rethrow;
+        } catch (e) {
+          debugPrint('takePicture failed: $e');
+          break;
+        }
+      }
+
+      if (file != null) {
+        final f = file;
+        final bytes = await f.readAsBytes();
+        _safeSetState(() {
+          _lastCapturedBytes = bytes;
+          _lastCapturedPath = f.path;
+          _isKept = false;
         });
       }
+    } catch (e) {
+      debugPrint('Error taking picture: $e');
+      _handleError('Error mengambil gambar: $e');
+    } finally {
+      try { await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off); } catch (_) {}
+      _safeSetState(() { _isCapturing = false; });
+      // Restart image stream if still intended
+      if (mounted) await _startImageStream();
     }
   }
 
@@ -2108,10 +1849,10 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     });
 
     try {
-      // Stage 1: Enhanced text detection (20% of progress)
+      // Stage 1: Optimized text detection (20% of progress)
       TextDetectionResult textDetection;
       try {
-        textDetection = await compute(_enhancedTextDetectionCompute, _lastCapturedBytes!);
+        textDetection = await compute(_optimizedTextDetectionCompute, _lastCapturedBytes!);
         
         // Update progress
         if (_analysisCompleter?.isCompleted == false) {
@@ -2120,17 +1861,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           });
         }
       } catch (e) {
-        textDetection = TextDetectionResult(
-          hasText: false, 
-          confidence: 0.0,
-          characteristics: ImageCharacteristics(
-            brightness: 0.0,
-            contrast: 0.0,
-            edgeDensity: 0.0,
-            textureComplexity: 0.0,
-            dominantColorCount: 0,
-          )
-        );
+        textDetection = TextDetectionResult(hasText: false, confidence: 0.0);
       }
 
       // If image doesn't contain text, skip heavy OCR/analysis
@@ -2262,17 +1993,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       }
     } catch (e) {
       debugPrint('Error during analysis: $e');
+      _handleError('Error selama analisis: $e');
+      
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error selama analisis: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }
