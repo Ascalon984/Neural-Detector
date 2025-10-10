@@ -349,6 +349,119 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     }
   }
 
+  // Stream-based OCR optimization methods
+  bool _shouldUseStreamOcr() {
+    // Use stream OCR on capable devices with good performance
+    return !_isLowMemoryDevice && _lastOcrMs < 1000 && _textRecognizer != null;
+  }
+
+  Future<TextRecognitionResult> _processStreamOcr(CameraImage image) async {
+    if (_textRecognizer == null) {
+      return TextRecognitionResult(text: '', success: false, error: 'No recognizer available');
+    }
+
+    try {
+      final inputImage = _convertCameraImageToInputImage(image);
+      final recognized = await _textRecognizer!.processImage(inputImage);
+      return TextRecognitionResult(
+        text: recognized.text,
+        success: recognized.text.isNotEmpty,
+      );
+    } catch (e) {
+      return TextRecognitionResult(text: '', success: false, error: e.toString());
+    }
+  }
+
+  InputImage _convertCameraImageToInputImage(CameraImage cameraImage) {
+    // Convert CameraImage to InputImage for ML Kit
+    final plane = cameraImage.planes[0];
+    final bytes = plane.bytes;
+    
+    return InputImage.fromBytes(
+      bytes: bytes,
+      metadata: InputImageMetadata(
+        size: Size(cameraImage.width.toDouble(), cameraImage.height.toDouble()),
+        rotation: InputImageRotation.rotation0deg,
+        format: InputImageFormat.nv21,
+        bytesPerRow: plane.bytesPerRow,
+      ),
+    );
+  }
+
+  Uint8List _convertCameraImageToBytes(CameraImage cameraImage) {
+    // Convert CameraImage to Uint8List for storage
+    final plane = cameraImage.planes[0];
+    return Uint8List.fromList(plane.bytes);
+  }
+
+  // Adaptive resolution strategy
+  ResolutionPreset _getOptimalResolution() {
+    // Adjust resolution based on OCR performance and device capabilities
+    if (_lastOcrConfidence < 0.7 && !_isLowMemoryDevice) {
+      return ResolutionPreset.high; // Better quality for poor results
+    } else if (_lastOcrConfidence > 0.9 && _isLowMemoryDevice) {
+      return ResolutionPreset.low; // Lower quality for good results on low-end devices
+    }
+    return ResolutionPreset.medium; // Default balanced approach
+  }
+
+  // Hardware acceleration detection
+  Future<void> _detectHardwareAcceleration() async {
+    if (kIsWeb) {
+      _hasHardwareAcceleration = false;
+      return;
+    }
+
+    try {
+      // Test ML Kit performance with a small test image
+      final testImage = _createTestImage();
+      final stopwatch = Stopwatch()..start();
+      
+      if (_textRecognizer != null) {
+        await _textRecognizer!.processImage(testImage);
+        stopwatch.stop();
+        _hasHardwareAcceleration = stopwatch.elapsedMilliseconds < 500;
+      }
+    } catch (e) {
+      debugPrint('Hardware acceleration detection failed: $e');
+      _hasHardwareAcceleration = false;
+    }
+  }
+
+  InputImage _createTestImage() {
+    // Create a small test image for performance testing
+    final testBytes = Uint8List.fromList(List.filled(100 * 100, 128)); // 100x100 gray image
+    return InputImage.fromBytes(
+      bytes: testBytes,
+      metadata: InputImageMetadata(
+        size: const Size(100, 100),
+        rotation: InputImageRotation.rotation0deg,
+        format: InputImageFormat.nv21,
+        bytesPerRow: 100,
+      ),
+    );
+  }
+
+  // Update OCR performance metrics
+  void _updateOcrMetrics(bool success, double confidence) {
+    if (success) {
+      _ocrSuccessCount++;
+      _lastOcrConfidence = confidence;
+    } else {
+      _ocrFailureCount++;
+    }
+
+    // Adjust processing strategy based on success rate
+    final successRate = _ocrSuccessCount / (_ocrSuccessCount + _ocrFailureCount);
+    if (successRate < 0.5) {
+      // Low success rate - try higher resolution
+      _throttleMs = (_throttleMs * 1.2).round().clamp(400, 2000);
+    } else if (successRate > 0.8) {
+      // High success rate - can use lower resolution for speed
+      _throttleMs = (_throttleMs * 0.9).round().clamp(400, 1200);
+    }
+  }
+
   // Periodic cleanup for temporary capture files
   Timer? _tempCleanupTimer;
 
@@ -384,6 +497,76 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     }
 
     return false;
+  }
+
+  // Enhanced image quality detection for smart capture suggestions
+  Map<String, double> _analyzeImageQuality(CameraImage image) {
+    final plane = image.planes[0];
+    final bytes = plane.bytes;
+    final rowStride = plane.bytesPerRow;
+    final pixelStride = plane.bytesPerPixel ?? 1;
+
+    int totalPixels = 0;
+    int brightPixels = 0;
+    int darkPixels = 0;
+    int edgePixels = 0;
+    double totalBrightness = 0;
+
+    // Sample every 4th pixel for performance
+    final step = 4;
+    for (int y = 0; y < image.height; y += step) {
+      for (int x = 0; x < image.width; x += step) {
+        final idx = y * rowStride + x * pixelStride;
+        if (idx >= bytes.length) continue;
+
+        final brightness = bytes[idx];
+        totalBrightness += brightness;
+        totalPixels++;
+
+        // Lighting analysis
+        if (brightness > 200) brightPixels++;
+        if (brightness < 50) darkPixels++;
+
+        // Edge detection
+        if (x + 1 < image.width) {
+          final idx2 = y * rowStride + (x + 1) * pixelStride;
+          if (idx2 < bytes.length) {
+            final diff = (brightness - bytes[idx2]).abs();
+            if (diff > 30) edgePixels++;
+          }
+        }
+      }
+    }
+
+    final avgBrightness = totalPixels > 0 ? totalBrightness / totalPixels : 0;
+    final lightingScore = 1.0 - (brightPixels + darkPixels) / (totalPixels * 2);
+    final edgeScore = totalPixels > 0 ? edgePixels / totalPixels : 0;
+    final focusScore = edgeScore > 0.1 ? 1.0 : edgeScore * 10;
+
+    return {
+      'lighting': lightingScore.clamp(0.0, 1.0),
+      'focus': focusScore.clamp(0.0, 1.0),
+      'brightness': (avgBrightness / 255.0).clamp(0.0, 1.0),
+      'edges': edgeScore.clamp(0.0, 1.0),
+    };
+  }
+
+  // Smart capture suggestion based on image quality
+  bool _shouldSuggestCapture(CameraImage image) {
+    final quality = _analyzeImageQuality(image);
+    final overallScore = (quality['lighting']! + quality['focus']! + quality['brightness']!) / 3;
+    
+    // Suggest capture if overall quality is good and we have text edges
+    return overallScore > 0.7 && quality['edges']! > 0.05;
+  }
+
+  // Get current quality score for display
+  String _getCurrentQualityScore() {
+    if (_lastQualityMetrics.isEmpty) return 'N/A';
+    final overall = (_lastQualityMetrics['lighting']! + 
+                    _lastQualityMetrics['focus']! + 
+                    _lastQualityMetrics['brightness']!) / 3;
+    return '${(overall * 100).toStringAsFixed(0)}%';
   }
 
   // Remove old temporary capture files periodically to avoid storage growth
@@ -440,6 +623,13 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   int _consecutiveErrors = 0; // Track consecutive errors for recovery
   // TFLite helper (best-effort)
   final TFLiteHelper _tfliteHelper = TFLiteHelper();
+  
+  // Performance optimization state
+  bool _hasHardwareAcceleration = false;
+  double _lastOcrConfidence = 0.0;
+  int _ocrSuccessCount = 0;
+  int _ocrFailureCount = 0;
+  Map<String, double> _lastQualityMetrics = {};
 
   @override
   void initState() {
@@ -1162,7 +1352,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                           child: SizedBox(
                             width: _cameraController!.value.previewSize?.height ?? boxWidth,
                             height: _cameraController!.value.previewSize?.width ?? boxHeight,
-                            child: CameraPreview(_cameraController!),
+                            child: Stack(
+                              children: [
+                                CameraPreview(_cameraController!),
+                                _buildSmartOverlay(),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1882,6 +2077,137 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     );
   }
 
+  // Smart overlay with real-time feedback
+  Widget _buildSmartOverlay() {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          // Text detection indicator
+          if (_isRecognizingText)
+            Positioned(
+              top: 20,
+              left: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'MENDETEKSI TEKS...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Performance indicator
+          if (kDebugMode)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'OCR: ${_lastOcrMs}ms\nSuccess: ${(_ocrSuccessCount / (_ocrSuccessCount + _ocrFailureCount) * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ),
+
+          // Stream OCR indicator
+          if (_shouldUseStreamOcr())
+            Positioned(
+              bottom: 100,
+              left: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'STREAM OCR',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+
+          // Hardware acceleration indicator
+          if (_hasHardwareAcceleration)
+            Positioned(
+              bottom: 100,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'GPU ACCEL',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+
+          // Quality indicators
+          if (kDebugMode)
+            Positioned(
+              bottom: 20,
+              left: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Quality: ${_getCurrentQualityScore()}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _initializeCamera() async {
     try {
       if (kIsWeb) {
@@ -1901,10 +2227,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         return;
       }
 
-      // Use medium resolution for better OCR results
-      final resolutionPreset = _isLowMemoryDevice
-          ? ResolutionPreset.medium  // Changed from low to medium
-          : (kIsWeb ? ResolutionPreset.high : ResolutionPreset.medium); // Changed from medium/low
+      // Use adaptive resolution based on device capabilities and OCR performance
+      final resolutionPreset = _getOptimalResolution();
 
       _cameraController = CameraController(
         cameras[0],
@@ -1945,6 +2269,9 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           }
         }
       }
+
+      // Detect hardware acceleration capabilities
+      await _detectHardwareAcceleration();
 
       // Start image stream with optimized processing via helper
       try {
@@ -2020,8 +2347,27 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       return;
     }
 
-    // Enqueue a capture request instead of performing capture immediately.
-    // Limit queue size to avoid unbounded buffering.
+    // Update quality metrics for UI feedback
+    _lastQualityMetrics = _analyzeImageQuality(image);
+
+    // Try stream-based OCR first (faster, no file I/O)
+    if (_shouldUseStreamOcr()) {
+      try {
+        final result = await _processStreamOcr(image);
+        if (result.success && result.text.isNotEmpty) {
+          _safeSetState(() {
+            _recognizedText = result.text;
+            _lastCapturedBytes = _convertCameraImageToBytes(image);
+          });
+          _isProcessingFrame = false;
+          return;
+        }
+      } catch (e) {
+        debugPrint('Stream OCR failed, falling back to capture: $e');
+      }
+    }
+
+    // Fallback to traditional capture method
     try {
       if (_captureQueue.length >= _maxCaptureQueueSize) {
         return; // already have pending tasks (adaptive)
@@ -2214,6 +2560,9 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         }
         ocrSw.stop();
         _updateAdaptiveThrottle(ocrSw.elapsedMilliseconds);
+        
+        // Update OCR performance metrics
+        _updateOcrMetrics(result.success, result.success ? 0.8 : 0.0);
 
         if (mounted) {
           setState(() {
