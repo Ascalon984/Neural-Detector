@@ -332,23 +332,71 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   // Serial capture queue to ensure captures are processed one-by-one
   final ListQueue<Completer<bool>> _captureQueue = ListQueue<Completer<bool>>();
   bool _captureWorkerRunning = false;
+  // Adaptive max queue size based on device memory
+  int get _maxCaptureQueueSize => _isLowMemoryDevice ? 1 : 3;
+
+  // Periodic cleanup for temporary capture files
+  Timer? _tempCleanupTimer;
 
   // (old delegator removed) image frames are handled via _startImageStream -> _onImageReceived
 
-  bool _quickHasEdges(CameraImage image, {int sampleStride = 30, int threshold = 3}) {
+  bool _quickHasEdges(CameraImage image, {int threshold = 3}) {
+    // Use Y (luminance) plane sampling with spatial stepping for robustness across formats
     final plane = image.planes[0];
     final bytes = plane.bytes;
-    int count = 0;
-    // Sample fewer pixels for better performance
-    final stride = kIsWeb ? sampleStride : sampleStride * 2; // Reduced from 3
-    final edgeThreshold = kIsWeb ? 25 : 30; // Lowered from 30/45
+    final rowStride = plane.bytesPerRow;
+    final pixelStride = plane.bytesPerPixel ?? 1;
 
-    for (int i = 0; i + stride < bytes.length; i += stride) {
-      final diff = (bytes[i] - bytes[i + stride]).abs();
-      if (diff > edgeThreshold) count++;
-      if (count >= threshold) return true;
+    int count = 0;
+    final edgeThreshold = kIsWeb ? 25 : 30;
+
+    // Determine sampling grid size dynamically based on image dimensions
+    final stepY = math.max(1, image.height ~/ 20);
+    final stepX = math.max(1, image.width ~/ 20);
+
+    for (int y = 0; y < image.height; y += stepY) {
+      for (int x = 0; x + 1 < image.width; x += stepX) {
+        final idx = y * rowStride + x * pixelStride;
+        final idx2 = y * rowStride + (x + 1) * pixelStride;
+        if (idx >= bytes.length || idx2 >= bytes.length) continue;
+        final v1 = bytes[idx];
+        final v2 = bytes[idx2];
+        final diff = (v1 - v2).abs();
+        if (diff > edgeThreshold) {
+          count++;
+          if (count >= threshold) return true;
+        }
+      }
     }
+
     return false;
+  }
+
+  // Remove old temporary capture files periodically to avoid storage growth
+  Future<void> _cleanupTempFiles() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final files = dir.listSync();
+      final now = DateTime.now();
+      for (final f in files) {
+        try {
+          if (f is File) {
+            final name = f.path.split(Platform.pathSeparator).last;
+            if (name.startsWith('camera_capture_') || name.contains('camera_capture_')) {
+              final stat = await f.stat();
+              // Remove files older than 24 hours
+              if (now.difference(stat.modified).inHours >= 24) {
+                try {
+                  await f.delete();
+                } catch (_) {}
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Temp cleanup error: $e');
+    }
   }
 
   bool _isCameraInitialized = false;
@@ -392,6 +440,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
     // Initialize memory management with more frequent cleanup
     _initializeMemoryManagement();
+
+    // Run a quick temp-file cleanup on startup and periodically
+    _cleanupTempFiles();
+    _tempCleanupTimer = Timer.periodic(const Duration(hours: 6), (_) {
+      _cleanupTempFiles();
+    });
 
     // Attempt to load a bundled TFLite model (best-effort)
     () async {
@@ -689,6 +743,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
     // Cancel memory cleanup timer
     _memoryCleanupTimer?.cancel();
+  // Cancel temp cleanup timer
+  _tempCleanupTimer?.cancel();
 
     // Dispose animation controllers
     _backgroundController.dispose();
@@ -1951,7 +2007,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     // Enqueue a capture request instead of performing capture immediately.
     // Limit queue size to avoid unbounded buffering.
     try {
-      if (_captureQueue.length >= 2) return; // already have pending tasks
+      if (_captureQueue.length >= _maxCaptureQueueSize) return; // already have pending tasks (adaptive)
       final completer = Completer<bool>();
       _captureQueue.add(completer);
       if (!_captureWorkerRunning) _processCaptureQueue();
@@ -2103,25 +2159,50 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       }
 
       TextRecognitionResult result;
-      if (kIsWeb) {
-        // On web use the shim which currently returns '' but avoids calling ML Kit plugins
-        final txt = await OCR.extractText(filePath: _lastCapturedPath, bytes: _lastCapturedBytes);
-        result = TextRecognitionResult(text: txt, success: txt.isNotEmpty);
-      } else {
-        // Run recognition on main isolate (ML Kit uses platform channels)
-        result = await _textRecognitionCompute(_lastCapturedPath!);
-      }
+      try {
+        if (kIsWeb) {
+          // On web use the shim which currently returns '' but avoids calling ML Kit plugins
+          final txt = await OCR.extractText(filePath: _lastCapturedPath, bytes: _lastCapturedBytes);
+          result = TextRecognitionResult(text: txt, success: txt.isNotEmpty);
+        } else {
+          // Use the initialized _textRecognizer on main isolate instead of creating a new one,
+          // with a timeout to avoid hangs on some devices.
+          try {
+            if (_textRecognizer == null) {
+              _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+            }
 
-      if (mounted) {
-        setState(() {
-          _recognizedText = result.success ? (result.text.isNotEmpty ? result.text : 'Tidak ada teks yang terdeteksi') : (result.error ?? 'Error');
-          _isRecognizingText = false;
-          _textRecognitionProgress = 1.0;
-        });
+            final inputImage = InputImage.fromFilePath(_lastCapturedPath!);
+
+            // Run with timeout
+            final recognizedFuture = _textRecognizer!.processImage(inputImage);
+            final recognized = await recognizedFuture.timeout(const Duration(seconds: 8), onTimeout: () => throw TimeoutException('Text recognition timeout'));
+
+            result = TextRecognitionResult(text: recognized.text, success: recognized.text.isNotEmpty);
+          } catch (e) {
+            debugPrint('Primary text recognition failed or timed out: $e');
+            // Fallback: try the helper that builds and disposes its own recognizer
+            try {
+              result = await _textRecognitionCompute(_lastCapturedPath!);
+            } catch (e2) {
+              debugPrint('Fallback text recognition also failed: $e2');
+              result = TextRecognitionResult(text: '', success: false, error: e2.toString());
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _recognizedText = result.success ? (result.text.isNotEmpty ? result.text : 'Tidak ada teks yang terdeteksi') : (result.error ?? 'Error');
+            _isRecognizingText = false;
+            _textRecognitionProgress = 1.0;
+          });
+        }
+      } finally {
+        _suspendMemoryCleanup = false;
+        _hideBlockingProgress();
+        try { await WakelockPlus.disable(); } catch (_) {}
       }
-      _suspendMemoryCleanup = false;
-      _hideBlockingProgress();
-      try { await WakelockPlus.disable(); } catch (_) {}
     } catch (e) {
   debugPrint('Error during text recognition: $e');
   try { await DebugLogger.append('OCR error: $e; path=${_lastCapturedPath ?? "<null>"}'); } catch (_) {}
