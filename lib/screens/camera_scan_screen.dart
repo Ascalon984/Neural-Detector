@@ -15,9 +15,14 @@ import '../widgets/cyber_notification.dart';
 import '../utils/robust_worker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../utils/ocr.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import '../utils/debug_logger.dart';
+import '../utils/tflite_helper.dart';
 
 // Memory monitor class for actual memory tracking
 class MemoryMonitor {
@@ -357,6 +362,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   bool _isCapturing = false;
   bool _isAnalyzing = false;
   bool _isRecognizingText = false; // New state for text recognition
+  bool _suspendMemoryCleanup = false; // When true, don't clear preview/temp files
   double _analysisProgress = 0.0;
   double _textRecognitionProgress = 0.0; // New progress for text recognition
   double _aiPct = 0.0;
@@ -370,6 +376,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   Timer? _memoryCleanupTimer;
   bool _isLowMemoryDevice = false; // Detect low memory devices
   int _consecutiveErrors = 0; // Track consecutive errors for recovery
+  // TFLite helper (best-effort)
+  final TFLiteHelper _tfliteHelper = TFLiteHelper();
 
   @override
   void initState() {
@@ -384,6 +392,16 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
     // Initialize memory management with more frequent cleanup
     _initializeMemoryManagement();
+
+    // Attempt to load a bundled TFLite model (best-effort)
+    () async {
+      try {
+        await _tfliteHelper.loadModel('assets/model.tflite');
+        debugPrint('TFLite model loaded successfully (assets/model.tflite)');
+      } catch (e) {
+        debugPrint('TFLite model not loaded or missing: $e');
+      }
+    }();
 
     // Initialize animation controllers
     _backgroundController = AnimationController(
@@ -573,10 +591,17 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
   // Perform memory cleanup
   void _performMemoryCleanup({bool aggressive = false}) {
+    // Respect explicit suspension: if another flow (OCR/analysis) needs the
+    // captured image to persist temporarily, skip cleanup.
+    if (_suspendMemoryCleanup) return;
+
     // Clear image cache if not analyzing
     if (!_isAnalyzing && _lastCapturedBytes != null) {
-      if (aggressive || _isLowMemoryDevice) {
-        // Aggressive cleanup - clear the captured image
+      // If image exists and user hasn't kept it (still preview), avoid
+      // aggressive cleanup so user has time to press SIMPAN.
+      if ((aggressive || _isLowMemoryDevice) && _isKept) {
+        // Aggressive cleanup - clear the captured image only when it's
+        // already been kept/processed.
         setState(() {
           _lastCapturedBytes = null;
           _lastCapturedPath = null;
@@ -688,6 +713,85 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
     setState(fn);
+  }
+
+  bool _blockingDialogVisible = false;
+
+  void _showBlockingProgress([String? message]) {
+    if (!mounted || _blockingDialogVisible) return;
+    _blockingDialogVisible = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 12),
+                Text(message ?? 'Memproses...', style: const TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _hideBlockingProgress() {
+    if (!mounted || !_blockingDialogVisible) return;
+    try {
+      Navigator.of(context, rootNavigator: true).pop();
+    } catch (_) {}
+    _blockingDialogVisible = false;
+  }
+
+  Future<void> _showDebugLog() async {
+    String content = '';
+    try {
+      final s = await DebugLogger.readAll();
+      content = s ?? '<tidak ada log>';
+    } catch (e) {
+      content = 'Gagal membaca log: $e';
+    }
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Debug Log'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(content),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              try {
+                await Clipboard.setData(ClipboardData(text: content));
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Log disalin ke clipboard')));
+              } catch (_) {}
+            },
+            child: const Text('COPY'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('TUTUP'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -934,6 +1038,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                     ),
                   ],
                 ),
+              ),
+              // Debug log viewer button (small)
+              IconButton(
+                icon: Icon(Icons.bug_report, color: Colors.cyan.shade200, size: 20),
+                tooltip: 'Lihat log debug',
+                onPressed: _showDebugLog,
               ),
             ],
           ),
@@ -1190,6 +1300,10 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                                         });
                                         // Start text recognition after saving
                                         await _recognizeText();
+                                        // If text was found, automatically start analysis
+                                        if (_recognizedText.isNotEmpty && !_recognizedText.startsWith('Error')) {
+                                          await _analyzeKeptImage();
+                                        }
                                       },
                                       color: Colors.green,
                                     ),
@@ -1898,15 +2012,49 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
       if (file == null) return false;
 
-      // Just save the image without text recognition
-      final bytes = await file.readAsBytes();
-      final savedPath = file.path;
+      // Save the image into the app temporary directory so the file
+      // remains available for ML Kit when we call InputImage.fromFilePath.
+      var bytes = await file.readAsBytes();
+      final origPath = file.path;
+      String savedPath;
+      try {
+        final dir = await getTemporaryDirectory();
+        // Compress before writing to reduce memory and speed up OCR
+        try {
+          // Run decode/resize/encode in an isolate to avoid jank/OOM on main isolate
+          final args = _PreprocessArgs(bytes, 1280, 720, 85);
+          final processed = await compute<_PreprocessArgs, Uint8List>(_preprocessImageIsolate, args);
+          if (processed.isNotEmpty) bytes = processed;
+        } catch (e) {
+          debugPrint('Isolate preprocessing failed, falling back to FlutterImageCompress: $e');
+          try {
+            final compressed = await FlutterImageCompress.compressWithList(
+              bytes,
+              minWidth: 1280,
+              minHeight: 720,
+              quality: 85,
+            );
+            if (compressed.isNotEmpty) bytes = Uint8List.fromList(compressed);
+          } catch (e2) {
+            debugPrint('Image compress failed: $e2');
+          }
+        }
+
+        final f = File('${dir.path}/camera_capture_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await f.writeAsBytes(bytes);
+        savedPath = f.path;
+      } catch (e) {
+        // Fallback to original path if temp write fails
+        savedPath = origPath;
+      }
+
       _safeSetState(() {
         _lastCapturedBytes = bytes;
         _lastCapturedPath = savedPath;
       });
 
-      try { if (savedPath.isNotEmpty) await File(savedPath).delete(); } catch (_) {}
+  // Keep original camera file untouched to avoid race conditions where
+  // the original is removed before ML Kit or other flows can access it.
       if (kDebugMode && sw != null) {
         sw.stop();
         debugPrint('Queued capture total time: ${sw.elapsedMilliseconds} ms');
@@ -1923,11 +2071,29 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   Future<void> _recognizeText() async {
     if (_lastCapturedPath == null) return;
 
+    // Prevent memory cleanup from removing the captured file while OCR runs
+    _suspendMemoryCleanup = true;
+
+    // Keep device awake during OCR
+  try { await WakelockPlus.enable(); } catch (_) {}
+
+    // Show blocking progress modal
+    _showBlockingProgress('Mengumpulkan teks...');
+
     setState(() {
       _isRecognizingText = true;
       _textRecognitionProgress = 0.0;
       _recognizedText = '';
     });
+
+    // Debug: print the path we'll process and whether it exists on disk
+    try {
+      final path = _lastCapturedPath!;
+      final exists = await File(path).exists();
+      debugPrint('Starting OCR on path: $path (exists: $exists)');
+    } catch (e) {
+      debugPrint('Error checking OCR path existence: $e');
+    }
 
     try {
       // Visual progress while recognizing
@@ -1953,8 +2119,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           _textRecognitionProgress = 1.0;
         });
       }
+      _suspendMemoryCleanup = false;
+      _hideBlockingProgress();
+      try { await WakelockPlus.disable(); } catch (_) {}
     } catch (e) {
-      debugPrint('Error during text recognition: $e');
+  debugPrint('Error during text recognition: $e');
+  try { await DebugLogger.append('OCR error: $e; path=${_lastCapturedPath ?? "<null>"}'); } catch (_) {}
       if (mounted) {
         setState(() {
           _recognizedText = 'Error: $e';
@@ -1962,6 +2132,9 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           _textRecognitionProgress = 0.0;
         });
       }
+      _suspendMemoryCleanup = false;
+      _hideBlockingProgress();
+      try { await WakelockPlus.disable(); } catch (_) {}
     }
   }
 
@@ -2032,14 +2205,39 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
       if (file != null) {
         final f = file;
-        final bytes = await f.readAsBytes();
-        final savedPath = f.path;
+        var bytes = await f.readAsBytes();
+        final origPath = f.path;
+        String savedPath;
+        try {
+          final dir = await getTemporaryDirectory();
+          // Compress before saving to temp
+          try {
+            final compressed = await FlutterImageCompress.compressWithList(
+              bytes,
+              minWidth: 1280,
+              minHeight: 720,
+              quality: 85,
+            );
+            if (compressed.isNotEmpty) bytes = Uint8List.fromList(compressed);
+          } catch (e) {
+            debugPrint('Image compress failed: $e');
+          }
+
+          final tf = File('${dir.path}/camera_capture_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await tf.writeAsBytes(bytes);
+          savedPath = tf.path;
+        } catch (e) {
+          savedPath = origPath;
+        }
+
         _safeSetState(() {
           _lastCapturedBytes = bytes;
           _lastCapturedPath = savedPath;
           _isKept = false;
           _recognizedText = ''; // Reset recognized text
         });
+
+  // Keep original camera file untouched to avoid race conditions.
       }
     } catch (e) {
       debugPrint('Error taking picture: $e');
@@ -2080,6 +2278,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   Future<void> _analyzeKeptImage() async {
     if (_lastCapturedBytes == null || _recognizedText.isEmpty) return;
 
+    // Prevent device sleep during analysis
+  try { await WakelockPlus.enable(); } catch (_) {}
+
+  // Show blocking progress modal
+  _showBlockingProgress('Menganalisis...');
+
     // Create a new completer for this analysis
     _analysisCompleter = Completer<bool>();
 
@@ -2106,7 +2310,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       }
 
       // If image doesn't contain text, skip heavy OCR/analysis
-      if (!textDetection.hasText) {
+  if (!textDetection.hasText) {
         // Simulate remaining progress
         for (int i = 20; i <= 100; i += 5) {
           await Future.delayed(const Duration(milliseconds: 30));
@@ -2117,7 +2321,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           });
         }
 
-        if (_analysisCompleter?.isCompleted == true) return;
+        if (_analysisCompleter?.isCompleted == true) {
+          _hideBlockingProgress();
+          try { await WakelockPlus.disable(); } catch (_) {}
+          return;
+        }
 
         setState(() {
           _aiPct = 0.0;
@@ -2137,7 +2345,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       // Stage 2: OCR (40% of progress)
       for (int i = 20; i <= 60; i += 4) {
         await Future.delayed(const Duration(milliseconds: 50));
-        if (_analysisCompleter?.isCompleted == true) return;
+        if (_analysisCompleter?.isCompleted == true) {
+          _hideBlockingProgress();
+          try { await WakelockPlus.disable(); } catch (_) {}
+          return;
+        }
 
         setState(() {
           _analysisProgress = i / 100;
@@ -2194,6 +2406,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         _humanPct = adjusted['human_written'] ?? 0.0;
       } catch (e) {
         debugPrint('Error during analysis: $e');
+        try { await DebugLogger.append('Analysis error: $e; path=${_lastCapturedPath ?? "<null>"}'); } catch (_) {}
         if (_analysisCompleter?.isCompleted == true) return;
 
         _aiPct = 0.0;
@@ -2210,12 +2423,20 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         });
       }
 
-      if (_analysisCompleter?.isCompleted == true) return;
+      if (_analysisCompleter?.isCompleted == true) {
+        _hideBlockingProgress();
+        try { await WakelockPlus.disable(); } catch (_) {}
+        return;
+      }
 
       setState(() {
         _isAnalyzing = false;
         _analysisProgress = 1.0;
       });
+      _hideBlockingProgress();
+      try { await WakelockPlus.disable(); } catch (_) {}
+
+  try { await WakelockPlus.disable(); } catch (_) {}
 
       // Show notification if enabled
       if (!mounted) return;
@@ -2235,6 +2456,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       }
     } catch (e) {
       debugPrint('Error during analysis: $e');
+      try { await DebugLogger.append('Analysis error (outer): $e; path=${_lastCapturedPath ?? "<null>"}'); } catch (_) {}
       _handleError('Error selama analisis: $e');
 
       if (mounted) {
@@ -2534,4 +2756,28 @@ class _ParticlesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// Helper struct for compute args
+class _PreprocessArgs {
+  final Uint8List bytes;
+  final int targetWidth;
+  final int targetHeight;
+  final int quality;
+  _PreprocessArgs(this.bytes, this.targetWidth, this.targetHeight, this.quality);
+}
+
+// Runs in an isolate via compute(): decode, resize, and encode jpg with given quality.
+// Returns encoded JPEG bytes.
+Uint8List _preprocessImageIsolate(_PreprocessArgs args) {
+  try {
+    final image = img.decodeImage(args.bytes);
+    if (image == null) return Uint8List.fromList(args.bytes);
+
+    final resized = img.copyResize(image, width: args.targetWidth, height: args.targetHeight);
+    final jpg = img.encodeJpg(resized, quality: args.quality);
+    return Uint8List.fromList(jpg);
+  } catch (_) {
+    return Uint8List.fromList(args.bytes);
+  }
 }
