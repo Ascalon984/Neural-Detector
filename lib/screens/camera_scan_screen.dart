@@ -43,14 +43,15 @@ Map<String, dynamic> toMap() => {
 };
 }
 
-// Optimized text detection with improved performance
+// Optimized compute function for text detection with memory constraints
 TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
 try {
+// Use smaller image for processing to reduce memory usage
 final image = img.decodeImage(bytes);
 if (image == null) return TextDetectionResult(hasText: false, confidence: 0.0);
 
-// Use cached target size
-final targetSize = _maxImageSize;
+// Downscale significantly for performance - target 300x300 max
+final targetSize = 300;
 final width = image.width;
 final height = image.height;
 
@@ -65,32 +66,51 @@ newWidth = (width * targetSize / height).round();
 }
 
 final resized = img.copyResize(image, width: newWidth, height: newHeight);
+
+// Convert to grayscale for edge detection
 final gray = img.grayscale(resized);
 
-// Simplified edge detection for better performance
+// Apply adaptive threshold for better text detection
+final threshold = _calculateOptimalThreshold(gray);
+final binary = img.Image(width: gray.width, height: gray.height);
+
+for (int y = 0; y < gray.height; y++) {
+for (int x = 0; x < gray.width; x++) {
+final pixel = gray.getPixel(x, y);
+final lum = img.getLuminance(pixel);
+if (lum > threshold) {
+binary.setPixelRgba(x, y, 255, 255, 255, 255);
+} else {
+binary.setPixelRgba(x, y, 0, 0, 0, 255);
+}
+}
+}
+
+// Edge detection with Sobel operator
 final edges = img.sobel(gray);
 
-// Optimized edge counting
+// Count edges to determine text presence
 int edgeCount = 0;
-const edgeThreshold = 30;
-const minEdgeRatio = 0.015; // Slightly lower for better sensitivity
+const edgeThreshold = 30; // Lower threshold for better sensitivity
+const minEdgeRatio = 0.02; // Minimum edge ratio for text detection
 
-final totalPixels = edges.width * edges.height;
-for (int i = 0; i < totalPixels; i++) {
-final x = i % edges.width;
-final y = i ~/ edges.width;
+for (int y = 0; y < edges.height; y++) {
+for (int x = 0; x < edges.width; x++) {
 final pixel = edges.getPixel(x, y);
 if (img.getLuminance(pixel) > edgeThreshold) edgeCount++;
 }
+}
 
-final edgeRatio = edgeCount / totalPixels;
+final edgeRatio = edgeCount / (edges.width * edges.height);
 final hasText = edgeRatio > minEdgeRatio;
-final confidence = math.min(edgeRatio * 15, 1.0);
 
-// Simplified text region detection
+// Calculate confidence based on edge density
+final confidence = math.min(edgeRatio * 20, 1.0);
+
+// Find text regions if text is detected
 Map<String, int>? textRegions;
 if (hasText) {
-textRegions = _findTextRegionsOptimized(edges);
+textRegions = _findTextRegions(edges);
 }
 
 return TextDetectionResult(
@@ -104,31 +124,71 @@ return TextDetectionResult(hasText: false, confidence: 0.0);
 }
 }
 
-// Removed complex threshold calculation for better performance
-// Using fixed threshold instead of Otsu method
+// Calculate optimal threshold for binarization
+int _calculateOptimalThreshold(img.Image gray) {
+// Calculate histogram
+final histogram = List<int>.filled(256, 0);
+for (int y = 0; y < gray.height; y++) {
+for (int x = 0; x < gray.width; x++) {
+final pixel = gray.getPixel(x, y);
+final luminance = img.getLuminance(pixel).round();
+histogram[luminance]++;
+}
+}
 
-// Optimized text region detection
-Map<String, int>? _findTextRegionsOptimized(img.Image edges) {
+// Otsu's method for automatic thresholding
+int total = gray.width * gray.height;
+double sum = 0.0;
+for (int t = 0; t < 256; t++) sum += t * histogram[t];
+
+double sumB = 0.0;
+int wB = 0;
+int wF = 0;
+double varMax = 0.0;
+int threshold = 0;
+
+for (int t = 0; t < 256; t++) {
+wB += histogram[t];
+if (wB == 0) continue;
+
+wF = total - wB;
+if (wF == 0) break;
+
+sumB += t * histogram[t];
+final mB = sumB / wB;
+final mF = (sum - sumB) / wF;
+
+final varBetween = wB * wF * (mB - mF) * (mB - mF);
+
+if (varBetween > varMax) {
+varMax = varBetween;
+threshold = t;
+}
+}
+
+return threshold;
+}
+
+// Find text regions in the image
+Map<String, int>? _findTextRegions(img.Image edges) {
 final width = edges.width;
 final height = edges.height;
 
-// Simplified region detection
-const regionSize = 50;
-const threshold = 12;
-const step = regionSize ~/ 2;
+// Simple region detection using sliding window
+const regionSize = 60;
+const threshold = 15;
 
 Map<String, int>? bestRegion;
 int maxEdgeCount = 0;
 
-for (int y = 0; y < height - regionSize; y += step) {
-for (int x = 0; x < width - regionSize; x += step) {
+for (int y = 0; y < height - regionSize; y += regionSize ~/ 2) {
+for (int x = 0; x < width - regionSize; x += regionSize ~/ 2) {
 int edgeCount = 0;
 
-// Sample fewer pixels for better performance
-for (int dy = 0; dy < regionSize; dy += 2) {
-for (int dx = 0; dx < regionSize; dx += 2) {
+for (int dy = 0; dy < regionSize; dy++) {
+for (int dx = 0; dx < regionSize; dx++) {
 final pixel = edges.getPixel(x + dx, y + dy);
-if (img.getLuminance(pixel) > 25) edgeCount++;
+if (img.getLuminance(pixel) > 30) edgeCount++;
 }
 }
 
@@ -156,81 +216,74 @@ State<CameraScanScreen> createState() => _CameraScanScreenState();
 
 class _CameraScanScreenState extends State<CameraScanScreen>
 with TickerProviderStateMixin {
-// Optimized animation controllers - only create what's needed
+late AnimationController _backgroundController;
 late AnimationController _glowController;
 late AnimationController _scanController;
 late AnimationController _pulseController;
+late AnimationController _rotateController;
 
+late Animation<double> _backgroundAnimation;
 late Animation<double> _glowAnimation;
 late Animation<double> _scanAnimation;
 late Animation<double> _pulseAnimation;
 
-// Cache for expensive computations
-static const int _maxImageSize = 300;
-static const int _throttleMs = 1000; // Increased throttle for better performance
-
 CameraController? _cameraController;
 TextRecognizer? _textRecognizer;
 bool _isProcessingFrame = false;
+int _throttleMs = 500; // Increased throttle for better performance
 DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
 
-// Performance optimization flags
-bool _isDisposed = false;
-bool _animationsEnabled = true;
-
-// Optimized camera image stream handler
+// Camera image stream handler with optimized processing
 void _handleCameraImage(CameraImage image) async {
-if (_isDisposed || _isProcessingFrame || _isCapturing) return;
-
 final now = DateTime.now();
 if (now.difference(_lastProcessed).inMilliseconds < _throttleMs) return;
 _lastProcessed = now;
 
-// Quick prefilter with better performance
+if (_isProcessingFrame) return;
+
+// Quick prefilter on Y plane with optimized sampling
 if (!_quickHasEdges(image)) return;
 
+// Mark processing and capture a still image for reliable OCR
 _isProcessingFrame = true;
 try {
-if (_cameraController?.value.isInitialized != true) return;
+if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+if (_isCapturing) return; // avoid collision with manual capture
 
 _isCapturing = true;
 final XFile file = await _cameraController!.takePicture();
 _isCapturing = false;
 
-if (_textRecognizer != null) {
+if (_textRecognizer == null) return;
 final inputImage = InputImage.fromFilePath(file.path);
 final recognized = await _textRecognizer!.processImage(inputImage);
 
-if (recognized.text.trim().length > 2) {
-debugPrint('Camera detected text: ${recognized.text.length} chars');
-}
+if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 2) {
+debugPrint('Camera detected text (from still): ${recognized.text.length} chars');
+// Handle detected text (e.g., save, analyze, UI update)
 }
 
-// Clean up temp file immediately
+// Delete temp file to save memory
 try { await File(file.path).delete(); } catch (_) {}
 } catch (e) {
-debugPrint('Camera processing error: $e');
+debugPrint('Camera capture/processing error: $e');
+_isCapturing = false;
 } finally {
 _isProcessingFrame = false;
-_isCapturing = false;
 }
 }
 
-bool _quickHasEdges(CameraImage image, {int sampleStride = 60, int threshold = 3}) {
+bool _quickHasEdges(CameraImage image, {int sampleStride = 40, int threshold = 4}) {
 final plane = image.planes[0];
 final bytes = plane.bytes;
 int count = 0;
-final maxSamples = (bytes.length / sampleStride).floor();
-
-// Limit samples for better performance
-for (int i = 0; i < maxSamples && count < threshold; i++) {
-final index = i * sampleStride;
-if (index + sampleStride < bytes.length) {
-final diff = (bytes[index] - bytes[index + sampleStride]).abs();
-if (diff > 25) count++;
+// Sample fewer pixels for better performance
+for (int i = 0; i + sampleStride < bytes.length; i += sampleStride) {
+final diff = (bytes[i] - bytes[i + sampleStride]).abs();
+if (diff > 30) count++; // Increased threshold for better filtering
+if (count >= threshold) return true;
 }
-}
-return count >= threshold;
+return false;
 }
 
 bool _isCameraInitialized = false;
@@ -257,10 +310,15 @@ int _memoryPressureLevel = 0;
 void initState() {
 super.initState();
 
-// Initialize memory management
+// Initialize memory management with more frequent cleanup
 _initializeMemoryManagement();
 
-// Initialize only essential animation controllers
+// Initialize animation controllers
+_backgroundController = AnimationController(
+duration: const Duration(seconds: 8),
+vsync: this,
+)..repeat();
+
 _glowController = AnimationController(
 duration: const Duration(seconds: 2),
 vsync: this,
@@ -272,56 +330,71 @@ vsync: this,
 )..repeat();
 
 _pulseController = AnimationController(
-duration: const Duration(milliseconds: 1500),
+duration: Duration(seconds: 1, milliseconds: 500),
 vsync: this,
 )..repeat(reverse: true);
 
-// Initialize animations with optimized curves
-_glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(
-CurvedAnimation(parent: _glowController, curve: Curves.easeInOut)
-);
+_rotateController = AnimationController(
+duration: const Duration(seconds: 20),
+vsync: this,
+)..repeat();
 
-_scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(
-CurvedAnimation(parent: _scanController, curve: Curves.easeInOut)
-);
+// Initialize animation objects
+if (AnimationConfig.enableBackgroundAnimations) {
+_backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
 
-_pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(
-CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut)
-);
+_glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+parent: _glowController,
+curve: Curves.easeInOut,
+));
+
+_scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(CurvedAnimation(
+parent: _scanController,
+curve: Curves.easeInOut,
+));
+
+_pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+parent: _pulseController,
+curve: Curves.easeInOut,
+));
+} else {
+_backgroundAnimation = AlwaysStoppedAnimation(0.0);
+_glowAnimation = AlwaysStoppedAnimation(0.5);
+_scanAnimation = AlwaysStoppedAnimation(0.0);
+_pulseAnimation = AlwaysStoppedAnimation(1.0);
+}
 
 _requestCameraPermission();
 }
 
-// Optimized memory management
+// Initialize memory management with more frequent cleanup
 void _initializeMemoryManagement() {
-// Check memory pressure every 30 seconds
-_memoryCleanupTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-if (!_isDisposed) _checkMemoryPressure();
+// Check memory pressure every 15 seconds (more frequent)
+_memoryCleanupTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+_checkMemoryPressure();
 });
 }
 
-// Optimized memory pressure check
+// Check memory pressure and clean up if needed
 void _checkMemoryPressure() {
-if (_isDisposed) return;
-
-// Simple memory pressure simulation
-_memoryPressureLevel = math.Random().nextInt(3);
+// Simulate memory pressure check
+_memoryPressureLevel = math.Random().nextInt(3); // 0: low, 1: medium, 2: high
 
 if (_memoryPressureLevel >= 2) {
+// High memory pressure - perform aggressive cleanup
 _performMemoryCleanup(aggressive: true);
 } else if (_memoryPressureLevel >= 1) {
+// Medium memory pressure - perform moderate cleanup
 _performMemoryCleanup(aggressive: false);
 }
 }
 
-// Optimized memory cleanup
+// Perform memory cleanup
 void _performMemoryCleanup({bool aggressive = false}) {
-if (_isDisposed) return;
-
 // Clear image cache if not analyzing
 if (!_isAnalyzing && _lastCapturedBytes != null) {
 if (aggressive) {
-if (mounted) {
+// Aggressive cleanup - clear the captured image
 setState(() {
 _lastCapturedBytes = null;
 _lastCapturedPath = null;
@@ -329,13 +402,13 @@ _isKept = false;
 });
 }
 }
-}
+
+// Force garbage collection
+// Note: This is not recommended in production code
 }
 
 @override
 void dispose() {
-_isDisposed = true;
-
 // Cancel any ongoing analysis
 _analysisCompleter?.complete(false);
 
@@ -343,11 +416,13 @@ _analysisCompleter?.complete(false);
 _memoryCleanupTimer?.cancel();
 
 // Dispose animation controllers
+_backgroundController.dispose();
 _glowController.dispose();
 _scanController.dispose();
 _pulseController.dispose();
+_rotateController.dispose();
 
-// Stop image stream and dispose camera controller
+// Stop image stream if running and dispose camera controller
 try {
 _cameraController?.stopImageStream();
 } catch (_) {}
@@ -409,19 +484,32 @@ _buildCyberpunkFrame(),
 }
 
 Widget _buildAnimatedBackground() {
+return AnimatedBuilder(
+animation: _backgroundAnimation,
+builder: (context, child) {
 return Container(
-decoration: const BoxDecoration(
+decoration: BoxDecoration(
 gradient: LinearGradient(
 begin: Alignment.topLeft,
 end: Alignment.bottomRight,
 colors: [
-Color(0xFF0a0a0a),
-Color(0xFF0d1117),
+Color.lerp(
+const Color(0xFF0a0a0a),
+const Color(0xFF1a0033),
+_backgroundAnimation.value,
+)!,
+Color.lerp(
+const Color(0xFF0d1117),
+const Color(0xFF0a0e27),
+_backgroundAnimation.value,
+)!,
 Colors.black,
 ],
-stops: [0.0, 0.5, 1.0],
+stops: const [0.0, 0.5, 1.0],
 ),
 ),
+);
+},
 );
 }
 
@@ -475,13 +563,13 @@ builder: (context, child) {
 return Opacity(
 opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
 child: Container(
-decoration: const BoxDecoration(
+decoration: BoxDecoration(
 gradient: LinearGradient(
 begin: Alignment.topLeft,
 end: Alignment.bottomRight,
 colors: [
-Color(0x1AFF69B4), // Colors.pink.withOpacity(0.1)
-Color(0x1A00FFFF), // Colors.cyan.withOpacity(0.1)
+Colors.pink.withOpacity(0.1),
+Colors.cyan.withOpacity(0.1),
 ],
 ),
 ),
@@ -493,8 +581,16 @@ Color(0x1A00FFFF), // Colors.cyan.withOpacity(0.1)
 }
 
 Widget _buildFloatingParticles() {
-return const IgnorePointer(
-child: SizedBox.shrink(), // Disabled for performance
+return IgnorePointer(
+child: AnimatedBuilder(
+animation: _rotateController,
+builder: (context, child) {
+return CustomPaint(
+painter: _ParticlesPainter(_rotateController.value),
+size: Size.infinite,
+);
+},
+),
 );
 }
 
@@ -543,7 +639,14 @@ Expanded(
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Text(
+ShaderMask(
+shaderCallback: (bounds) => LinearGradient(
+colors: [
+Colors.cyan.withOpacity(_glowAnimation.value),
+Colors.pink.withOpacity(_glowAnimation.value),
+],
+).createShader(bounds),
+child: Text(
 'OCR KAMERA',
 style: TextStyle(
 fontSize: MediaQuery.of(context).size.width < 360 ? 18 : 22,
@@ -554,6 +657,7 @@ fontFamily: 'Orbitron',
 ),
 maxLines: 1,
 overflow: TextOverflow.ellipsis,
+),
 ),
 const SizedBox(height: 3),
 Text(
@@ -1117,17 +1221,98 @@ fontFamily: 'Orbitron',
 }
 
 Widget _buildCyberpunkFrame() {
-return const IgnorePointer(
-child: SizedBox.shrink(), // Disabled for performance
+return IgnorePointer(
+child: Stack(
+children: [
+// Top border
+Positioned(
+top: 0,
+left: 0,
+right: 0,
+child: Container(
+height: 2,
+decoration: BoxDecoration(
+gradient: LinearGradient(
+colors: [
+Colors.transparent,
+Colors.cyan.withOpacity(_glowAnimation.value),
+Colors.pink.withOpacity(_glowAnimation.value),
+Colors.transparent,
+],
+),
+),
+),
+),
+// Bottom border
+Positioned(
+bottom: 0,
+left: 0,
+right: 0,
+child: Container(
+height: 2,
+decoration: BoxDecoration(
+gradient: LinearGradient(
+colors: [
+Colors.transparent,
+Colors.pink.withOpacity(_glowAnimation.value),
+Colors.cyan.withOpacity(_glowAnimation.value),
+Colors.transparent,
+],
+),
+),
+),
+),
+// Left border
+Positioned(
+top: 0,
+bottom: 0,
+left: 0,
+child: Container(
+width: 2,
+decoration: BoxDecoration(
+gradient: LinearGradient(
+begin: Alignment.topCenter,
+end: Alignment.bottomCenter,
+colors: [
+Colors.transparent,
+Colors.cyan.withOpacity(_glowAnimation.value),
+Colors.pink.withOpacity(_glowAnimation.value),
+Colors.transparent,
+],
+),
+),
+),
+),
+// Right border
+Positioned(
+top: 0,
+bottom: 0,
+right: 0,
+child: Container(
+width: 2,
+decoration: BoxDecoration(
+gradient: LinearGradient(
+begin: Alignment.topCenter,
+end: Alignment.bottomCenter,
+colors: [
+Colors.transparent,
+Colors.pink.withOpacity(_glowAnimation.value),
+Colors.cyan.withOpacity(_glowAnimation.value),
+Colors.transparent,
+],
+),
+),
+),
+),
+],
+),
 );
 }
 
 Future<void> _initializeCamera() async {
-if (_isDisposed) return;
-
 try {
 if (kIsWeb) {
-await Future.delayed(const Duration(milliseconds: 300));
+await Future.delayed(const Duration(milliseconds: 500));
 }
 
 final cameras = await availableCameras();
@@ -1143,38 +1328,37 @@ backgroundColor: Colors.red,
 return;
 }
 
-// Use optimized resolution for better performance
+// Use lower resolution for better performance on low-memory devices
 _cameraController = CameraController(
 cameras[0],
-ResolutionPreset.low,
+ResolutionPreset.low, // Changed from medium to low
 enableAudio: false,
 );
 
 await _cameraController?.initialize();
 
-// Initialize ML Kit text recognizer with error handling
+// Initialize ML Kit text recognizer
 try {
 _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-} catch (e) {
-debugPrint('TextRecognizer initialization failed: $e');
+} catch (_) {
 _textRecognizer = null;
 }
 
-// Start image stream with error handling
+// Start image stream with optimized processing
 try {
 await _cameraController?.startImageStream(_handleCameraImage);
-} catch (e) {
-debugPrint('Image stream not supported: $e');
+} catch (_) {
+// Some platforms may not support streams
 }
 
-if (!mounted || _isDisposed) return;
+if (!mounted) return;
 
 setState(() {
 _isCameraInitialized = true;
 });
 } catch (e) {
 debugPrint('Error initializing camera: $e');
-if (!mounted || _isDisposed) return;
+if (!mounted) return;
 
 final errorMessage = kIsWeb
 ? 'Izinkan akses kamera di browser Anda'
@@ -1223,13 +1407,11 @@ backgroundColor: Colors.red,
 }
 
 Future<void> _takePicture() async {
-if (_isDisposed || _cameraController?.value.isInitialized != true) return;
+if (_cameraController == null || !_cameraController!.value.isInitialized) return;
 
-if (mounted) {
 setState(() {
 _isCapturing = true;
 });
-}
 
 try {
 final shouldTorch = _flashOn || _isFlashHovering;
@@ -1241,9 +1423,6 @@ await _cameraController?.setFlashMode(FlashMode.torch);
 
 final XFile file = await _cameraController!.takePicture();
 final bytes = await file.readAsBytes();
-
-if (!mounted || _isDisposed) return;
-
 setState(() {
 _lastCapturedBytes = bytes;
 _lastCapturedPath = file.path;
@@ -1251,7 +1430,7 @@ _isKept = false;
 });
 } catch (e) {
 debugPrint('Error taking picture: $e');
-if (!mounted || _isDisposed) return;
+if (!mounted) return;
 ScaffoldMessenger.of(context).showSnackBar(
 SnackBar(
 content: Text('Error mengambil gambar: $e'),
@@ -1262,7 +1441,7 @@ backgroundColor: Colors.red,
 try {
 await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
 } catch (_) {}
-if (mounted && !_isDisposed) {
+if (mounted) {
 setState(() {
 _isCapturing = false;
 });
