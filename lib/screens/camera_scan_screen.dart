@@ -17,14 +17,15 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:device_info_plus/device_info_plus.dart';
+import '../utils/ocr.dart';
 
 // Memory monitor class for actual memory tracking
 class MemoryMonitor {
   static int _memoryThreshold = 100 * 1024 * 1024; // 100MB default threshold
-  
+
   static Future<void> initialize() async {
     if (kIsWeb) return;
-    
+
     try {
       final deviceInfo = DeviceInfoPlugin();
       if (Platform.isAndroid) {
@@ -52,14 +53,14 @@ class MemoryMonitor {
       debugPrint('Error initializing memory monitor: $e');
     }
   }
-  
+
   static bool isMemoryPressureHigh() {
     // In a real implementation, you would check actual memory usage
     // For now, we'll use a simple heuristic based on time
     final now = DateTime.now();
     return now.second % 10 < 3; // Simulate memory pressure 30% of the time
   }
-  
+
   static int get memoryThreshold => _memoryThreshold;
 }
 
@@ -68,7 +69,7 @@ class TextDetectionResult {
   final bool hasText;
   final double confidence;
   final Map<String, int>? textRegions;
-  
+
   TextDetectionResult({
     required this.hasText,
     required this.confidence,
@@ -90,6 +91,19 @@ class TextDetectionResult {
   };
 }
 
+// Text recognition result class
+class TextRecognitionResult {
+  final String text;
+  final bool success;
+  final String? error;
+
+  TextRecognitionResult({
+    required this.text,
+    required this.success,
+    this.error,
+  });
+}
+
 // Optimized compute function for text detection with memory constraints
 TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
   try {
@@ -97,11 +111,11 @@ TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
     final image = img.decodeImage(bytes);
     if (image == null) return TextDetectionResult(hasText: false, confidence: 0.0);
 
-    // Downscale significantly for performance - target 150x150 max for mobile
-    final targetSize = kIsWeb ? 300 : 150;
+    // Downscale for performance - increased target size for better OCR
+    final targetSize = kIsWeb ? 400 : 250; // Increased from 300/150
     final width = image.width;
     final height = image.height;
-    
+
     // Calculate aspect ratio preserving dimensions
     int newWidth, newHeight;
     if (width > height) {
@@ -111,16 +125,16 @@ TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
       newHeight = targetSize;
       newWidth = (width * targetSize / height).round();
     }
-    
+
     final resized = img.copyResize(image, width: newWidth, height: newHeight);
-    
+
     // Convert to grayscale for edge detection
     final gray = img.grayscale(resized);
-    
+
     // Apply adaptive threshold for better text detection
     final threshold = _calculateOptimalThreshold(gray);
     final binary = img.Image(width: gray.width, height: gray.height);
-    
+
     for (int y = 0; y < gray.height; y++) {
       for (int x = 0; x < gray.width; x++) {
         final pixel = gray.getPixel(x, y);
@@ -132,34 +146,34 @@ TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
         }
       }
     }
-    
+
     // Edge detection with Sobel operator
     final edges = img.sobel(gray);
-    
-    // Count edges to determine text presence
+
+    // Count edges to determine text presence - lowered thresholds for better detection
     int edgeCount = 0;
-    final edgeThreshold = kIsWeb ? 30 : 45; // Higher threshold for mobile to reduce false positives
-    final minEdgeRatio = kIsWeb ? 0.02 : 0.04; // Higher minimum for mobile
-    
+    final edgeThreshold = kIsWeb ? 25 : 30; // Lowered from 30/45
+    final minEdgeRatio = kIsWeb ? 0.015 : 0.02; // Lowered from 0.02/0.04
+
     for (int y = 0; y < edges.height; y++) {
       for (int x = 0; x < edges.width; x++) {
         final pixel = edges.getPixel(x, y);
         if (img.getLuminance(pixel) > edgeThreshold) edgeCount++;
       }
     }
-    
+
     final edgeRatio = edgeCount / (edges.width * edges.height);
     final hasText = edgeRatio > minEdgeRatio;
-    
+
     // Calculate confidence based on edge density
     final confidence = math.min(edgeRatio * 20, 1.0);
-    
+
     // Find text regions if text is detected
     Map<String, int>? textRegions;
     if (hasText) {
       textRegions = _findTextRegions(edges);
     }
-    
+
     return TextDetectionResult(
       hasText: hasText,
       confidence: confidence,
@@ -168,6 +182,32 @@ TextDetectionResult _optimizedTextDetectionCompute(Uint8List bytes) {
   } catch (e) {
     debugPrint('Error in text detection: $e');
     return TextDetectionResult(hasText: false, confidence: 0.0);
+  }
+}
+
+// Compute function for text recognition
+// Note: ML Kit (TextRecognizer) uses platform channels and should run on the
+// main isolate. Keep this helper async and await the result when called from
+// the main isolate. Do NOT call this from `compute()` as platform channels
+// are not available in spawned isolates.
+Future<TextRecognitionResult> _textRecognitionCompute(String filePath) async {
+  try {
+    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    final inputImage = InputImage.fromFilePath(filePath);
+    final recognizedText = await textRecognizer.processImage(inputImage);
+    textRecognizer.close();
+
+    return TextRecognitionResult(
+      text: recognizedText.text,
+      success: true,
+    );
+  } catch (e) {
+    debugPrint('Error in text recognition: $e');
+    return TextRecognitionResult(
+      text: '',
+      success: false,
+      error: e.toString(),
+    );
   }
 }
 
@@ -182,37 +222,37 @@ int _calculateOptimalThreshold(img.Image gray) {
       histogram[luminance]++;
     }
   }
-  
+
   // Otsu's method for automatic thresholding
   int total = gray.width * gray.height;
   double sum = 0.0;
   for (int t = 0; t < 256; t++) sum += t * histogram[t];
-  
+
   double sumB = 0.0;
   int wB = 0;
   int wF = 0;
   double varMax = 0.0;
   int threshold = 0;
-  
+
   for (int t = 0; t < 256; t++) {
     wB += histogram[t];
     if (wB == 0) continue;
-    
+
     wF = total - wB;
     if (wF == 0) break;
-    
+
     sumB += t * histogram[t];
     final mB = sumB / wB;
     final mF = (sum - sumB) / wF;
-    
+
     final varBetween = wB * wF * (mB - mF) * (mB - mF);
-    
+
     if (varBetween > varMax) {
       varMax = varBetween;
       threshold = t;
     }
   }
-  
+
   return threshold;
 }
 
@@ -220,25 +260,25 @@ int _calculateOptimalThreshold(img.Image gray) {
 Map<String, int>? _findTextRegions(img.Image edges) {
   final width = edges.width;
   final height = edges.height;
-  
+
   // Simple region detection using sliding window
-  final regionSize = kIsWeb ? 60 : 30; // Smaller regions for mobile
-  final threshold = kIsWeb ? 15 : 25; // Higher threshold for mobile
-  
+  final regionSize = kIsWeb ? 60 : 40; // Increased from 60/30
+  final threshold = kIsWeb ? 15 : 20; // Lowered from 15/25
+
   Map<String, int>? bestRegion;
   int maxEdgeCount = 0;
-  
+
   for (int y = 0; y < height - regionSize; y += regionSize ~/ 2) {
     for (int x = 0; x < width - regionSize; x += regionSize ~/ 2) {
       int edgeCount = 0;
-      
+
       for (int dy = 0; dy < regionSize; dy++) {
         for (int dx = 0; dx < regionSize; dx++) {
           final pixel = edges.getPixel(x + dx, y + dy);
           if (img.getLuminance(pixel) > 30) edgeCount++;
         }
       }
-      
+
       if (edgeCount > threshold && edgeCount > maxEdgeCount) {
         maxEdgeCount = edgeCount;
         bestRegion = {
@@ -250,7 +290,7 @@ Map<String, int>? _findTextRegions(img.Image edges) {
       }
     }
   }
-  
+
   return bestRegion;
 }
 
@@ -262,22 +302,22 @@ class CameraScanScreen extends StatefulWidget {
 }
 
 class _CameraScanScreenState extends State<CameraScanScreen>
-  with TickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _backgroundController;
   late AnimationController _glowController;
   late AnimationController _scanController;
   late AnimationController _pulseController;
   late AnimationController _rotateController;
-  
+
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
-  
+
   CameraController? _cameraController;
   TextRecognizer? _textRecognizer;
   bool _isProcessingFrame = false;
-  int _throttleMs = kIsWeb ? 500 : 1500; // Increased throttle for mobile
+  int _throttleMs = kIsWeb ? 500 : 1000; // Reduced throttle for better responsiveness
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   // Stream control and OCR mutex
   StreamController<CameraImage>? _cameraImageStreamController;
@@ -287,17 +327,17 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   // Serial capture queue to ensure captures are processed one-by-one
   final ListQueue<Completer<bool>> _captureQueue = ListQueue<Completer<bool>>();
   bool _captureWorkerRunning = false;
-  
+
   // (old delegator removed) image frames are handled via _startImageStream -> _onImageReceived
 
-  bool _quickHasEdges(CameraImage image, {int sampleStride = 40, int threshold = 4}) {
+  bool _quickHasEdges(CameraImage image, {int sampleStride = 30, int threshold = 3}) {
     final plane = image.planes[0];
     final bytes = plane.bytes;
     int count = 0;
     // Sample fewer pixels for better performance
-    final stride = kIsWeb ? sampleStride : sampleStride * 3; // Even fewer samples on mobile
-    final edgeThreshold = kIsWeb ? 30 : 45; // Higher threshold for mobile
-    
+    final stride = kIsWeb ? sampleStride : sampleStride * 2; // Reduced from 3
+    final edgeThreshold = kIsWeb ? 25 : 30; // Lowered from 30/45
+
     for (int i = 0; i + stride < bytes.length; i += stride) {
       final diff = (bytes[i] - bytes[i + stride]).abs();
       if (diff > edgeThreshold) count++;
@@ -308,6 +348,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
   bool _isCameraInitialized = false;
   bool _hasCameraPermission = false;
+  bool _hasFlash = false; // Track if device has flash
   Uint8List? _lastCapturedBytes;
   String? _lastCapturedPath;
   bool _isKept = false;
@@ -315,13 +356,16 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   bool _isFlashHovering = false;
   bool _isCapturing = false;
   bool _isAnalyzing = false;
+  bool _isRecognizingText = false; // New state for text recognition
   double _analysisProgress = 0.0;
+  double _textRecognitionProgress = 0.0; // New progress for text recognition
   double _aiPct = 0.0;
   double _humanPct = 0.0;
-  
+  String _recognizedText = ''; // New state to store recognized text
+
   // Cancel token for analysis
   Completer<bool>? _analysisCompleter;
-  
+
   // Memory management
   Timer? _memoryCleanupTimer;
   bool _isLowMemoryDevice = false; // Detect low memory devices
@@ -331,16 +375,16 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+
     // Initialize memory monitor
     _initializeMemoryMonitor();
-    
+
     // Detect if this is a low memory device
     _detectLowMemoryDevice();
-    
+
     // Initialize memory management with more frequent cleanup
     _initializeMemoryManagement();
-    
+
     // Initialize animation controllers
     _backgroundController = AnimationController(
       duration: const Duration(seconds: 8),
@@ -366,7 +410,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       duration: const Duration(seconds: 20),
       vsync: this,
     );
-    
+
     // Initialize animation objects
     if (AnimationConfig.enableBackgroundAnimations && !_isLowMemoryDevice) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
@@ -428,7 +472,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       _isLowMemoryDevice = false;
       return;
     }
-    
+
     try {
       final deviceInfo = DeviceInfoPlugin();
       if (Platform.isAndroid) {
@@ -482,8 +526,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       'Moto C',
       'Moto G Play',
     ];
-    
-    return lowEndModels.any((lowEndModel) => 
+
+    return lowEndModels.any((lowEndModel) =>
         model.toLowerCase().contains(lowEndModel.toLowerCase()));
   }
 
@@ -502,15 +546,15 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       'iPad Air',
       'iPod touch',
     ];
-    
-    return lowEndModels.any((lowEndModel) => 
+
+    return lowEndModels.any((lowEndModel) =>
         model.contains(lowEndModel));
   }
 
   // Initialize memory management with more frequent cleanup
   void _initializeMemoryManagement() {
     // Check memory pressure more frequently on mobile
-    final interval = _isLowMemoryDevice ? 8 : 12;
+    final interval = _isLowMemoryDevice ? 10 : 15; // Increased intervals
     _memoryCleanupTimer = Timer.periodic(Duration(seconds: interval), (_) {
       _checkMemoryPressure();
     });
@@ -520,7 +564,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   void _checkMemoryPressure() {
     // Use actual memory pressure detection
     final isHighPressure = MemoryMonitor.isMemoryPressureHigh();
-    
+
     if (isHighPressure || _isLowMemoryDevice) {
       // High memory pressure or low memory device - perform aggressive cleanup
       _performMemoryCleanup(aggressive: true);
@@ -537,10 +581,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           _lastCapturedBytes = null;
           _lastCapturedPath = null;
           _isKept = false;
+          _recognizedText = '';
         });
       }
     }
-    
+
     // Stop animations on aggressive cleanup
     if (aggressive && AnimationConfig.enableBackgroundAnimations) {
       _backgroundController.stop();
@@ -548,7 +593,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       _scanController.stop();
       _pulseController.stop();
       _rotateController.stop();
-      
+
       // Restart after a delay
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted && !_isLowMemoryDevice) {
@@ -566,12 +611,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   void _handleError(String error, {bool critical = false}) {
     debugPrint('Error: $error');
     _consecutiveErrors++;
-    
+
     // If too many consecutive errors, perform recovery
     if (_consecutiveErrors >= 3 || critical) {
       _performErrorRecovery();
     }
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -586,13 +631,13 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   // Perform error recovery
   Future<void> _performErrorRecovery() async {
     debugPrint('Performing error recovery');
-    
+
     // Reset error counter
     _consecutiveErrors = 0;
-    
+
     // Aggressive memory cleanup
     _performMemoryCleanup(aggressive: true);
-    
+
     // Restart camera if needed
     if (_cameraController != null && _isCameraInitialized) {
       try {
@@ -616,17 +661,17 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   void dispose() {
     // Cancel any ongoing analysis
     _analysisCompleter?.complete(false);
-    
+
     // Cancel memory cleanup timer
     _memoryCleanupTimer?.cancel();
-    
+
     // Dispose animation controllers
     _backgroundController.dispose();
     _glowController.dispose();
     _scanController.dispose();
     _pulseController.dispose();
     _rotateController.dispose();
-    
+
     // Stop image stream if running and dispose camera controller
     try {
       if (_cameraController?.value.isStreamingImages ?? false) {
@@ -635,7 +680,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     } catch (_) {}
     _textRecognizer?.close();
     _cameraController?.dispose();
-    
+
     super.dispose();
   }
 
@@ -652,22 +697,22 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       body: Stack(
         children: [
           // Animated cyberpunk background - simplified for low memory devices
-          _isLowMemoryDevice 
-            ? Container(color: Colors.black)
-            : _buildAnimatedBackground(),
-          
+          _isLowMemoryDevice
+              ? Container(color: Colors.black)
+              : _buildAnimatedBackground(),
+
           // Grid overlay effect - skip on low memory devices
           if (!_isLowMemoryDevice) _buildGridOverlay(),
-          
+
           // Scan line effect
           _buildScanLine(),
-          
+
           // Glitch effect overlay - skip on low memory devices
           if (!_isLowMemoryDevice) _buildGlitchEffect(),
-          
+
           // Floating particles effect - skip on low memory devices
           if (!_isLowMemoryDevice) _buildFloatingParticles(),
-          
+
           // Main content
           SafeArea(
             child: LayoutBuilder(
@@ -690,7 +735,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
               },
             ),
           ),
-          
+
           // Cyberpunk frame borders - simplified for low memory devices
           _isLowMemoryDevice ? _buildSimpleFrame() : _buildCyberpunkFrame(),
         ],
@@ -954,9 +999,9 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            _hasCameraPermission 
-                              ? 'MENGINISIALISASI PEMINDAI'
-                              : 'IZIN KAMERA DIPERLUKAN',
+                            _hasCameraPermission
+                                ? 'MENGINISIALISASI PEMINDAI'
+                                : 'IZIN KAMERA DIPERLUKAN',
                             style: const TextStyle(
                               color: Colors.white54,
                               fontSize: 14,
@@ -1036,7 +1081,103 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                                 ),
                               ),
                               const SizedBox(height: 15),
-                              if (!_isKept)
+                              
+                              // Show text recognition progress or recognized text
+                              if (_isRecognizingText)
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.cyan.withOpacity(_glowAnimation.value),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              value: _textRecognitionProgress,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Flexible(
+                                            child: Text(
+                                              'MENGUMPULKAN DATA TEKS: ${(_textRecognitionProgress * 100).toStringAsFixed(0)}%',
+                                              style: TextStyle(
+                                                color: Colors.cyan.shade300,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                fontFamily: 'Orbitron',
+                                                letterSpacing: 1,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else if (_recognizedText.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.cyan.withOpacity(_glowAnimation.value),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'TEKS TERKUMPUL:',
+                                        style: TextStyle(
+                                          color: Colors.cyan.shade300,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Orbitron',
+                                          letterSpacing: 1,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        constraints: BoxConstraints(
+                                          maxHeight: boxHeight * 0.2,
+                                        ),
+                                        child: SingleChildScrollView(
+                                          child: Text(
+                                            _recognizedText,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              
+                              const SizedBox(height: 15),
+                              
+                              // Action buttons
+                              if (!_isKept && !_isRecognizingText)
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -1047,10 +1188,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                                         setState(() {
                                           _isKept = true;
                                         });
-                                        try {
-                                          final auto = await SettingsManager.getAutoScan();
-                                          if (auto && mounted) await _analyzeKeptImage();
-                                        } catch (_) {}
+                                        // Start text recognition after saving
+                                        await _recognizeText();
                                       },
                                       color: Colors.green,
                                     ),
@@ -1063,36 +1202,51 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                                     ),
                                   ],
                                 )
-                              else
-                                GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _lastCapturedBytes = null;
-                                      _isKept = false;
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Gambar dihapus'),
-                                        backgroundColor: Colors.red,
+                              else if (_isKept)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Keep ANALISIS only in footer; in preview show delete and optionally a quick analyze if text exists
+                                    if (_recognizedText.isNotEmpty)
+                                      _buildCyberButton(
+                                        text: 'LIHAT TEKS',
+                                        icon: Icons.visibility,
+                                        onPressed: () {},
+                                        color: Colors.cyan,
                                       ),
-                                    );
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withOpacity(0.2),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.red.withOpacity(_glowAnimation.value),
-                                        width: 2,
+                                    const SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _lastCapturedBytes = null;
+                                          _isKept = false;
+                                          _recognizedText = '';
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Gambar dihapus'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withOpacity(0.2),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.red.withOpacity(_glowAnimation.value),
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.delete,
+                                          color: Colors.red,
+                                          size: 20,
+                                        ),
                                       ),
                                     ),
-                                    child: const Icon(
-                                      Icons.delete,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                  ),
+                                  ],
                                 ),
                             ],
                           ),
@@ -1191,26 +1345,35 @@ class _CameraScanScreenState extends State<CameraScanScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // Flash control
+                // Flash control - always visible but greyed when not available
                 GestureDetector(
                   onTapDown: (_) => _handleFlashHover(true),
                   onTapUp: (_) => _handleFlashHover(false),
                   onTapCancel: () => _handleFlashHover(false),
                   onTap: () async {
-                    _flashOn = !_flashOn;
+                    // Attempt to toggle flash/torch; only update state when operation succeeds
+                    final targetOn = !_flashOn;
                     try {
-                      await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
-                      if (!mounted) return;
-                      setState(() {});
+                      await _cameraController?.setFlashMode(targetOn ? FlashMode.torch : FlashMode.off);
+                      _safeSetState(() {
+                        _flashOn = targetOn;
+                        _hasFlash = true;
+                      });
                     } catch (e) {
-                      if (!mounted) return;
-                      _handleError('Flash tidak tersedia: $e');
+                      debugPrint('Flash toggle error: $e');
+                      // If toggling fails, assume flash not supported or unavailable and disable UI
+                      _safeSetState(() {
+                        _hasFlash = false;
+                        _flashOn = false;
+                      });
+                      _handleError('Perangkat tidak mendukung senter atau sedang sibuk: $e');
                     }
                   },
                   child: _buildControlButton(
                     Icons.flash_on,
                     'LAMPU',
-                    _flashOn || _isFlashHovering ? Colors.yellow : Colors.cyan,
+                    // show yellow when active/hovering, cyan when available, grey when not
+                    (_flashOn || _isFlashHovering) ? Colors.yellow : (_hasFlash ? Colors.cyan : Colors.grey),
                   ),
                 ),
 
@@ -1254,13 +1417,13 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                   ),
                 ),
 
-                // Analyze button
+                // Analyze button - only enabled when text is recognized
                 GestureDetector(
-                  onTap: _isKept && !_isAnalyzing ? _analyzeKeptImage : null,
+                  onTap: _isKept && _recognizedText.isNotEmpty && !_isAnalyzing ? _analyzeKeptImage : null,
                   child: _buildControlButton(
                     Icons.analytics,
                     'ANALISIS',
-                    _isKept ? Colors.green : Colors.grey,
+                    _isKept && _recognizedText.isNotEmpty ? Colors.green : Colors.grey,
                   ),
                 ),
               ],
@@ -1554,11 +1717,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         return;
       }
 
-      // Use lower resolution for better performance on low-memory devices
-      final resolutionPreset = _isLowMemoryDevice 
-        ? ResolutionPreset.low 
-        : (kIsWeb ? ResolutionPreset.medium : ResolutionPreset.low);
-        
+      // Use medium resolution for better OCR results
+      final resolutionPreset = _isLowMemoryDevice
+          ? ResolutionPreset.medium  // Changed from low to medium
+          : (kIsWeb ? ResolutionPreset.high : ResolutionPreset.medium); // Changed from medium/low
+
       _cameraController = CameraController(
         cameras[0],
         resolutionPreset,
@@ -1567,11 +1730,36 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
       await _cameraController?.initialize();
 
-      // Initialize ML Kit text recognizer
+      // Check if device has flash capability - attempt to set flash mode to detect support
+      _hasFlash = false;
       try {
+        // Try setting flash mode to off; if the device doesn't support flash this may throw
+        await _cameraController?.setFlashMode(FlashMode.off);
+        _hasFlash = true;
+      } catch (e) {
+        _hasFlash = false;
+      }
+      debugPrint('Device has flash: $_hasFlash');
+
+      // Initialize ML Kit text recognizer with multiple scripts for better compatibility
+      try {
+        // Try Latin first (most common)
         _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      } catch (_) {
-        _textRecognizer = null;
+      } catch (e) {
+        debugPrint('Error initializing Latin text recognizer: $e');
+        try {
+          // Fallback to Chinese if Latin fails
+          _textRecognizer = TextRecognizer(script: TextRecognitionScript.chinese);
+        } catch (e2) {
+          debugPrint('Error initializing Chinese text recognizer: $e2');
+          try {
+            // Final fallback to default
+            _textRecognizer = TextRecognizer();
+          } catch (e3) {
+            debugPrint('Error initializing default text recognizer: $e3');
+            _textRecognizer = null;
+          }
+        }
       }
 
       // Start image stream with optimized processing via helper
@@ -1644,11 +1832,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
     if (!_quickHasEdges(image)) return;
 
-  // start debug timer (will be measured in worker)
+    // start debug timer (will be measured in worker)
 
     // Enqueue a capture request instead of performing capture immediately.
     // Limit queue size to avoid unbounded buffering.
-      try {
+    try {
       if (_captureQueue.length >= 2) return; // already have pending tasks
       final completer = Completer<bool>();
       _captureQueue.add(completer);
@@ -1687,8 +1875,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     if (_ocrLock) return false;
     _ocrLock = true;
     _isCapturing = true;
-  XFile? file;
-  final Stopwatch? sw = kDebugMode ? (Stopwatch()..start()) : null;
+    XFile? file;
+    final Stopwatch? sw = kDebugMode ? (Stopwatch()..start()) : null;
     try {
       await _stopImageStream();
       int attempts = 0;
@@ -1710,24 +1898,15 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
       if (file == null) return false;
 
-      if (_textRecognizer != null) {
-        try {
-          final f = file; // local non-null reference
-          final inputImage = InputImage.fromFilePath(f.path);
-          final recognized = await _textRecognizer!.processImage(inputImage);
-          if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 2) {
-            final bytes = await File(f.path).readAsBytes();
-            _safeSetState(() {
-              _lastCapturedBytes = bytes;
-              _lastCapturedPath = f.path;
-            });
-          }
-        } catch (e) {
-          debugPrint('Queued text recognition error: $e');
-        }
-      }
+      // Just save the image without text recognition
+      final bytes = await file.readAsBytes();
+      final savedPath = file.path;
+      _safeSetState(() {
+        _lastCapturedBytes = bytes;
+        _lastCapturedPath = savedPath;
+      });
 
-      try { await File(file.path).delete(); } catch (_) {}
+      try { if (savedPath.isNotEmpty) await File(savedPath).delete(); } catch (_) {}
       if (kDebugMode && sw != null) {
         sw.stop();
         debugPrint('Queued capture total time: ${sw.elapsedMilliseconds} ms');
@@ -1737,6 +1916,52 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       _ocrLock = false;
       _isCapturing = false;
       if (mounted) await _startImageStream();
+    }
+  }
+
+  // New method to recognize text after saving the image
+  Future<void> _recognizeText() async {
+    if (_lastCapturedPath == null) return;
+
+    setState(() {
+      _isRecognizingText = true;
+      _textRecognitionProgress = 0.0;
+      _recognizedText = '';
+    });
+
+    try {
+      // Visual progress while recognizing
+      for (int i = 0; i <= 60; i += 10) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (mounted) setState(() => _textRecognitionProgress = i / 100);
+      }
+
+      TextRecognitionResult result;
+      if (kIsWeb) {
+        // On web use the shim which currently returns '' but avoids calling ML Kit plugins
+        final txt = await OCR.extractText(filePath: _lastCapturedPath, bytes: _lastCapturedBytes);
+        result = TextRecognitionResult(text: txt, success: txt.isNotEmpty);
+      } else {
+        // Run recognition on main isolate (ML Kit uses platform channels)
+        result = await _textRecognitionCompute(_lastCapturedPath!);
+      }
+
+      if (mounted) {
+        setState(() {
+          _recognizedText = result.success ? (result.text.isNotEmpty ? result.text : 'Tidak ada teks yang terdeteksi') : (result.error ?? 'Error');
+          _isRecognizingText = false;
+          _textRecognitionProgress = 1.0;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error during text recognition: $e');
+      if (mounted) {
+        setState(() {
+          _recognizedText = 'Error: $e';
+          _isRecognizingText = false;
+          _textRecognitionProgress = 0.0;
+        });
+      }
     }
   }
 
@@ -1771,10 +1996,14 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     _safeSetState(() { _isCapturing = true; });
 
     try {
-      // Turn torch on if needed
-      final shouldTorch = _flashOn || _isFlashHovering;
+      // Turn torch on if needed and device has flash
+      final shouldTorch = (_flashOn || _isFlashHovering) && _hasFlash;
       if (shouldTorch) {
-        try { await _cameraController?.setFlashMode(FlashMode.torch); } catch (_) {}
+        try { 
+          await _cameraController?.setFlashMode(FlashMode.torch); 
+        } catch (e) {
+          debugPrint('Error setting flash mode: $e');
+        }
       }
 
       // Ensure image stream is stopped before capture
@@ -1804,17 +2033,23 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       if (file != null) {
         final f = file;
         final bytes = await f.readAsBytes();
+        final savedPath = f.path;
         _safeSetState(() {
           _lastCapturedBytes = bytes;
-          _lastCapturedPath = f.path;
+          _lastCapturedPath = savedPath;
           _isKept = false;
+          _recognizedText = ''; // Reset recognized text
         });
       }
     } catch (e) {
       debugPrint('Error taking picture: $e');
       _handleError('Error mengambil gambar: $e');
     } finally {
-      try { await _cameraController?.setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off); } catch (_) {}
+      try { 
+        await _cameraController?.setFlashMode(_flashOn && _hasFlash ? FlashMode.torch : FlashMode.off); 
+      } catch (e) {
+        debugPrint('Error resetting flash mode: $e');
+      }
       _safeSetState(() { _isCapturing = false; });
       // Restart image stream if still intended
       if (mounted) await _startImageStream();
@@ -1825,8 +2060,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     if (_isFlashHovering == hovering) return;
     _isFlashHovering = hovering;
     try {
-      _cameraController?.setFlashMode(hovering || _flashOn ? FlashMode.torch : FlashMode.off);
-    } catch (_) {}
+      if (_hasFlash) {
+        _cameraController?.setFlashMode(hovering || _flashOn ? FlashMode.torch : FlashMode.off);
+      }
+    } catch (e) {
+      debugPrint('Error handling flash hover: $e');
+    }
     if (mounted) setState(() {});
   }
 
@@ -1834,15 +2073,16 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     setState(() {
       _lastCapturedBytes = null;
       _isKept = false;
+      _recognizedText = '';
     });
   }
 
   Future<void> _analyzeKeptImage() async {
-    if (_lastCapturedBytes == null) return;
-    
+    if (_lastCapturedBytes == null || _recognizedText.isEmpty) return;
+
     // Create a new completer for this analysis
     _analysisCompleter = Completer<bool>();
-    
+
     setState(() {
       _isAnalyzing = true;
       _analysisProgress = 0.0;
@@ -1853,7 +2093,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       TextDetectionResult textDetection;
       try {
         textDetection = await compute(_optimizedTextDetectionCompute, _lastCapturedBytes!);
-        
+
         // Update progress
         if (_analysisCompleter?.isCompleted == false) {
           setState(() {
@@ -1861,6 +2101,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           });
         }
       } catch (e) {
+        debugPrint('Error in text detection: $e');
         textDetection = TextDetectionResult(hasText: false, confidence: 0.0);
       }
 
@@ -1870,14 +2111,14 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         for (int i = 20; i <= 100; i += 5) {
           await Future.delayed(const Duration(milliseconds: 30));
           if (_analysisCompleter?.isCompleted == true) return;
-          
+
           setState(() {
             _analysisProgress = i / 100;
           });
         }
-        
+
         if (_analysisCompleter?.isCompleted == true) return;
-        
+
         setState(() {
           _aiPct = 0.0;
           _humanPct = 100.0;
@@ -1886,7 +2127,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
         // Save to history
         await _saveToHistory();
-        
+
         if (mounted) {
           _showAnalysisDialog(_aiPct, _humanPct);
         }
@@ -1897,7 +2138,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       for (int i = 20; i <= 60; i += 4) {
         await Future.delayed(const Duration(milliseconds: 50));
         if (_analysisCompleter?.isCompleted == true) return;
-        
+
         setState(() {
           _analysisProgress = i / 100;
         });
@@ -1907,7 +2148,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       for (int i = 60; i <= 80; i += 4) {
         await Future.delayed(const Duration(milliseconds: 40));
         if (_analysisCompleter?.isCompleted == true) return;
-        
+
         setState(() {
           _analysisProgress = i / 100;
         });
@@ -1919,7 +2160,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
         // Use text regions if available
         Map<String, int>? roi = textDetection.textRegions;
-        
+
         String? analysisFilePath = _lastCapturedPath;
 
         if (roi != null) {
@@ -1939,21 +2180,22 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         }
 
         final adjusted = await runAnalysisIsolate(
-          filePath: analysisFilePath, 
-          bytes: null, 
+          filePath: analysisFilePath,
+          bytes: null,
           sensitivityLevel: level
         ).timeout(
-          const Duration(seconds: 10), 
+          const Duration(seconds: 10),
           onTimeout: () => {'ai_detection': 0.0, 'human_written': 100.0}
         );
 
         if (_analysisCompleter?.isCompleted == true) return;
-        
+
         _aiPct = adjusted['ai_detection'] ?? 0.0;
         _humanPct = adjusted['human_written'] ?? 0.0;
       } catch (e) {
+        debugPrint('Error during analysis: $e');
         if (_analysisCompleter?.isCompleted == true) return;
-        
+
         _aiPct = 0.0;
         _humanPct = 100.0;
       }
@@ -1962,14 +2204,14 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       for (int i = 80; i <= 100; i += 5) {
         await Future.delayed(const Duration(milliseconds: 30));
         if (_analysisCompleter?.isCompleted == true) return;
-        
+
         setState(() {
           _analysisProgress = i / 100;
         });
       }
 
       if (_analysisCompleter?.isCompleted == true) return;
-      
+
       setState(() {
         _isAnalyzing = false;
         _analysisProgress = 1.0;
@@ -1983,7 +2225,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
           CyberNotification.show(context, 'Analisis Selesai', 'Analisis pemindaian kamera selesai');
         }
       } catch (_) {}
-      
+
       // Save to history
       await _saveToHistory();
 
@@ -1994,7 +2236,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     } catch (e) {
       debugPrint('Error during analysis: $e');
       _handleError('Error selama analisis: $e');
-      
+
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
@@ -2017,6 +2259,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
         humanWritten: _humanPct.round(),
         status: 'Completed',
         fileSize: sized,
+        text: _recognizedText, // Save recognized text to history
       );
       await HistoryManager.addEntry(entry);
     } catch (e) {
@@ -2042,12 +2285,12 @@ class _CameraScanScreenState extends State<CameraScanScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                aiPct > 50 
-                  ? Colors.red.shade900.withOpacity(0.9)
-                  : Colors.blue.shade900.withOpacity(0.9),
                 aiPct > 50
-                  ? Colors.deepOrange.shade900.withOpacity(0.9)
-                  : Colors.purple.shade900.withOpacity(0.9),
+                    ? Colors.red.shade900.withOpacity(0.9)
+                    : Colors.blue.shade900.withOpacity(0.9),
+                aiPct > 50
+                    ? Colors.deepOrange.shade900.withOpacity(0.9)
+                    : Colors.purple.shade900.withOpacity(0.9),
               ],
             ),
             border: Border.all(
@@ -2161,6 +2404,49 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                       ],
                     ),
                   ),
+                  const SizedBox(height: 15),
+                  if (_recognizedText.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: Colors.cyan.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'TEKS YANG DIANALISIS:',
+                            style: TextStyle(
+                              color: Colors.cyan.shade300,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Orbitron',
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            constraints: const BoxConstraints(
+                              maxHeight: 150,
+                            ),
+                            child: SingleChildScrollView(
+                              child: Text(
+                                _recognizedText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   _buildCyberButton(
                     text: 'TUTUP',
@@ -2226,26 +2512,26 @@ class _GridPainter extends CustomPainter {
 
 class _ParticlesPainter extends CustomPainter {
   final double animationValue;
-  
+
   _ParticlesPainter(this.animationValue);
-  
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = Colors.cyan.withOpacity(0.3)
       ..style = PaintingStyle.fill;
-    
+
     final random = math.Random(42); // Fixed seed for consistent particles
-    
+
     for (int i = 0; i < 20; i++) {
       final x = (random.nextDouble() * size.width);
       final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
       final radius = random.nextDouble() * 2 + 1;
-      
+
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }
-  
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

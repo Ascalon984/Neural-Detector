@@ -1193,9 +1193,9 @@ class _HistoryScreenState extends State<HistoryScreen>
                       ],
                     ),
                     const SizedBox(height: 15),
-                    _buildDetailItem('File Name', history.fileName),
-                    _buildDetailItem('Date & Time', history.date),
-                    _buildDetailItem('File Size', history.fileSize),
+                    _buildDetailItem('Nama Dokumen', history.fileName),
+                    _buildDetailItem('Tanggal & Waktu', history.date),
+                    _buildDetailItem('Ukuran File', history.fileSize),
                     const SizedBox(height: 15),
                     Container(
                       padding: const EdgeInsets.all(15),
@@ -1210,7 +1210,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                       child: Column(
                         children: [
                           Text(
-                            'ANALYSIS RESULTS',
+                            'HASIL',
                             style: TextStyle(
                               color: Colors.pink.shade300,
                               fontWeight: FontWeight.bold,
@@ -1231,7 +1231,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                     ),
                     const SizedBox(height: 20),
                     _buildCyberButton(
-                      text: 'CLOSE',
+                      text: 'TUTUP',
                       icon: Icons.close,
                       onPressed: () => Navigator.pop(context),
                       color: Colors.cyan,

@@ -7,6 +7,7 @@ class ScanHistory {
   final String status;
   final String fileSize;
   final String source; // 'camera'|'upload'|'editor'|'history' etc.
+  final String text;
 
   ScanHistory({
     required this.id,
@@ -17,6 +18,7 @@ class ScanHistory {
     required this.status,
     required this.fileSize,
     this.source = 'history',
+    this.text = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -27,6 +29,7 @@ class ScanHistory {
         'humanWritten': humanWritten,
         'status': status,
         'fileSize': fileSize,
+        'text': text,
         'source': source,
       };
 
@@ -38,6 +41,7 @@ class ScanHistory {
         humanWritten: (json['humanWritten'] as num).toInt(),
         status: json['status'] as String,
         fileSize: json['fileSize'] as String,
-        source: (json['source'] as String?) ?? 'history',
+    source: (json['source'] as String?) ?? 'history',
+    text: (json['text'] as String?) ?? '',
       );
 }
