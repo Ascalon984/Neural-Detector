@@ -323,6 +323,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   TextRecognizer? _textRecognizer;
   bool _isProcessingFrame = false;
   int _throttleMs = kIsWeb ? 500 : 1000; // Reduced throttle for better responsiveness
+  int _lastOcrMs = 800; // Track last OCR duration to adapt throttle
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   // Stream control and OCR mutex
   StreamController<CameraImage>? _cameraImageStreamController;
@@ -334,6 +335,19 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   bool _captureWorkerRunning = false;
   // Adaptive max queue size based on device memory
   int get _maxCaptureQueueSize => _isLowMemoryDevice ? 1 : 3;
+
+  void _updateAdaptiveThrottle(int ocrMs) {
+    // Adapt throttle based on recent OCR duration to balance responsiveness vs load
+    _lastOcrMs = ocrMs;
+    final int target = (ocrMs * 0.7).round();
+    final int clamped = target.clamp(400, 1200);
+    if (clamped != _throttleMs) {
+      _throttleMs = clamped;
+      if (kDebugMode) {
+        debugPrint('Adaptive throttle updated to: $_throttleMs ms (ocr: ${ocrMs}ms)');
+      }
+    }
+  }
 
   // Periodic cleanup for temporary capture files
   Timer? _tempCleanupTimer;
@@ -1999,15 +2013,19 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     _lastProcessed = now;
 
     if (_isProcessingFrame) return;
+    _isProcessingFrame = true;
 
-    if (!_quickHasEdges(image)) return;
-
-    // start debug timer (will be measured in worker)
+    if (!_quickHasEdges(image)) {
+      _isProcessingFrame = false;
+      return;
+    }
 
     // Enqueue a capture request instead of performing capture immediately.
     // Limit queue size to avoid unbounded buffering.
     try {
-      if (_captureQueue.length >= _maxCaptureQueueSize) return; // already have pending tasks (adaptive)
+      if (_captureQueue.length >= _maxCaptureQueueSize) {
+        return; // already have pending tasks (adaptive)
+      }
       final completer = Completer<bool>();
       _captureQueue.add(completer);
       if (!_captureWorkerRunning) _processCaptureQueue();
@@ -2133,7 +2151,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     // Keep device awake during OCR
   try { await WakelockPlus.enable(); } catch (_) {}
 
-    // Show blocking progress modal
+    // Show blocking progress modal (no artificial delays)
     _showBlockingProgress('Mengumpulkan teks...');
 
     setState(() {
@@ -2152,12 +2170,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     }
 
     try {
-      // Visual progress while recognizing
-      for (int i = 0; i <= 60; i += 10) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        if (mounted) setState(() => _textRecognitionProgress = i / 100);
-      }
-
+      final Stopwatch ocrSw = Stopwatch()..start();
       TextRecognitionResult result;
       try {
         if (kIsWeb) {
@@ -2175,10 +2188,19 @@ class _CameraScanScreenState extends State<CameraScanScreen>
             final inputImage = InputImage.fromFilePath(_lastCapturedPath!);
 
             // Run with timeout
-            final recognizedFuture = _textRecognizer!.processImage(inputImage);
-            final recognized = await recognizedFuture.timeout(const Duration(seconds: 8), onTimeout: () => throw TimeoutException('Text recognition timeout'));
-
-            result = TextRecognitionResult(text: recognized.text, success: recognized.text.isNotEmpty);
+            try {
+              final recognizedFuture = _textRecognizer!.processImage(inputImage);
+              final recognized = await recognizedFuture.timeout(const Duration(seconds: 8), onTimeout: () => throw TimeoutException('Text recognition timeout'));
+              result = TextRecognitionResult(text: recognized.text, success: recognized.text.isNotEmpty);
+            } on TimeoutException {
+              // On timeout, try once to recreate recognizer and retry quickly
+              try { await _textRecognizer?.close(); } catch (_) {}
+              _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+              final retry = await _textRecognizer!
+                  .processImage(inputImage)
+                  .timeout(const Duration(seconds: 5), onTimeout: () => throw TimeoutException('Retry text recognition timeout'));
+              result = TextRecognitionResult(text: retry.text, success: retry.text.isNotEmpty);
+            }
           } catch (e) {
             debugPrint('Primary text recognition failed or timed out: $e');
             // Fallback: try the helper that builds and disposes its own recognizer
@@ -2190,6 +2212,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
             }
           }
         }
+        ocrSw.stop();
+        _updateAdaptiveThrottle(ocrSw.elapsedMilliseconds);
 
         if (mounted) {
           setState(() {
