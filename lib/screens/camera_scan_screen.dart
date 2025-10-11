@@ -271,16 +271,22 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       debugPrint('ML Kit warm-up error: $e');
     }
   }
+  
   late AnimationController _backgroundController;
   late AnimationController _glowController;
   late AnimationController _scanController;
   late AnimationController _pulseController;
   late AnimationController _rotateController;
-
+  late AnimationController _hexagonController;
+  late AnimationController _dataStreamController;
+  late AnimationController _glitchController;
+  
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _hexagonAnimation;
+  late Animation<double> _dataStreamAnimation;
 
   CameraController? _cameraController;
   TextRecognizer? _textRecognizer;
@@ -466,7 +472,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
     } finally {
       _isProcessingFrame = false;
     }
-    }
+  }
+  
   bool _hasCameraPermission = false;
   Uint8List? _lastCapturedBytes;
   String? _lastCapturedPath;
@@ -503,35 +510,50 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
 
     // Initialize animation controllers
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 15),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
 
     _scanController = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
       vsync: this,
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 1, milliseconds: 500),
+      duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
     _rotateController = AnimationController(
+      duration: const Duration(seconds: 30),
+      vsync: this,
+    )..repeat();
+    
+    _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
+    
+    _dataStreamController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
+    
+    _glitchController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
 
     // Initialize animation objects
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
 
-      _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+      _glowAnimation = Tween<double>(begin: 0.4, end: 0.9).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
@@ -541,15 +563,28 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
         curve: Curves.easeInOut,
       ));
 
-      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+      _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
+      
+      _hexagonAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_hexagonController);
+      
+      _dataStreamAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_dataStreamController);
+      
+      // Randomly trigger glitch effect
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
+      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
     }
 
     _requestCameraPermission();
@@ -559,6 +594,21 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       _objectDetector = ObjectDetector(options: options);
     } catch (_) {
       _objectDetector = null;
+    }
+  }
+
+  void _triggerGlitch() {
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _glitchController.forward().then((_) {
+        _glitchController.reverse();
+      });
+      
+      // Schedule next glitch
+      Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     }
   }
 
@@ -618,6 +668,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
     _scanController.dispose();
     _pulseController.dispose();
     _rotateController.dispose();
+    _hexagonController.dispose();
+    _dataStreamController.dispose();
+    _glitchController.dispose();
 
     // Stop image stream if running and dispose camera controller
     try {
@@ -636,11 +689,14 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Animated cyberpunk background
+          // Enhanced animated cyberpunk background
           _buildAnimatedBackground(),
 
-          // Grid overlay effect
-          _buildGridOverlay(),
+          // Hexagon grid overlay effect
+          _buildHexagonGridOverlay(),
+
+          // Data stream effect
+          _buildDataStreamEffect(),
 
           // Scan line effect
           _buildScanLine(),
@@ -674,7 +730,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             ),
           ),
 
-          // Cyberpunk frame borders
+          // Enhanced cyberpunk frame borders
           _buildCyberpunkFrame(),
         ],
       ),
@@ -687,9 +743,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            gradient: RadialGradient(
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.3,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
@@ -711,16 +767,35 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
     );
   }
 
-  Widget _buildGridOverlay() {
+  Widget _buildHexagonGridOverlay() {
     return IgnorePointer(
-      child: CustomPaint(
-        painter: _GridPainter(),
-        size: Size.infinite,
+      child: AnimatedBuilder(
+        animation: _hexagonAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _HexagonGridPainter(_hexagonAnimation.value),
+            size: Size.infinite,
+          );
+        },
       ),
     );
   }
 
+  Widget _buildDataStreamEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _dataStreamAnimation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _DataStreamPainter(_dataStreamAnimation.value),
+          size: Size.infinite,
+        );
+      },
+    );
+  }
+
   Widget _buildScanLine() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: _scanAnimation,
       builder: (context, child) {
@@ -729,7 +804,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
           left: 0,
           right: 0,
           child: Container(
-            height: 3,
+            height: 4,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -741,9 +816,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 2,
+                  color: Colors.cyan.withOpacity(0.6),
+                  blurRadius: 15,
+                  spreadRadius: 3,
                 ),
               ],
             ),
@@ -754,12 +829,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
   }
 
   Widget _buildGlitchEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return IgnorePointer(
       child: AnimatedBuilder(
-        animation: _glowAnimation,
+        animation: _glitchController,
         builder: (context, child) {
           return Opacity(
-            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            opacity: _glitchController.value,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -797,12 +873,12 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           child: Row(
             children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -812,27 +888,27 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                      blurRadius: 15,
-                      spreadRadius: 2,
+                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                      blurRadius: 20,
+                      spreadRadius: 3,
                     ),
                     BoxShadow(
-                      color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                      blurRadius: 10,
-                      spreadRadius: 1,
+                      color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                      blurRadius: 15,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.camera_alt,
                   color: Colors.white,
-                  size: 25,
+                  size: 30,
                 ),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,7 +923,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                       child: Text(
                         'OCR KAMERA',
                         style: TextStyle(
-                          fontSize: MediaQuery.of(context).size.width < 360 ? 18 : 22,
+                          fontSize: MediaQuery.of(context).size.width < 360 ? 20 : 24,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                           letterSpacing: 2,
@@ -857,12 +933,24 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    SizedBox(height: 5),
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.cyan.withOpacity(_glowAnimation.value),
+                            Colors.pink.withOpacity(_glowAnimation.value),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 5),
                     Text(
                       'ANALISIS FOTO DENGAN AI',
                       style: TextStyle(
                         color: Colors.pink.shade300,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w300,
                         letterSpacing: 2,
                         fontFamily: 'Courier',
@@ -895,16 +983,16 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
               width: boxWidth,
               height: boxHeight,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(25),
                 border: Border.all(
                   color: Colors.cyan.withOpacity(_glowAnimation.value),
-                  width: 2,
+                  width: 2.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 15,
-                    spreadRadius: 3,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 20,
+                    spreadRadius: 4,
                   ),
                 ],
               ),
@@ -913,7 +1001,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                   // Camera preview
                   if (_isCameraInitialized && _cameraController != null)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(22),
                       child: SizedBox.expand(
                         child: FittedBox(
                           fit: BoxFit.cover,
@@ -933,16 +1021,16 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                           Icon(
                             _hasCameraPermission ? Icons.camera_alt : Icons.no_photography,
                             color: Colors.white54,
-                            size: 40,
+                            size: 45,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 15),
                           Text(
                             _hasCameraPermission
                                 ? 'MENGINISIALISASI PEMINDAI'
                                 : 'IZIN KAMERA DIPERLUKAN',
                             style: const TextStyle(
                               color: Colors.white54,
-                              fontSize: 14,
+                              fontSize: 15,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -956,7 +1044,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     left: 0,
                     right: 0,
                     child: Container(
-                      height: 2,
+                      height: 3,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -969,8 +1057,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                         boxShadow: [
                           BoxShadow(
                             color: Colors.cyan.withOpacity(0.5),
-                            blurRadius: 8,
-                            spreadRadius: 1,
+                            blurRadius: 10,
+                            spreadRadius: 2,
                           ),
                         ],
                       ),
@@ -986,7 +1074,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(22),
                         ),
                         alignment: Alignment.center,
                         child: SingleChildScrollView(
@@ -995,21 +1083,21 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                             children: [
                               Container(
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(15),
                                   border: Border.all(
                                     color: Colors.cyan.withOpacity(_glowAnimation.value),
-                                    width: 2,
+                                    width: 2.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                                      blurRadius: 12,
-                                      spreadRadius: 2,
+                                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                                      blurRadius: 15,
+                                      spreadRadius: 3,
                                     ),
                                   ],
                                 ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(12),
                                   child: Image.memory(
                                     _lastCapturedBytes!,
                                     width: boxWidth * 0.8,
@@ -1018,7 +1106,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 15),
+                              const SizedBox(height: 18),
                               if (!_isKept)
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1037,7 +1125,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                                       },
                                       color: Colors.green,
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 15),
                                     _buildCyberButton(
                                       text: 'BATAL',
                                       icon: Icons.delete,
@@ -1061,19 +1149,19 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                                     );
                                   },
                                   child: Container(
-                                    padding: const EdgeInsets.all(8),
+                                    padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       color: Colors.red.withOpacity(0.2),
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: Colors.red.withOpacity(_glowAnimation.value),
-                                        width: 2,
+                                        width: 2.5,
                                       ),
                                     ),
                                     child: const Icon(
                                       Icons.delete,
                                       color: Colors.red,
-                                      size: 20,
+                                      size: 22,
                                     ),
                                   ),
                                 ),
@@ -1095,26 +1183,26 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
     return [
       // Top Left
       Positioned(
-        top: 8,
-        left: 8,
+        top: 10,
+        left: 10,
         child: _buildCornerWidget(true, true),
       ),
       // Top Right
       Positioned(
-        top: 8,
-        right: 8,
+        top: 10,
+        right: 10,
         child: _buildCornerWidget(false, true),
       ),
       // Bottom Left
       Positioned(
-        bottom: 8,
-        left: 8,
+        bottom: 10,
+        left: 10,
         child: _buildCornerWidget(true, false),
       ),
       // Bottom Right
       Positioned(
-        bottom: 8,
-        right: 8,
+        bottom: 10,
+        right: 10,
         child: _buildCornerWidget(false, false),
       ),
     ];
@@ -1125,21 +1213,21 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          width: 25,
-          height: 25,
+          width: 30,
+          height: 30,
           decoration: BoxDecoration(
             border: Border(
               left: isLeft
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3)
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3.5)
                   : BorderSide.none,
               right: !isLeft
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3)
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3.5)
                   : BorderSide.none,
               top: isTop
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3)
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3.5)
                   : BorderSide.none,
               bottom: !isTop
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3)
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3.5)
                   : BorderSide.none,
             ),
           ),
@@ -1150,24 +1238,24 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
 
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(15),
+              color: Colors.black.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: Colors.cyan.withOpacity(_glowAnimation.value),
-                width: 1.5,
+                width: 2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
-                  blurRadius: 12,
-                  spreadRadius: 1,
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
                 ),
               ],
             ),
@@ -1210,8 +1298,8 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     animation: _pulseAnimation,
                     builder: (context, child) {
                       return Container(
-                        width: 60,
-                        height: 60,
+                        width: 70,
+                        height: 70,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
@@ -1222,9 +1310,9 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                              blurRadius: 15,
-                              spreadRadius: 2,
+                              color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                              blurRadius: 20,
+                              spreadRadius: 3,
                             ),
                           ],
                         ),
@@ -1236,7 +1324,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                             : const Icon(
                                 Icons.camera_alt,
                                 color: Colors.white,
-                                size: 25,
+                                size: 30,
                               ),
                       );
                     },
@@ -1269,15 +1357,22 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
           // Suggestion overlay (shows when _suggestedRoi != null)
           if (_suggestedRoi != null)
             Positioned(
-              left: 16,
-              right: 16,
-              bottom: 120,
+              left: 18,
+              right: 18,
+              bottom: 130,
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.cyan.withOpacity(_glowAnimation.value), width: 1.5),
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.cyan.withOpacity(_glowAnimation.value), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1287,16 +1382,16 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                         Expanded(
                           child: Text(
                             _suggestedText ?? 'Teks terdeteksi',
-                            style: const TextStyle(color: Colors.white, fontSize: 14),
+                            style: const TextStyle(color: Colors.white, fontSize: 15),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Text('${(_suggestedConfidence * 100).toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white70)),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -1304,7 +1399,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                           onPressed: _dismissSuggestion,
                           child: const Text('Tutup', style: TextStyle(color: Colors.white)),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         ElevatedButton(
                           onPressed: _isCapturing ? null : _captureSuggested,
                           child: const Text('Capture now'),
@@ -1315,40 +1410,47 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                 ),
               ),
             ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 15),
           if (_isAnalyzing)
             AnimatedBuilder(
               animation: _glowAnimation,
               builder: (context, child) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(15),
                     border: Border.all(
                       color: Colors.cyan.withOpacity(_glowAnimation.value),
-                      width: 1,
+                      width: 1.5,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                          strokeWidth: 2.5,
                           value: _analysisProgress,
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 15),
                       Flexible(
                         child: Text(
                           'MEMPROSES: ${(_analysisProgress * 100).toStringAsFixed(0)}%',
                           style: TextStyle(
                             color: Colors.cyan.shade300,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'Orbitron',
                             letterSpacing: 1,
@@ -1375,39 +1477,39 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
         return Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
                   colors: [
-                    color.withOpacity(0.3),
+                    color.withOpacity(0.4),
                     color.withOpacity(0.1),
                   ],
                 ),
                 border: Border.all(
                   color: color.withOpacity(_glowAnimation.value),
-                  width: 2,
+                  width: 2.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 8,
-                    spreadRadius: 1,
+                    color: color.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 10,
+                    spreadRadius: 2,
                   ),
                 ],
               ),
               child: Icon(
                 icon,
                 color: color,
-                size: 20,
+                size: 22,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               label,
               style: TextStyle(
                 color: color,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
                 letterSpacing: 1,
@@ -1430,44 +1532,44 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(0.3),
-                color.withOpacity(0.1),
+                color.withOpacity(0.4),
+                color.withOpacity(0.2),
               ],
             ),
             border: Border.all(
               color: color.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 10,
-                spreadRadius: 1,
+                color: color.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 12,
+                spreadRadius: 2,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(18),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: color, size: 18),
-                    const SizedBox(width: 8),
+                    Icon(icon, color: color, size: 20),
+                    const SizedBox(width: 10),
                     Text(
                       text,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 13,
                         letterSpacing: 1,
                         fontFamily: 'Orbitron',
                       ),
@@ -1492,7 +1594,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -1502,6 +1604,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1511,7 +1620,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -1521,6 +1630,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1530,7 +1646,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             bottom: 0,
             left: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -1542,6 +1658,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1551,7 +1674,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             bottom: 0,
             right: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -1563,6 +1686,13 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -2123,7 +2253,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             maxHeight: MediaQuery.of(context).size.height * 0.7,
           ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -2138,25 +2268,25 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
             ),
             border: Border.all(
               color: aiPct > 50 ? Colors.red : Colors.cyan,
-              width: 2
+              width: 2.5
             ),
             boxShadow: [
               BoxShadow(
-                color: (aiPct > 50 ? Colors.red : Colors.cyan).withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
+                color: (aiPct > 50 ? Colors.red : Colors.cyan).withOpacity(0.6),
+                blurRadius: 25,
+                spreadRadius: 6,
               ),
             ],
           ),
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 70,
-                    height: 70,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Colors.cyan, Colors.pink],
@@ -2164,23 +2294,23 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.cyan.withOpacity(0.5),
-                          blurRadius: 15,
-                          spreadRadius: 3,
+                          color: Colors.cyan.withOpacity(0.6),
+                          blurRadius: 20,
+                          spreadRadius: 4,
                         ),
                       ],
                     ),
                     child: const Icon(
                       Icons.verified,
                       color: Colors.white,
-                      size: 35,
+                      size: 40,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   Text(
                     'ANALISIS SELESAI',
                     style: TextStyle(
-                      fontSize: MediaQuery.of(context).size.width < 360 ? 16 : 18,
+                      fontSize: MediaQuery.of(context).size.width < 360 ? 18 : 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.cyan.shade300,
                       fontFamily: 'Orbitron',
@@ -2188,15 +2318,15 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 18),
                   Container(
-                    padding: const EdgeInsets.all(15),
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(15),
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: Colors.cyan.withOpacity(0.3),
-                        width: 1,
+                        color: Colors.cyan.withOpacity(0.4),
+                        width: 1.5,
                       ),
                     ),
                     child: Column(
@@ -2208,21 +2338,21 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                               'Deteksi AI:',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 14,
+                                fontSize: 16,
                               ),
                             ),
                             Text(
                               '${aiPct.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                                fontSize: 16,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 15),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -2230,14 +2360,14 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                               'Ditulis Manusia:',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 14,
+                                fontSize: 16,
                               ),
                             ),
                             Text(
                               '${humanPct.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: Colors.cyan.shade300,
-                                fontSize: 16,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
@@ -2247,7 +2377,7 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   _buildCyberButton(
                     text: 'TUTUP',
                     icon: Icons.close,
@@ -2278,36 +2408,92 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
   }
 }
 
-class _GridPainter extends CustomPainter {
+class _HexagonGridPainter extends CustomPainter {
+  final double animationValue;
+  _HexagonGridPainter(this.animationValue);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.05)
+      ..color = Colors.cyan.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
-    const gridSize = 30.0;
+    const hexSize = 40.0;
+    const hexHeight = hexSize * 2;
+    final hexWidth = math.sqrt(3) * hexSize;
+    final vertDist = hexHeight * 3 / 4;
 
-    // Draw vertical lines
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+    int cols = (size.width / hexWidth).ceil() + 1;
+    int rows = (size.height / vertDist).ceil() + 1;
+
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final x = col * hexWidth + (row % 2) * hexWidth / 2;
+        final y = row * vertDist;
+        
+        // Add some animation by shifting hexagons
+        final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
+        final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
+        
+        _drawHexagon(canvas, Offset(x + offsetX, y + offsetY), hexSize, paint);
+      }
     }
+  }
 
-    // Draw horizontal lines
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+  void _drawHexagon(Canvas canvas, Offset center, double size, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = 2 * math.pi * i / 6 - math.pi / 2;
+      final x = center.dx + size * math.cos(angle);
+      final y = center.dy + size * math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _DataStreamPainter extends CustomPainter {
+  final double animationValue;
+  _DataStreamPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.pink.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final random = math.Random(123);
+    
+    for (int i = 0; i < 5; i++) {
+      final startX = random.nextDouble() * size.width;
+      final startY = -50.0;
+      final endY = size.height + 50;
+      
+      path.moveTo(startX, startY);
+      
+      for (double y = startY; y < endY; y += 20) {
+        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
+        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
+      }
+      
+      canvas.drawPath(path, paint);
+      path.reset();
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class _ParticlesPainter extends CustomPainter {
@@ -2318,15 +2504,15 @@ class _ParticlesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.3)
+      ..color = Colors.cyan.withOpacity(0.4)
       ..style = PaintingStyle.fill;
 
     final random = math.Random(42); // Fixed seed for consistent particles
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 25; i++) {
       final x = (random.nextDouble() * size.width);
       final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 2 + 1;
+      final radius = random.nextDouble() * 3 + 1;
 
       canvas.drawCircle(Offset(x, y), radius, paint);
     }

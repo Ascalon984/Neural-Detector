@@ -42,12 +42,16 @@ class _HistoryScreenState extends State<HistoryScreen>
   late AnimationController _pulseController;
   late AnimationController _rotateController;
   late AnimationController _glitchController;
+  late AnimationController _hexagonController;
+  late AnimationController _dataStreamController;
   
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _glitchAnimation;
+  late Animation<double> _hexagonAnimation;
+  late Animation<double> _dataStreamAnimation;
 
   List<Model.ScanHistory> _scanHistory = [];
   int _aiAvg = 0;
@@ -64,39 +68,49 @@ class _HistoryScreenState extends State<HistoryScreen>
     super.initState();
     
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 10),
+      duration: const Duration(seconds: 15),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
 
     _scanController = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
       vsync: this,
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 1, milliseconds: 500),
+      duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
     _rotateController = AnimationController(
-      duration: const Duration(seconds: 20),
+      duration: const Duration(seconds: 30),
       vsync: this,
     )..repeat();
     
     _glitchController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
+    
+    _hexagonController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
+    
+    _dataStreamController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
     
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
 
-      _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+      _glowAnimation = Tween<double>(begin: 0.4, end: 0.9).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
@@ -106,7 +120,7 @@ class _HistoryScreenState extends State<HistoryScreen>
         curve: Curves.easeInOut,
       ));
 
-      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+      _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
@@ -115,6 +129,10 @@ class _HistoryScreenState extends State<HistoryScreen>
         parent: _glitchController,
         curve: Curves.easeInOut,
       ));
+      
+      _hexagonAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_hexagonController);
+      
+      _dataStreamAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_dataStreamController);
       
       Future.delayed(const Duration(seconds: 5), () {
         if (mounted) {
@@ -127,6 +145,8 @@ class _HistoryScreenState extends State<HistoryScreen>
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
       _glitchAnimation = AlwaysStoppedAnimation(0.0);
+      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
     }
 
     _loadHistory();
@@ -154,6 +174,8 @@ class _HistoryScreenState extends State<HistoryScreen>
     _pulseController.dispose();
     _rotateController.dispose();
     _glitchController.dispose();
+    _hexagonController.dispose();
+    _dataStreamController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -204,7 +226,8 @@ class _HistoryScreenState extends State<HistoryScreen>
       body: Stack(
         children: [
           _buildAnimatedBackground(),
-          _buildGridOverlay(),
+          _buildHexagonGridOverlay(),
+          _buildDataStreamEffect(),
           _buildScanLine(),
           _buildGlitchEffect(),
           _buildFloatingParticles(),
@@ -258,9 +281,9 @@ class _HistoryScreenState extends State<HistoryScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            gradient: RadialGradient(
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.3,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
@@ -282,12 +305,30 @@ class _HistoryScreenState extends State<HistoryScreen>
     );
   }
 
-  Widget _buildGridOverlay() {
+  Widget _buildHexagonGridOverlay() {
     return IgnorePointer(
-      child: CustomPaint(
-        painter: _GridPainter(),
-        size: Size.infinite,
+      child: AnimatedBuilder(
+        animation: _hexagonAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _HexagonGridPainter(_hexagonAnimation.value),
+            size: Size.infinite,
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildDataStreamEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _dataStreamAnimation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _DataStreamPainter(_dataStreamAnimation.value),
+          size: Size.infinite,
+        );
+      },
     );
   }
 
@@ -301,7 +342,7 @@ class _HistoryScreenState extends State<HistoryScreen>
           left: 0,
           right: 0,
           child: Container(
-            height: 3,
+            height: 4,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -313,9 +354,9 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 2,
+                  color: Colors.cyan.withOpacity(0.6),
+                  blurRadius: 15,
+                  spreadRadius: 3,
                 ),
               ],
             ),
@@ -332,7 +373,7 @@ class _HistoryScreenState extends State<HistoryScreen>
         animation: _glitchAnimation,
         builder: (context, child) {
           return Opacity(
-            opacity: _glitchAnimation.value * 0.1,
+            opacity: _glitchAnimation.value,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -375,8 +416,8 @@ class _HistoryScreenState extends State<HistoryScreen>
             Row(
               children: [
                 Container(
-                  width: 60,
-                  height: 60,
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -386,27 +427,27 @@ class _HistoryScreenState extends State<HistoryScreen>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                        blurRadius: 20,
-                        spreadRadius: 3,
+                        color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                        blurRadius: 25,
+                        spreadRadius: 4,
                       ),
                       BoxShadow(
-                        color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                        blurRadius: 15,
-                        spreadRadius: 2,
+                        color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                        blurRadius: 20,
+                        spreadRadius: 3,
                       ),
                     ],
                   ),
                   child: const Icon(
                     Icons.history,
                     color: Colors.white,
-                    size: 30,
+                    size: 35,
                   ),
                 ),
-                const SizedBox(width: 15),
+                const SizedBox(width: 18),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -420,7 +461,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                       child: const Text(
                         'ARSIP DATA',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 28,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                           letterSpacing: 3,
@@ -428,12 +469,24 @@ class _HistoryScreenState extends State<HistoryScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    SizedBox(height: 5),
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.cyan.withOpacity(_glowAnimation.value),
+                            Colors.pink.withOpacity(_glowAnimation.value),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 5),
                     Text(
                       'DATA RIWAYAT PEMINDAIAN',
                       style: TextStyle(
                         color: Colors.pink.shade300,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w300,
                         letterSpacing: 2,
                         fontFamily: 'Courier',
@@ -466,24 +519,24 @@ class _HistoryScreenState extends State<HistoryScreen>
             clipBehavior: Clip.none,
             children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 55,
+                height: 55,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(15),
                   border: Border.all(
                     color: Colors.pink.withOpacity(_glowAnimation.value),
-                    width: 2,
+                    width: 2.5,
                   ),
                   gradient: LinearGradient(
                     colors: [
-                      Colors.pink.withOpacity(0.2),
+                      Colors.pink.withOpacity(0.3),
                       Colors.pink.withOpacity(0.1),
                     ],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                      blurRadius: 10,
+                      color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                      blurRadius: 12,
                       spreadRadius: 2,
                     ),
                   ],
@@ -491,7 +544,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                 child: Icon(
                   Icons.filter_list,
                   color: Colors.pink.shade300,
-                  size: 24,
+                  size: 26,
                 ),
               ),
               Positioned(
@@ -558,26 +611,26 @@ class _HistoryScreenState extends State<HistoryScreen>
         return Stack(
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.blue.shade900.withOpacity(0.3),
-                Colors.purple.shade900.withOpacity(0.3),
+                Colors.blue.shade900.withOpacity(0.4),
+                Colors.purple.shade900.withOpacity(0.4),
               ],
             ),
             border: Border.all(
               color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 1.5,
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
-                blurRadius: 15,
-                spreadRadius: 2,
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 18,
+                spreadRadius: 3,
               ),
             ],
           ),
@@ -591,21 +644,28 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
             ),
             Positioned(
-              top: 8,
-              right: 8,
+              top: 10,
+              right: 10,
               child: GestureDetector(
                 onTap: () => setState(() => _showGraph = !_showGraph),
                 child: AnimatedRotation(
                   turns: _showGraph ? 0.5 : 0,
                   duration: const Duration(milliseconds: 300),
                   child: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.cyan.withOpacity(0.12),
+                      color: Colors.cyan.withOpacity(0.15),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.cyan.withOpacity(_glowAnimation.value)),
+                      border: Border.all(color: Colors.cyan.withOpacity(_glowAnimation.value), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
-                    child: Icon(Icons.keyboard_arrow_down, color: Colors.cyan.shade300, size: 20),
+                    child: Icon(Icons.keyboard_arrow_down, color: Colors.cyan.shade300, size: 22),
                   ),
                 ),
               ),
@@ -625,30 +685,30 @@ class _HistoryScreenState extends State<HistoryScreen>
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
                     colors: [
-                      color.withOpacity(0.3),
+                      color.withOpacity(0.4),
                       color.withOpacity(0.1),
                     ],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(_glowAnimation.value * 0.5),
-                      blurRadius: 10,
+                      color: color.withOpacity(_glowAnimation.value * 0.6),
+                      blurRadius: 12,
                       spreadRadius: 2,
                     ),
                   ],
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 22),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: color,
                   fontFamily: 'Orbitron',
@@ -659,7 +719,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                 label,
                 style: const TextStyle(
                   color: Colors.white70,
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: FontWeight.w300,
                   letterSpacing: 1.5,
                 ),
@@ -679,27 +739,34 @@ class _HistoryScreenState extends State<HistoryScreen>
           'PEMINDAIAN TERBARU',
           style: TextStyle(
             color: Colors.cyan.shade300,
-            fontSize: 16,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             letterSpacing: 2,
             fontFamily: 'Orbitron',
           ),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.black.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: Colors.pink.withOpacity(_glowAnimation.value),
-              width: 1,
+              width: 1.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.pink.withOpacity(_glowAnimation.value * 0.2),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+            ],
           ),
           child: Text(
             '${_scanHistory.length} ENTRI',
             style: TextStyle(
               color: Colors.pink.shade300,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               fontFamily: 'Courier',
             ),
@@ -711,21 +778,28 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   Widget _buildEmptyState() {
     return Container(
-      height: 200,
+      height: 220,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(25),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Colors.blue.shade900.withOpacity(0.2),
-            Colors.purple.shade900.withOpacity(0.2),
+            Colors.blue.shade900.withOpacity(0.3),
+            Colors.purple.shade900.withOpacity(0.3),
           ],
         ),
         border: Border.all(
           color: Colors.cyan.withOpacity(_glowAnimation.value),
-          width: 1.5,
+          width: 2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
+            blurRadius: 15,
+            spreadRadius: 2,
+          ),
+        ],
       ),
       child: Center(
         child: Column(
@@ -734,25 +808,25 @@ class _HistoryScreenState extends State<HistoryScreen>
             Icon(
               Icons.folder_open,
               color: Colors.cyan.withOpacity(_glowAnimation.value),
-              size: 50,
+              size: 55,
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 18),
             Text(
               'NO SCAN HISTORY',
               style: TextStyle(
                 color: Colors.cyan.shade300,
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
                 letterSpacing: 2,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 8),
             Text(
               'Start scanning to see results here',
               style: TextStyle(
                 color: Colors.white70,
-                fontSize: 12,
+                fontSize: 13,
               ),
             ),
           ],
@@ -768,49 +842,49 @@ class _HistoryScreenState extends State<HistoryScreen>
         return Transform.scale(
           scale: _pulseAnimation.value,
           child: Container(
-            margin: const EdgeInsets.only(bottom: 15),
+            margin: const EdgeInsets.only(bottom: 18),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.4),
-                  Colors.purple.shade900.withOpacity(0.3),
+                  Colors.blue.shade900.withOpacity(0.5),
+                  Colors.purple.shade900.withOpacity(0.4),
                 ],
               ),
               border: Border.all(
                 color: Colors.cyan.withOpacity(_glowAnimation.value),
-                width: 2,
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 4),
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                  blurRadius: 12,
+                  spreadRadius: 3,
+                  offset: const Offset(0, 5),
                 ),
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 6,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withOpacity(0.4),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               child: InkWell(
                 onTap: () => _showHistoryDetails(history),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(22),
                 child: Padding(
-                  padding: const EdgeInsets.all(15),
+                  padding: const EdgeInsets.all(18),
                   child: Row(
                     children: [
                       _buildFileIcon(history),
                       
-                      const SizedBox(width: 15),
+                      const SizedBox(width: 18),
                       
                       Expanded(
                         child: Column(
@@ -820,27 +894,27 @@ class _HistoryScreenState extends State<HistoryScreen>
                               history.fileName,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 14,
+                                fontSize: 15,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 5),
+                            const SizedBox(height: 6),
                             Text(
                               history.date,
                               style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 10,
+                                fontSize: 11,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
                             _buildDetectionBar(history),
                           ],
                         ),
                       ),
                       
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       
                       _buildStatusIndicator(history),
                     ],
@@ -863,13 +937,13 @@ class _HistoryScreenState extends State<HistoryScreen>
             return Transform.rotate(
               angle: _rotateController.value * 2 * math.pi,
               child: Container(
-                width: 50,
-                height: 50,
+                width: 55,
+                height: 55,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: Colors.cyan.withOpacity(_glowAnimation.value),
-                    width: 2,
+                    width: 2.5,
                   ),
                 ),
               ),
@@ -877,8 +951,8 @@ class _HistoryScreenState extends State<HistoryScreen>
           },
         ),
         Container(
-          width: 50,
-          height: 50,
+          width: 55,
+          height: 55,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -886,27 +960,27 @@ class _HistoryScreenState extends State<HistoryScreen>
                 Colors.pink.withOpacity(_glowAnimation.value),
               ],
             ),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(15),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                blurRadius: 10,
-                spreadRadius: 2,
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                blurRadius: 12,
+                spreadRadius: 3,
               ),
             ],
           ),
           child: const Icon(
             Icons.description,
             color: Colors.white,
-            size: 25,
+            size: 28,
           ),
         ),
         Positioned(
           bottom: 0,
           right: 0,
           child: Container(
-            width: 14,
-            height: 14,
+            width: 16,
+            height: 16,
             decoration: BoxDecoration(
               color: _getAiLevelColor(history.aiDetection),
               shape: BoxShape.circle,
@@ -914,7 +988,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               boxShadow: [
                 BoxShadow(
                   color: _getAiLevelColor(history.aiDetection),
-                  blurRadius: 5,
+                  blurRadius: 6,
                   spreadRadius: 1,
                 ),
               ],
@@ -929,26 +1003,26 @@ class _HistoryScreenState extends State<HistoryScreen>
     return Column(
       children: [
         Container(
-          height: 6,
+          height: 7,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(3),
-            color: Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(4),
+            color: Colors.black.withOpacity(0.4),
           ),
           child: Stack(
             children: [
               Container(
                 width: double.infinity,
-                height: 6,
+                height: 7,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(3),
-                  color: Colors.blue.shade900.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.blue.shade900.withOpacity(0.4),
                 ),
               ),
               Container(
                 width: MediaQuery.of(context).size.width * 0.4 * (history.aiDetection / 100),
-                height: 6,
+                height: 7,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(4),
                   gradient: LinearGradient(
                     colors: [
                       _getAiLevelColor(history.aiDetection),
@@ -958,7 +1032,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                   boxShadow: [
                     BoxShadow(
                       color: _getAiLevelColor(history.aiDetection),
-                      blurRadius: 5,
+                      blurRadius: 6,
                       spreadRadius: 1,
                     ),
                   ],
@@ -967,7 +1041,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             ],
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -975,7 +1049,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               '${history.aiDetection}% AI',
               style: TextStyle(
                 color: _getAiLevelColor(history.aiDetection),
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
               ),
@@ -984,7 +1058,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               '${history.humanWritten}% Human',
               style: TextStyle(
                 color: Colors.cyan.shade300,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
               ),
@@ -999,18 +1073,18 @@ class _HistoryScreenState extends State<HistoryScreen>
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.green.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: Colors.green.withOpacity(_glowAnimation.value),
-              width: 1,
+              width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.green.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 5,
+                color: Colors.green.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 6,
                 spreadRadius: 1,
               ),
             ],
@@ -1019,18 +1093,18 @@ class _HistoryScreenState extends State<HistoryScreen>
             history.status,
             style: TextStyle(
               color: Colors.green.shade300,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               fontFamily: 'Orbitron',
             ),
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         Text(
           history.fileSize,
           style: const TextStyle(
             color: Colors.white60,
-            fontSize: 8,
+            fontSize: 9,
           ),
         ),
       ],
@@ -1046,7 +1120,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -1056,6 +1130,13 @@ class _HistoryScreenState extends State<HistoryScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1064,7 +1145,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -1074,6 +1155,13 @@ class _HistoryScreenState extends State<HistoryScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1082,7 +1170,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             bottom: 0,
             left: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -1094,6 +1182,13 @@ class _HistoryScreenState extends State<HistoryScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1102,7 +1197,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             bottom: 0,
             right: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -1114,6 +1209,13 @@ class _HistoryScreenState extends State<HistoryScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1130,7 +1232,7 @@ class _HistoryScreenState extends State<HistoryScreen>
           backgroundColor: Colors.transparent,
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(28),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -1141,18 +1243,18 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
               border: Border.all(
                 color: Colors.cyan.withOpacity(_glowAnimation.value),
-                width: 2,
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                  blurRadius: 20,
-                  spreadRadius: 5,
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                  blurRadius: 25,
+                  spreadRadius: 6,
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1164,7 +1266,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         Text(
                           'SCAN DETAILS',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Colors.cyan.shade300,
                             fontFamily: 'Orbitron',
@@ -1172,39 +1274,39 @@ class _HistoryScreenState extends State<HistoryScreen>
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
+                            color: Colors.green.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: Colors.green.withOpacity(_glowAnimation.value),
-                              width: 1,
+                              width: 1.5,
                             ),
                           ),
                           child: Text(
                             history.status,
                             style: TextStyle(
                               color: Colors.green.shade300,
-                              fontSize: 10,
+                              fontSize: 11,
                               fontFamily: 'Orbitron',
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 15),
+                    const SizedBox(height: 18),
                     _buildDetailItem('Nama Dokumen', history.fileName),
                     _buildDetailItem('Tanggal & Waktu', history.date),
                     _buildDetailItem('Ukuran File', history.fileSize),
-                    const SizedBox(height: 15),
+                    const SizedBox(height: 18),
                     Container(
-                      padding: const EdgeInsets.all(15),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(15),
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: Colors.cyan.withOpacity(_glowAnimation.value),
-                          width: 1,
+                          width: 1.5,
                         ),
                       ),
                       child: Column(
@@ -1215,10 +1317,10 @@ class _HistoryScreenState extends State<HistoryScreen>
                               color: Colors.pink.shade300,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Orbitron',
-                              fontSize: 14,
+                              fontSize: 15,
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
@@ -1229,7 +1331,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 22),
                     _buildCyberButton(
                       text: 'TUTUP',
                       icon: Icons.close,
@@ -1248,7 +1350,7 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   Widget _buildDetailItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           Text(
@@ -1256,7 +1358,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             style: const TextStyle(
               color: Colors.white70,
               fontWeight: FontWeight.bold,
-              fontSize: 12,
+              fontSize: 13,
             ),
           ),
           Expanded(
@@ -1264,7 +1366,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               value,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: 13,
               ),
             ),
           ),
@@ -1277,24 +1379,24 @@ class _HistoryScreenState extends State<HistoryScreen>
     return Column(
       children: [
         Container(
-          width: 60,
-          height: 60,
+          width: 70,
+          height: 70,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(0.3),
+                color.withOpacity(0.4),
                 color.withOpacity(0.1),
               ],
             ),
             shape: BoxShape.circle,
             border: Border.all(
               color: color.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.5),
-                blurRadius: 10,
+                color: color.withOpacity(_glowAnimation.value * 0.6),
+                blurRadius: 12,
                 spreadRadius: 2,
               ),
             ],
@@ -1304,19 +1406,19 @@ class _HistoryScreenState extends State<HistoryScreen>
               value,
               style: TextStyle(
                 color: color,
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
               ),
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Text(
           label,
           style: TextStyle(
             color: color,
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
           ),
@@ -1337,44 +1439,44 @@ class _HistoryScreenState extends State<HistoryScreen>
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(0.3),
-                color.withOpacity(0.1),
+                color.withOpacity(0.4),
+                color.withOpacity(0.2),
               ],
             ),
             border: Border.all(
               color: color.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 15,
-                spreadRadius: 2,
+                color: color.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 18,
+                spreadRadius: 3,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 15),
+                padding: const EdgeInsets.symmetric(vertical: 18),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, color: color, size: 20),
-                    const SizedBox(width: 10),
+                    Icon(icon, color: color, size: 22),
+                    const SizedBox(width: 12),
                     Text(
                       text,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 13,
                         letterSpacing: 1.2,
                         fontFamily: 'Orbitron',
                       ),
@@ -1416,34 +1518,92 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 }
 
-class _GridPainter extends CustomPainter {
+class _HexagonGridPainter extends CustomPainter {
+  final double animationValue;
+  _HexagonGridPainter(this.animationValue);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.05)
+      ..color = Colors.cyan.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
-    const gridSize = 30.0;
+    const hexSize = 40.0;
+    const hexHeight = hexSize * 2;
+    final hexWidth = math.sqrt(3) * hexSize;
+    final vertDist = hexHeight * 3 / 4;
 
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+    int cols = (size.width / hexWidth).ceil() + 1;
+    int rows = (size.height / vertDist).ceil() + 1;
+
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final x = col * hexWidth + (row % 2) * hexWidth / 2;
+        final y = row * vertDist;
+        
+        // Add some animation by shifting hexagons
+        final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
+        final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
+        
+        _drawHexagon(canvas, Offset(x + offsetX, y + offsetY), hexSize, paint);
+      }
     }
+  }
 
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+  void _drawHexagon(Canvas canvas, Offset center, double size, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = 2 * math.pi * i / 6 - math.pi / 2;
+      final x = center.dx + size * math.cos(angle);
+      final y = center.dy + size * math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _DataStreamPainter extends CustomPainter {
+  final double animationValue;
+  _DataStreamPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.pink.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final random = math.Random(123);
+    
+    for (int i = 0; i < 5; i++) {
+      final startX = random.nextDouble() * size.width;
+      final startY = -50.0;
+      final endY = size.height + 50;
+      
+      path.moveTo(startX, startY);
+      
+      for (double y = startY; y < endY; y += 20) {
+        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
+        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
+      }
+      
+      canvas.drawPath(path, paint);
+      path.reset();
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 // Enhanced history graph with individual scan bars and cyberpunk theme
@@ -1458,26 +1618,26 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
   return AnimatedContainer(
     duration: const Duration(milliseconds: 300),
     margin: const EdgeInsets.only(bottom: 20),
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(15),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.black.withOpacity(0.7),
-          Colors.blue.shade900.withOpacity(0.3),
+          Colors.black.withOpacity(0.8),
+          Colors.blue.shade900.withOpacity(0.4),
         ],
       ),
       border: Border.all(
         color: Colors.cyan.withOpacity(glow),
-        width: 1.5,
+        width: 2,
       ),
       boxShadow: [
         BoxShadow(
-          color: Colors.cyan.withOpacity(glow * 0.3),
-          blurRadius: 10,
-          spreadRadius: 1,
+          color: Colors.cyan.withOpacity(glow * 0.4),
+          blurRadius: 12,
+          spreadRadius: 2,
         ),
       ],
     ),
@@ -1486,15 +1646,15 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
       children: [
         Row(
           children: [
-            Icon(Icons.bar_chart, color: Colors.cyan.shade300, size: 16),
-            const SizedBox(width: 8),
+            Icon(Icons.bar_chart, color: Colors.cyan.shade300, size: 18),
+            const SizedBox(width: 10),
             Text(
               'RIWAYAT ANALISIS',
               style: TextStyle(
                 color: Colors.cyan.shade300,
                 fontWeight: FontWeight.bold,
                 fontFamily: 'Orbitron',
-                fontSize: 14,
+                fontSize: 15,
                 letterSpacing: 1.5,
               ),
             ),
@@ -1503,19 +1663,19 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
               'Total: ${scanHistory.length}',
               style: TextStyle(
                 color: Colors.white70,
-                fontSize: 10,
+                fontSize: 11,
                 fontFamily: 'Orbitron',
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 15),
         SizedBox(
-          height: 180,
+          height: 190,
           child: LayoutBuilder(
             builder: (context, constraints) {
               // Calculate responsive bar width based on available space
-              final barWidth = math.max(15.0, (constraints.maxWidth - 20) / limitedHistory.length - 5);
+              final barWidth = math.max(18.0, (constraints.maxWidth - 20) / limitedHistory.length - 5);
               
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -1525,9 +1685,9 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
                     final history = entry.value;
                     
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                      padding: const EdgeInsets.symmetric(horizontal: 3.0),
                       child: _IndividualScanBar(
-                        height: 150, // Fixed height for all bars
+                        height: 160, // Fixed height for all bars
                         width: barWidth,
                         label: _formatDateTimeLabel(history.date),
                         aiDetection: history.aiDetection,
@@ -1544,12 +1704,12 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
             },
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _buildLegendItem('AI Content', Colors.pink.shade400),
-            const SizedBox(width: 20),
+            const SizedBox(width: 25),
             _buildLegendItem('Human Content', Colors.cyan.shade400),
           ],
         ),
@@ -1593,19 +1753,19 @@ Widget _buildLegendItem(String label, Color color) {
     mainAxisSize: MainAxisSize.min,
     children: [
       Container(
-        width: 12,
-        height: 12,
+        width: 14,
+        height: 14,
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(3),
         ),
       ),
-      const SizedBox(width: 6),
+      const SizedBox(width: 8),
       Text(
         label,
         style: TextStyle(
           color: Colors.white70,
-          fontSize: 10,
+          fontSize: 11,
           fontFamily: 'Orbitron',
         ),
       ),
@@ -1663,8 +1823,6 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
     super.dispose();
   }
 
-  // ...existing code...
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -1700,19 +1858,19 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                   width: widget.width,
                   height: totalHeight,
                   decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                     boxShadow: [
                       BoxShadow(
                         color: _isHovered 
                           ? Colors.cyan.withOpacity(widget.glow * 0.8)
-                          : Colors.black.withOpacity(0.3),
-                        blurRadius: _isHovered ? 15 : 5,
-                        spreadRadius: _isHovered ? 2 : 1,
+                          : Colors.black.withOpacity(0.4),
+                        blurRadius: _isHovered ? 18 : 6,
+                        spreadRadius: _isHovered ? 3 : 1,
                       ),
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -1731,8 +1889,8 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.cyan.withOpacity(widget.glow * 0.3),
-                                blurRadius: 3,
+                                color: Colors.cyan.withOpacity(widget.glow * 0.4),
+                                blurRadius: 4,
                                 spreadRadius: 1,
                               ),
                             ],
@@ -1753,8 +1911,8 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: _getAiLevelColor(widget.aiDetection).withOpacity(0.5),
-                                blurRadius: 3,
+                                color: _getAiLevelColor(widget.aiDetection).withOpacity(0.6),
+                                blurRadius: 4,
                                 spreadRadius: 1,
                               ),
                             ],
@@ -1766,7 +1924,7 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                 );
               },
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             // Responsive label with font size adjustment for mobile
             Container(
               constraints: BoxConstraints(maxWidth: widget.width),
@@ -1776,7 +1934,7 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                   widget.label,
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 9,
+                    fontSize: 10,
                     fontFamily: 'Orbitron',
                     fontWeight: _isHovered ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -1799,17 +1957,17 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
 
-    final tooltipWidth = math.min(200.0, MediaQuery.of(context).size.width * 0.8);
-    final tooltipHeight = 100.0; // Reduced height for simpler tooltip
+    final tooltipWidth = math.min(220.0, MediaQuery.of(context).size.width * 0.8);
+    final tooltipHeight = 110.0; // Increased height for better content display
 
     final screenSize = MediaQuery.of(context).size;
-    double top = offset.dy - tooltipHeight - 8;
-    if (top < MediaQuery.of(context).padding.top + 8) {
-      top = offset.dy + size.height + 8;
+    double top = offset.dy - tooltipHeight - 10;
+    if (top < MediaQuery.of(context).padding.top + 10) {
+      top = offset.dy + size.height + 10;
     }
 
     double left = offset.dx + (size.width / 2) - (tooltipWidth / 2);
-    left = left.clamp(8.0, screenSize.width - tooltipWidth - 8.0);
+    left = left.clamp(10.0, screenSize.width - tooltipWidth - 10.0);
 
     _overlayEntry = OverlayEntry(builder: (context) {
       return Positioned(
@@ -1822,7 +1980,7 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
             onTap: _removeOverlay,
             behavior: HitTestBehavior.translucent,
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -1832,16 +1990,16 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                     Colors.blue.shade900.withOpacity(0.8),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: Colors.cyan.withOpacity(widget.glow),
-                  width: 1.5,
+                  width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(widget.glow * 0.5),
-                    blurRadius: 15,
-                    spreadRadius: 2,
+                    color: Colors.cyan.withOpacity(widget.glow * 0.6),
+                    blurRadius: 18,
+                    spreadRadius: 3,
                   ),
                 ],
               ),
@@ -1851,19 +2009,19 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                 children: [
                   // File name with truncation
                   Text(
-                    widget.fileName.length > 20 
-                        ? '${widget.fileName.substring(0, 20)}...' 
+                    widget.fileName.length > 25 
+                        ? '${widget.fileName.substring(0, 25)}...' 
                         : widget.fileName,
                     style: TextStyle(
                       color: Colors.cyan.shade300,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Orbitron',
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   // AI and Human percentages
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1871,19 +2029,19 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                       Row(
                         children: [
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: 10,
+                            height: 10,
                             decoration: BoxDecoration(
                               color: _getAiLevelColor(widget.aiDetection),
-                              borderRadius: BorderRadius.circular(2),
+                              borderRadius: BorderRadius.circular(3),
                             ),
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 6),
                           Text(
                             'AI: ${widget.aiDetection}%',
                             style: TextStyle(
                               color: _getAiLevelColor(widget.aiDetection),
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1892,25 +2050,33 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                       Row(
                         children: [
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: 10,
+                            height: 10,
                             decoration: BoxDecoration(
                               color: Colors.cyan.shade400,
-                              borderRadius: BorderRadius.circular(2),
+                              borderRadius: BorderRadius.circular(3),
                             ),
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 6),
                           Text(
                             'Human: ${widget.humanDetection}%',
                             style: TextStyle(
                               color: Colors.cyan.shade300,
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.date,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ),
@@ -1963,15 +2129,15 @@ class _ParticlesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.3)
+      ..color = Colors.cyan.withOpacity(0.4)
       ..style = PaintingStyle.fill;
     
     final random = math.Random(42);
     
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 25; i++) {
       final x = (random.nextDouble() * size.width);
       final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 2 + 1;
+      final radius = random.nextDouble() * 3 + 1;
       
       canvas.drawCircle(Offset(x, y), radius, paint);
     }

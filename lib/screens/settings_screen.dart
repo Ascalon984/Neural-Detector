@@ -22,11 +22,16 @@ class _SettingsScreenState extends State<SettingsScreen>
   late AnimationController _scanController;
   late AnimationController _pulseController;
   late AnimationController _rotateController;
+  late AnimationController _hexagonController;
+  late AnimationController _dataStreamController;
+  late AnimationController _glitchController;
   
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _hexagonAnimation;
+  late Animation<double> _dataStreamAnimation;
 
   bool _notifications = true;
   bool _autoScan = false;
@@ -43,35 +48,50 @@ class _SettingsScreenState extends State<SettingsScreen>
     
     // Initialize multiple animation controllers for different effects
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 15),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
 
     _scanController = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
       vsync: this,
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 1, milliseconds: 500),
+      duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
     _rotateController = AnimationController(
+      duration: const Duration(seconds: 30),
+      vsync: this,
+    )..repeat();
+    
+    _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
+    
+    _dataStreamController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
+    
+    _glitchController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
     
     // Initialize animation objects (use AlwaysStoppedAnimation when animations are disabled)
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
 
-      _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+      _glowAnimation = Tween<double>(begin: 0.4, end: 0.9).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
@@ -81,15 +101,28 @@ class _SettingsScreenState extends State<SettingsScreen>
         curve: Curves.easeInOut,
       ));
 
-      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+      _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
+      
+      _hexagonAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_hexagonController);
+      
+      _dataStreamAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_dataStreamController);
+      
+      // Randomly trigger glitch effect
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
+      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
     }
 
     _loadSensitivity();
@@ -99,6 +132,21 @@ class _SettingsScreenState extends State<SettingsScreen>
     _loadLanguage();
   }
 
+  void _triggerGlitch() {
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _glitchController.forward().then((_) {
+        _glitchController.reverse();
+      });
+      
+      // Schedule next glitch
+      Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
     _backgroundController.dispose();
@@ -106,6 +154,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     _scanController.dispose();
     _pulseController.dispose();
     _rotateController.dispose();
+    _hexagonController.dispose();
+    _dataStreamController.dispose();
+    _glitchController.dispose();
     super.dispose();
   }
 
@@ -174,11 +225,14 @@ class _SettingsScreenState extends State<SettingsScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Animated cyberpunk background
+          // Enhanced animated cyberpunk background
           _buildAnimatedBackground(),
           
-          // Grid overlay effect
-          _buildGridOverlay(),
+          // Hexagon grid overlay effect
+          _buildHexagonGridOverlay(),
+          
+          // Data stream effect
+          _buildDataStreamEffect(),
           
           // Scan line effect
           _buildScanLine(),
@@ -198,17 +252,17 @@ class _SettingsScreenState extends State<SettingsScreen>
                   children: [
                     // Fixed header (will not scroll)
                     Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18),
                       child: _buildHeader(),
                     ),
 
                     // Scrollable settings area
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
                         child: SingleChildScrollView(
                           child: Padding(
-                            padding: const EdgeInsets.only(top: 20, bottom: 16),
+                            padding: const EdgeInsets.only(top: 20, bottom: 20),
                             child: _buildSettingsContent(),
                           ),
                         ),
@@ -220,7 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
           
-          // Cyberpunk frame borders
+          // Enhanced cyberpunk frame borders
           _buildCyberpunkFrame(),
         ],
       ),
@@ -233,9 +287,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            gradient: RadialGradient(
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.3,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
@@ -257,16 +311,35 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildGridOverlay() {
+  Widget _buildHexagonGridOverlay() {
     return IgnorePointer(
-      child: CustomPaint(
-        painter: _GridPainter(),
-        size: Size.infinite,
+      child: AnimatedBuilder(
+        animation: _hexagonAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _HexagonGridPainter(_hexagonAnimation.value),
+            size: Size.infinite,
+          );
+        },
       ),
     );
   }
 
+  Widget _buildDataStreamEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _dataStreamAnimation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _DataStreamPainter(_dataStreamAnimation.value),
+          size: Size.infinite,
+        );
+      },
+    );
+  }
+
   Widget _buildScanLine() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: _scanAnimation,
       builder: (context, child) {
@@ -275,7 +348,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           left: 0,
           right: 0,
           child: Container(
-            height: 3,
+            height: 4,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -287,9 +360,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 2,
+                  color: Colors.cyan.withOpacity(0.6),
+                  blurRadius: 15,
+                  spreadRadius: 3,
                 ),
               ],
             ),
@@ -300,12 +373,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildGlitchEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return IgnorePointer(
       child: AnimatedBuilder(
-        animation: _glowAnimation,
+        animation: _glitchController,
         builder: (context, child) {
           return Opacity(
-            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            opacity: _glitchController.value,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -345,8 +419,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         return Row(
           children: [
             Container(
-              width: 50,
-              height: 50,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -356,27 +430,27 @@ class _SettingsScreenState extends State<SettingsScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                    blurRadius: 15,
-                    spreadRadius: 2,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                    blurRadius: 20,
+                    spreadRadius: 3,
                   ),
                   BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.settings,
                 color: Colors.white,
-                size: 25,
+                size: 30,
               ),
             ),
-            const SizedBox(width: 15),
+            const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -391,7 +465,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     child: Text(
                       'PENGATURAN',
                       style: TextStyle(
-                        fontSize: MediaQuery.of(context).size.width < 360 ? 20 : 24,
+                        fontSize: MediaQuery.of(context).size.width < 360 ? 22 : 26,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         letterSpacing: 2,
@@ -401,12 +475,24 @@ class _SettingsScreenState extends State<SettingsScreen>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: 5),
+                  Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.cyan.withOpacity(_glowAnimation.value),
+                          Colors.pink.withOpacity(_glowAnimation.value),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 5),
                   Text(
                     'PENGATURAN APLIKASI & SISTEM',
                     style: TextStyle(
                       color: Colors.pink.shade300,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
                       fontFamily: 'Courier',
@@ -435,13 +521,13 @@ class _SettingsScreenState extends State<SettingsScreen>
               left: 0,
               right: 0,
               child: Container(
-                height: 2,
+                height: 3,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      Colors.cyan.withOpacity(0.6),
-                      Colors.pink.withOpacity(0.6),
+                      Colors.cyan.withOpacity(0.7),
+                      Colors.pink.withOpacity(0.7),
                       Colors.transparent,
                     ],
                   ),
@@ -493,7 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   color: Colors.purple,
                 ),
                 _buildSensitivitySlider(),
-                const SizedBox(height: 15),
+                const SizedBox(height: 20),
                 
                 _buildSectionHeader('PREFERENSI SISTEM'),
                 Consumer<ThemeProvider>(
@@ -518,7 +604,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   color: Colors.blue,
                 ),
                 _buildLanguageSelector(),
-                const SizedBox(height: 15),
+                const SizedBox(height: 20),
                 
                 _buildSectionHeader('DATA & PRIVASI'),
                 _buildSettingButton(
@@ -535,10 +621,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                   color: Colors.green,
                   onTap: _exportData,
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 20),
                 
                 _buildSystemInfo(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
               ],
             ),
           ],
@@ -549,12 +635,12 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 15),
       child: Text(
         title,
         style: TextStyle(
           color: Colors.cyan.shade300,
-          fontSize: MediaQuery.of(context).size.width < 360 ? 16 : 18,
+          fontSize: MediaQuery.of(context).size.width < 360 ? 17 : 19,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,
           fontFamily: 'Orbitron',
@@ -577,60 +663,60 @@ class _SettingsScreenState extends State<SettingsScreen>
         return Transform.scale(
           scale: _pulseAnimation.value,
           child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 15),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(18),
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  color.withOpacity(0.3),
-                  color.withOpacity(0.1),
+                  color.withOpacity(0.4),
+                  color.withOpacity(0.2),
                 ],
               ),
               border: Border.all(
                 color: color.withOpacity(_glowAnimation.value),
-                width: 2,
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(_glowAnimation.value * 0.3),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 3),
+                  color: color.withOpacity(_glowAnimation.value * 0.4),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
                 ),
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.4),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
                       colors: [
-                        color.withOpacity(0.3),
+                        color.withOpacity(0.4),
                         color.withOpacity(0.1),
                       ],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(_glowAnimation.value * 0.5),
-                        blurRadius: 8,
-                        spreadRadius: 1,
+                        color: color.withOpacity(_glowAnimation.value * 0.6),
+                        blurRadius: 10,
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: Icon(icon, color: color, size: 22),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 15),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -640,18 +726,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: 15,
                           fontFamily: 'Orbitron',
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
                         style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 11,
+                          fontSize: 12,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -665,7 +751,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     value: value,
                     onChanged: onChanged,
                     activeThumbColor: color,
-                    activeTrackColor: color.withOpacity(0.3),
+                    activeTrackColor: color.withOpacity(0.4),
                   ),
                 ),
               ],
@@ -681,27 +767,27 @@ class _SettingsScreenState extends State<SettingsScreen>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.purple.shade900.withOpacity(0.3),
-                Colors.pink.shade900.withOpacity(0.3),
+                Colors.purple.shade900.withOpacity(0.4),
+                Colors.pink.shade900.withOpacity(0.4),
               ],
             ),
             border: Border.all(
               color: Colors.pink.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 10,
-                spreadRadius: 1,
-                offset: const Offset(0, 3),
+                color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 12,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -710,15 +796,15 @@ class _SettingsScreenState extends State<SettingsScreen>
             children: [
               Row(
                 children: [
-                  Icon(Icons.tune, color: Colors.pink.shade300, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(Icons.tune, color: Colors.pink.shade300, size: 22),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Sensivitas Deteksi',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontFamily: 'Orbitron',
                       ),
                       maxLines: 1,
@@ -727,16 +813,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 15),
               Stack(
                 children: [
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       activeTrackColor: Colors.pink,
-                      inactiveTrackColor: Colors.pink.withOpacity(0.3),
+                      inactiveTrackColor: Colors.pink.withOpacity(0.4),
                       thumbColor: Colors.pink,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-                      overlayColor: Colors.pink.withOpacity(0.2),
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                      overlayColor: Colors.pink.withOpacity(0.3),
                       valueIndicatorColor: Colors.pink,
                       valueIndicatorTextStyle: const TextStyle(color: Colors.white),
                     ),
@@ -757,19 +843,26 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   if (_highAccuracy)
                     Positioned(
-                      right: 8,
+                      right: 10,
                       top: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.red.shade300,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.3),
+                              blurRadius: 5,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
                         child: const Text(
                           'LOCKED',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -777,7 +870,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -785,7 +878,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     'RENDAH',
                     style: const TextStyle(
                       color: Colors.white70,
-                      fontSize: 11,
+                      fontSize: 12,
                       fontFamily: 'Orbitron',
                     ),
                   ),
@@ -793,7 +886,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     'TINGGI',
                     style: const TextStyle(
                       color: Colors.white70,
-                      fontSize: 11,
+                      fontSize: 12,
                       fontFamily: 'Orbitron',
                     ),
                   ),
@@ -811,27 +904,27 @@ class _SettingsScreenState extends State<SettingsScreen>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.blue.shade900.withOpacity(0.3),
-                Colors.cyan.shade900.withOpacity(0.3),
+                Colors.blue.shade900.withOpacity(0.4),
+                Colors.cyan.shade900.withOpacity(0.4),
               ],
             ),
             border: Border.all(
               color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 10,
-                spreadRadius: 1,
-                offset: const Offset(0, 3),
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 12,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -840,28 +933,28 @@ class _SettingsScreenState extends State<SettingsScreen>
             children: [
               Row(
                 children: [
-                  Icon(Icons.language, color: Colors.cyan.shade300, size: 20),
-                  const SizedBox(width: 8),
+                  Icon(Icons.language, color: Colors.cyan.shade300, size: 22),
+                  const SizedBox(width: 10),
                   Text(
                     'Bahasa',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 15,
                       fontFamily: 'Orbitron',
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 15),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: Colors.cyan.withOpacity(_glowAnimation.value),
-                    width: 1,
+                    width: 1.5,
                   ),
                 ),
                 child: DropdownButton<String>(
@@ -908,61 +1001,61 @@ class _SettingsScreenState extends State<SettingsScreen>
         return Transform.scale(
           scale: _pulseAnimation.value,
           child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
+            margin: const EdgeInsets.only(bottom: 15),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(18),
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  color.withOpacity(0.3),
-                  color.withOpacity(0.1),
+                  color.withOpacity(0.4),
+                  color.withOpacity(0.2),
                 ],
               ),
               border: Border.all(
                 color: color.withOpacity(_glowAnimation.value),
-                width: 2,
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(_glowAnimation.value * 0.3),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 3),
+                  color: color.withOpacity(_glowAnimation.value * 0.4),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(18),
               child: InkWell(
                 onTap: onTap,
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(18),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
                             colors: [
-                              color.withOpacity(0.3),
+                              color.withOpacity(0.4),
                               color.withOpacity(0.1),
                             ],
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: color.withOpacity(_glowAnimation.value * 0.5),
-                              blurRadius: 8,
-                              spreadRadius: 1,
+                              color: color.withOpacity(_glowAnimation.value * 0.6),
+                              blurRadius: 10,
+                              spreadRadius: 2,
                             ),
                           ],
                         ),
-                        child: Icon(icon, color: color, size: 20),
+                        child: Icon(icon, color: color, size: 22),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 15),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -972,18 +1065,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                                fontSize: 15,
                                 fontFamily: 'Orbitron',
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 4),
                             Text(
                               subtitle,
                               style: const TextStyle(
                                 color: Colors.white70,
-                                fontSize: 11,
+                                fontSize: 12,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -991,7 +1084,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ],
                         ),
                       ),
-                      Icon(Icons.arrow_forward_ios, color: color, size: 16),
+                      Icon(Icons.arrow_forward_ios, color: color, size: 18),
                     ],
                   ),
                 ),
@@ -1024,27 +1117,27 @@ class _SettingsScreenState extends State<SettingsScreen>
           animation: _glowAnimation,
           builder: (context, child) {
             return Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(18),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.grey.shade900.withOpacity(0.3),
-                    Colors.black.withOpacity(0.5),
+                    Colors.grey.shade900.withOpacity(0.4),
+                    Colors.black.withOpacity(0.6),
                   ],
                 ),
                 border: Border.all(
                   color: Colors.cyan.withOpacity(_glowAnimation.value),
-                  width: 2,
+                  width: 2.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 3),
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -1055,13 +1148,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     'INFORMASI SISTEM',
                     style: TextStyle(
                       color: Colors.cyan.shade300,
-                      fontSize: MediaQuery.of(context).size.width < 360 ? 14 : 16,
+                      fontSize: MediaQuery.of(context).size.width < 360 ? 15 : 17,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Orbitron',
                       letterSpacing: 1,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 15),
                   _buildInfoRow('Versi', '1.0.0'),
                   _buildInfoRow('Terakhir Diperbarui', lastUpdated),
                   _buildInfoRow('Ukuran Database', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
@@ -1106,7 +1199,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -1114,7 +1207,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             label,
             style: const TextStyle(
               color: Colors.white70,
-              fontSize: 12,
+              fontSize: 13,
             ),
           ),
           Flexible(
@@ -1122,7 +1215,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               value,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: 13,
                 fontFamily: 'Courier',
               ),
               textAlign: TextAlign.right,
@@ -1145,7 +1238,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -1155,6 +1248,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1164,7 +1264,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -1174,6 +1274,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1183,7 +1290,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             bottom: 0,
             left: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -1195,6 +1302,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1204,7 +1318,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             bottom: 0,
             right: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -1216,6 +1330,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1236,7 +1357,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             maxHeight: MediaQuery.of(context).size.height * 0.7,
           ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1247,58 +1368,65 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             border: Border.all(
               color: Colors.red.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.red.withOpacity(_glowAnimation.value * 0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
+                color: Colors.red.withOpacity(_glowAnimation.value * 0.6),
+                blurRadius: 25,
+                spreadRadius: 6,
               ),
             ],
           ),
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 70,
+                    height: 70,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Colors.red, Colors.deepOrange],
                       ),
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.5),
+                          blurRadius: 15,
+                          spreadRadius: 3,
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.warning,
                       color: Colors.white,
-                      size: 30,
+                      size: 35,
                     ),
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 18),
                   Text(
                     'Confirm Deletion',
                     style: TextStyle(
-                      fontSize: MediaQuery.of(context).size.width < 360 ? 16 : 18,
+                      fontSize: MediaQuery.of(context).size.width < 360 ? 17 : 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.red.shade300,
                       fontFamily: 'Orbitron',
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 15),
                   const Text(
                     'Are you sure you want to delete ALL scan history? This action cannot be undone.',
                     style: TextStyle(
                       color: Colors.white70,
-                      fontSize: 13,
+                      fontSize: 14,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   Row(
                     children: [
                       Expanded(
@@ -1309,7 +1437,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           color: Colors.grey,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 15),
                       Expanded(
                         child: _buildCyberButton(
                           text: 'DELETE',
@@ -1397,7 +1525,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             maxHeight: MediaQuery.of(context).size.height * 0.7,
           ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(25),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1408,58 +1536,65 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             border: Border.all(
               color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                blurRadius: 25,
+                spreadRadius: 6,
               ),
             ],
           ),
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(22),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 70,
+                    height: 70,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Colors.cyan, Colors.pink],
                       ),
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.cyan.withOpacity(0.5),
+                          blurRadius: 15,
+                          spreadRadius: 3,
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.check_circle,
                       color: Colors.white,
-                      size: 30,
+                      size: 35,
                     ),
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 18),
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: MediaQuery.of(context).size.width < 360 ? 16 : 18,
+                      fontSize: MediaQuery.of(context).size.width < 360 ? 17 : 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.cyan.shade300,
                       fontFamily: 'Orbitron',
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 15),
                   Text(
                     message,
                     style: const TextStyle(
                       color: Colors.white70,
-                      fontSize: 13,
+                      fontSize: 14,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   _buildCyberButton(
                     text: 'OK',
                     icon: Icons.done,
@@ -1486,45 +1621,45 @@ class _SettingsScreenState extends State<SettingsScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(0.3),
-                color.withOpacity(0.1),
+                color.withOpacity(0.4),
+                color.withOpacity(0.2),
               ],
             ),
             border: Border.all(
               color: color.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 10,
-                spreadRadius: 1,
+                color: color.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 12,
+                spreadRadius: 2,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(18),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, color: color, size: 18),
-                    const SizedBox(width: 8),
+                    Icon(icon, color: color, size: 20),
+                    const SizedBox(width: 10),
                     Text(
                       text,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        letterSpacing: 1,
+                        fontSize: 14,
+                        letterSpacing: 1.2,
                         fontFamily: 'Orbitron',
                       ),
                     ),
@@ -1539,36 +1674,92 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 }
 
-class _GridPainter extends CustomPainter {
+class _HexagonGridPainter extends CustomPainter {
+  final double animationValue;
+  _HexagonGridPainter(this.animationValue);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.05)
+      ..color = Colors.cyan.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
-    const gridSize = 30.0;
+    const hexSize = 40.0;
+    const hexHeight = hexSize * 2;
+    final hexWidth = math.sqrt(3) * hexSize;
+    final vertDist = hexHeight * 3 / 4;
 
-    // Draw vertical lines
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+    int cols = (size.width / hexWidth).ceil() + 1;
+    int rows = (size.height / vertDist).ceil() + 1;
+
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final x = col * hexWidth + (row % 2) * hexWidth / 2;
+        final y = row * vertDist;
+        
+        // Add some animation by shifting hexagons
+        final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
+        final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
+        
+        _drawHexagon(canvas, Offset(x + offsetX, y + offsetY), hexSize, paint);
+      }
     }
+  }
 
-    // Draw horizontal lines
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+  void _drawHexagon(Canvas canvas, Offset center, double size, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = 2 * math.pi * i / 6 - math.pi / 2;
+      final x = center.dx + size * math.cos(angle);
+      final y = center.dy + size * math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _DataStreamPainter extends CustomPainter {
+  final double animationValue;
+  _DataStreamPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.pink.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final random = math.Random(123);
+    
+    for (int i = 0; i < 5; i++) {
+      final startX = random.nextDouble() * size.width;
+      final startY = -50.0;
+      final endY = size.height + 50;
+      
+      path.moveTo(startX, startY);
+      
+      for (double y = startY; y < endY; y += 20) {
+        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
+        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
+      }
+      
+      canvas.drawPath(path, paint);
+      path.reset();
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class _ParticlesPainter extends CustomPainter {
@@ -1579,15 +1770,15 @@ class _ParticlesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.3)
+      ..color = Colors.cyan.withOpacity(0.4)
       ..style = PaintingStyle.fill;
     
     final random = math.Random(42); // Fixed seed for consistent particles
     
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 25; i++) {
       final x = (random.nextDouble() * size.width);
       final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 2 + 1;
+      final radius = random.nextDouble() * 3 + 1;
       
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
