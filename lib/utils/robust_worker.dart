@@ -1,9 +1,77 @@
-import 'dart:typed_data';
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'ocr.dart';
 import 'text_analyzer.dart';
 import 'sensitivity.dart';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
+
+// Preprocess image bytes in an isolate: auto-crop to content, resize, enhance contrast.
+Uint8List preprocessImageBytesCompute(Uint8List bytes) {
+  try {
+    final image = img.decodeImage(bytes);
+    if (image == null) return bytes;
+
+    final width = image.width;
+    final height = image.height;
+
+    // Convert to grayscale for fast content detection
+    final gray = img.grayscale(image);
+
+    int minX = width, minY = height, maxX = 0, maxY = 0;
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        final p = gray.getPixel(x, y);
+        final lum = img.getLuminance(p);
+        if (lum < 240) { // not almost-white
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    // If no content detected, return original bytes
+    if (minX > maxX || minY > maxY) return bytes;
+
+    // Add small padding
+    const pad = 8;
+    minX = (minX - pad).clamp(0, width - 1);
+    minY = (minY - pad).clamp(0, height - 1);
+    maxX = (maxX + pad).clamp(0, width - 1);
+    maxY = (maxY + pad).clamp(0, height - 1);
+
+    final w = maxX - minX;
+    final h = maxY - minY;
+    if (w <= 0 || h <= 0) return bytes;
+
+    final crop = img.copyCrop(image, x: minX, y: minY, width: w, height: h);
+
+    // Resize to reasonable max dimension for OCR
+    const maxDim = 1200;
+    int newW = crop.width;
+    int newH = crop.height;
+    if (newW > maxDim || newH > maxDim) {
+      if (newW > newH) {
+        newH = (newH * maxDim / newW).round();
+        newW = maxDim;
+      } else {
+        newW = (newW * maxDim / newH).round();
+        newH = maxDim;
+      }
+    }
+    final resized = img.copyResize(crop, width: newW, height: newH);
+
+    // Light enhancement
+    final enhanced = img.adjustColor(resized, contrast: 1.08, saturation: 1.0);
+
+    final out = img.encodeJpg(enhanced, quality: 85);
+    return Uint8List.fromList(out);
+  } catch (e) {
+    return bytes;
+  }
+}
 
 class _IsolateMessage {
   final String? extractedText;

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
 import '../config/animation_config.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, compute;
+import 'package:flutter/foundation.dart' show kIsWeb, compute, kDebugMode;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
@@ -15,6 +16,37 @@ import '../utils/robust_worker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
+
+// Preprocess JPEG bytes in an isolate: decode, resize to max 800px, apply light contrast.
+Uint8List _preprocessImageBytesCompute(Uint8List bytes) {
+  try {
+    final image = img.decodeImage(bytes);
+    if (image == null) return bytes;
+
+    const maxDim = 800;
+    int newW = image.width;
+    int newH = image.height;
+    if (math.max(newW, newH) > maxDim) {
+      if (newW > newH) {
+        newH = (newH * maxDim / newW).round();
+        newW = maxDim;
+      } else {
+        newW = (newW * maxDim / newH).round();
+        newH = maxDim;
+      }
+    }
+
+    final resized = img.copyResize(image, width: newW, height: newH);
+
+    // Light contrast enhancement
+    final enhanced = img.adjustColor(resized, contrast: 1.05, saturation: 1.0);
+
+    final out = img.encodeJpg(enhanced, quality: 75);
+    return Uint8List.fromList(out);
+  } catch (e) {
+    return bytes;
+  }
+}
 
 // Simplified text detection result for memory efficiency
 class TextDetectionResult {
@@ -214,8 +246,31 @@ class CameraScanScreen extends StatefulWidget {
   State<CameraScanScreen> createState() => _CameraScanScreenState();
 }
 
-class _CameraScanScreenState extends State<CameraScanScreen>
-    with TickerProviderStateMixin {
+class _CameraScanScreenState extends State<CameraScanScreen> with TickerProviderStateMixin {
+  // ML Kit model warm-up helper
+  Future<void> _warmUpMlKitModels() async {
+    try {
+      // Text Recognition warm-up
+      final textRecognizer = TextRecognizer();
+      // Gunakan gambar kosong/minimal untuk trigger download model
+      final blankImage = InputImage.fromFilePath('assets/blank.jpg');
+      await textRecognizer.processImage(blankImage);
+      textRecognizer.close();
+
+      // Object Detection warm-up
+      final objectDetector = ObjectDetector(
+        options: ObjectDetectorOptions(
+          mode: DetectionMode.single,
+          classifyObjects: false,
+          multipleObjects: false,
+        ),
+      );
+      await objectDetector.processImage(blankImage);
+      objectDetector.close();
+    } catch (e) {
+      debugPrint('ML Kit warm-up error: $e');
+    }
+  }
   late AnimationController _backgroundController;
   late AnimationController _glowController;
   late AnimationController _scanController;
@@ -229,49 +284,11 @@ class _CameraScanScreenState extends State<CameraScanScreen>
 
   CameraController? _cameraController;
   TextRecognizer? _textRecognizer;
+  ObjectDetector? _objectDetector;
   bool _isProcessingFrame = false;
   int _throttleMs = 500; // Increased throttle for better performance
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
-
-  // Camera image stream handler with optimized processing
-  void _handleCameraImage(CameraImage image) async {
-    final now = DateTime.now();
-    if (now.difference(_lastProcessed).inMilliseconds < _throttleMs) return;
-    _lastProcessed = now;
-
-    if (_isProcessingFrame) return;
-
-    // Quick prefilter on Y plane with optimized sampling
-    if (!_quickHasEdges(image)) return;
-
-    // Mark processing and capture a still image for reliable OCR
-    _isProcessingFrame = true;
-    try {
-      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-      if (_isCapturing) return; // avoid collision with manual capture
-
-      _isCapturing = true;
-      final XFile file = await _cameraController!.takePicture();
-      _isCapturing = false;
-
-      if (_textRecognizer == null) return;
-      final inputImage = InputImage.fromFilePath(file.path);
-      final recognized = await _textRecognizer!.processImage(inputImage);
-
-      if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 2) {
-        debugPrint('Camera detected text (from still): ${recognized.text.length} chars');
-        // Handle detected text (e.g., save, analyze, UI update)
-      }
-
-      // Delete temp file to save memory
-      try { await File(file.path).delete(); } catch (_) {}
-    } catch (e) {
-      debugPrint('Camera capture/processing error: $e');
-      _isCapturing = false;
-    } finally {
-      _isProcessingFrame = false;
-    }
-  }
+  bool _isCameraInitialized = false;
 
   bool _quickHasEdges(CameraImage image, {int sampleStride = 40, int threshold = 4}) {
     final plane = image.planes[0];
@@ -286,7 +303,141 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     return false;
   }
 
-  bool _isCameraInitialized = false;
+  // Camera image stream handler with optimized processing
+  void _handleCameraImage(CameraImage image) async {
+    final now = DateTime.now();
+    if (now.difference(_lastProcessed).inMilliseconds < _throttleMs) return;
+    _lastProcessed = now;
+
+    if (_isProcessingFrame) return;
+
+    // Quick prefilter on Y plane with optimized sampling
+    if (!_quickHasEdges(image)) return;
+
+    _isProcessingFrame = true;
+    try {
+      if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+      if (_isCapturing) return;
+      if (_textRecognizer == null) return;
+
+      // Convert CameraImage to a temporary JPEG file and preprocess
+      String tmpPath;
+      try {
+        tmpPath = await _cameraImageToJpegFile(image);
+      } catch (e) {
+        debugPrint('Failed to convert camera image to jpg: $e');
+        return;
+      }
+
+      try {
+        final bytes = await File(tmpPath).readAsBytes();
+        final preprocessed = await compute<Uint8List, Uint8List>(_preprocessImageBytesCompute, bytes);
+        final detection = await compute<Uint8List, TextDetectionResult>(_optimizedTextDetectionCompute, preprocessed);
+
+        const minConfidenceForOcr = 0.25;
+        if (!detection.hasText || detection.confidence < minConfidenceForOcr) {
+          _telemetry_detectionsSkipped++;
+          debugPrint('Stream detection skipped (confidence=${detection.confidence})');
+          try { await File(tmpPath).delete(); } catch (_) {}
+        } else {
+          _telemetry_detectionsPassed++;
+          debugPrint('Stream detection passed (confidence=${detection.confidence})');
+
+          var handled = false;
+
+          if (_objectDetector != null) {
+            try {
+              final dir = await getTemporaryDirectory();
+              final tmpDetect = File('${dir.path}/detect_${DateTime.now().microsecondsSinceEpoch}.jpg');
+              await tmpDetect.writeAsBytes(preprocessed);
+              final inputImg = InputImage.fromFilePath(tmpDetect.path);
+              final objects = await _objectDetector!.processImage(inputImg);
+
+              if (objects.isNotEmpty) {
+                DetectedObject? best;
+                double bestArea = 0.0;
+                for (final o in objects) {
+                  final rect = o.boundingBox;
+                  final area = rect.width * rect.height;
+                  if (area > bestArea) {
+                    bestArea = area;
+                    best = o;
+                  }
+                }
+
+                if (best != null) {
+                  try {
+                    final full = img.decodeImage(preprocessed);
+                    if (full != null) {
+                      final r = best.boundingBox;
+                      final left = r.left.clamp(0, full.width - 1).toInt();
+                      final top = r.top.clamp(0, full.height - 1).toInt();
+                      final right = r.right.clamp(1, full.width).toInt();
+                      final bottom = r.bottom.clamp(1, full.height).toInt();
+                      final w = (right - left).clamp(1, full.width);
+                      final h = (bottom - top).clamp(1, full.height);
+                      final crop = img.copyCrop(full, x: left, y: top, width: w, height: h);
+                      final cropBytes = img.encodeJpg(crop, quality: 85);
+                      final tmpCrop = File('${dir.path}/crop_${DateTime.now().microsecondsSinceEpoch}.jpg');
+                      await tmpCrop.writeAsBytes(cropBytes);
+
+                      final inputImage = InputImage.fromFilePath(tmpCrop.path);
+                      _telemetry_ocrRuns++;
+                      final recognized = await _textRecognizer!.processImage(inputImage);
+                      try { await tmpDetect.delete(); } catch (_) {}
+                      try { await tmpCrop.delete(); } catch (_) {}
+
+                      if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 8) {
+                        debugPrint('ROI OCR detected text len=${recognized.text.length}');
+                        try { await _takePicture(); } catch (_) {}
+                      }
+
+                      try { await File(tmpPath).delete(); } catch (_) {}
+                      handled = true;
+                    }
+                  } catch (e) {
+                    debugPrint('ROI crop/ocr error: $e');
+                  }
+                }
+              }
+
+              try { await tmpDetect.delete(); } catch (_) {}
+            } catch (e) {
+              debugPrint('Object detection error: $e');
+            }
+          }
+
+          if (!handled) {
+            try {
+              final dir = await getTemporaryDirectory();
+              final tmp2 = File('${dir.path}/ocr_${DateTime.now().microsecondsSinceEpoch}.jpg');
+              await tmp2.writeAsBytes(preprocessed);
+              final inputImage = InputImage.fromFilePath(tmp2.path);
+              _telemetry_ocrRuns++;
+              final recognized = await _textRecognizer!.processImage(inputImage);
+              try { await tmp2.delete(); } catch (_) {}
+              try { await File(tmpPath).delete(); } catch (_) {}
+
+              if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 8) {
+                debugPrint('Stream OCR detected significant text length=${recognized.text.length}');
+                try { await _takePicture(); } catch (_) {}
+              }
+            } catch (e) {
+              debugPrint('Stream OCR error after detection: $e');
+              try { await File(tmpPath).delete(); } catch (_) {}
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Stream OCR detection error: $e');
+        try { await File(tmpPath).delete(); } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Camera stream processing error: $e');
+    } finally {
+      _isProcessingFrame = false;
+    }
+    }
   bool _hasCameraPermission = false;
   Uint8List? _lastCapturedBytes;
   String? _lastCapturedPath;
@@ -299,6 +450,13 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   double _analysisProgress = 0.0;
   double _aiPct = 0.0;
   double _humanPct = 0.0;
+
+  // Telemetry counters
+  int _telemetry_capturesAttempted = 0;
+  int _telemetry_capturesFailed = 0;
+  int _telemetry_ocrRuns = 0;
+  int _telemetry_detectionsPassed = 0;
+  int _telemetry_detectionsSkipped = 0;
 
   // Cancel token for analysis
   Completer<bool>? _analysisCompleter;
@@ -366,6 +524,13 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     }
 
     _requestCameraPermission();
+    // Initialize object detector
+    try {
+      final options = ObjectDetectorOptions(mode: DetectionMode.single, classifyObjects: false, multipleObjects: false);
+      _objectDetector = ObjectDetector(options: options);
+    } catch (_) {
+      _objectDetector = null;
+    }
   }
 
   // Initialize memory management with more frequent cleanup
@@ -396,6 +561,8 @@ class _CameraScanScreenState extends State<CameraScanScreen>
     if (!_isAnalyzing && _lastCapturedBytes != null) {
       if (aggressive) {
         // Aggressive cleanup - clear the captured image
+        // Warm-up ML Kit models di awal agar siap digunakan
+        _warmUpMlKitModels();
         setState(() {
           _lastCapturedBytes = null;
           _lastCapturedPath = null;
@@ -428,6 +595,7 @@ class _CameraScanScreenState extends State<CameraScanScreen>
       _cameraController?.stopImageStream();
     } catch (_) {}
     _textRecognizer?.close();
+    _objectDetector?.close();
     _cameraController?.dispose();
 
     super.dispose();
@@ -1055,6 +1223,17 @@ class _CameraScanScreenState extends State<CameraScanScreen>
                     _isKept ? Colors.green : Colors.grey,
                   ),
                 ),
+                // Telemetry dump (debug-only)
+                if (kDebugMode)
+                  GestureDetector(
+                    onTap: () {
+                      final msg = 'caps:$_telemetry_capturesAttempted fails:$_telemetry_capturesFailed ocr:$_telemetry_ocrRuns det_pass:$_telemetry_detectionsPassed det_skip:$_telemetry_detectionsSkipped';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(msg), duration: const Duration(seconds: 4)),
+                      );
+                    },
+                    child: _buildControlButton(Icons.bug_report, 'METRIK', Colors.purple),
+                  ),
               ],
             ),
           ),
@@ -1478,50 +1657,143 @@ class _CameraScanScreenState extends State<CameraScanScreen>
   }
 
   Future<void> _takePicture() async {
+    await _captureWithRetries(highRes: false);
+  }
+
+  Future<void> _captureWithRetries({required bool highRes, int retries = 2, Duration timeout = const Duration(seconds: 5)}) async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_isCapturing) return;
+    setState(() { _isCapturing = true; });
 
-    setState(() {
-      _isCapturing = true;
-    });
-
+  CameraController? originalController = _cameraController;
     try {
-      // Store current flash state
-      final wasFlashOn = _flashOn;
-      
-      // Turn on flash if needed
-      if (_torchAvailable && wasFlashOn) {
-        await _setFlashMode(FlashMode.torch);
+      // Stop stream before capture
+      try { await _cameraController?.stopImageStream(); } catch (_) {}
+
+      // Optionally upgrade resolution by recreating controller (best-effort)
+      if (highRes) {
+        try {
+          final desc = _cameraController!.description;
+          await _cameraController?.dispose();
+          _cameraController = CameraController(desc, ResolutionPreset.high, enableAudio: false);
+          await _cameraController?.initialize();
+        } catch (e) {
+          debugPrint('Failed to switch to high resolution: $e');
+          _cameraController = originalController;
+        }
       }
 
-      final XFile file = await _cameraController!.takePicture();
-      final bytes = await file.readAsBytes();
-      setState(() {
-        _lastCapturedBytes = bytes;
-        _lastCapturedPath = file.path;
-        _isKept = false;
-      });
-    } catch (e) {
-      debugPrint('Error taking picture: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error mengambil gambar: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      int attempt = 0;
+      while (attempt <= retries) {
+        attempt++;
+        _telemetry_capturesAttempted++;
+        try {
+          final fileFuture = _cameraController!.takePicture();
+          final file = await fileFuture.timeout(timeout);
+          final bytes = await file.readAsBytes();
+          setState(() {
+            _lastCapturedBytes = bytes;
+            _lastCapturedPath = file.path;
+            _isKept = false;
+          });
+          break; // success
+        } catch (e) {
+          _telemetry_capturesFailed++;
+          debugPrint('Capture attempt $attempt failed: $e');
+          if (attempt > retries) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error mengambil gambar: $e'), backgroundColor: Colors.red),
+              );
+            }
+          } else {
+            await Future.delayed(const Duration(milliseconds: 300));
+          }
+        }
+      }
     } finally {
-      // Restore flash state
+      // Restore original controller if we recreated
+      try {
+        if (highRes && originalController != null && _cameraController != originalController) {
+          try { await _cameraController?.dispose(); } catch (_) {}
+          _cameraController = originalController;
+          try { await _cameraController?.initialize(); } catch (_) {}
+        }
+      } catch (_) {}
+
+      // Restart image stream (best-effort)
+      try { await _cameraController?.startImageStream(_handleCameraImage); } catch (_) {}
+
       if (_torchAvailable) {
         await _setFlashMode(_flashOn ? FlashMode.torch : FlashMode.off);
       }
-      
-      if (mounted) {
-        setState(() {
-          _isCapturing = false;
-        });
-      }
+
+      if (mounted) setState(() { _isCapturing = false; });
     }
   }
+
+  // Convert a CameraImage (YUV420) to a temporary JPEG file.
+  // This is a best-effort converter for common Android/iOS YUV420 formats.
+  Future<String> _cameraImageToJpegFile(CameraImage image) async {
+    try {
+      final int width = image.width;
+      final int height = image.height;
+
+      final planeY = image.planes[0];
+      final planeU = image.planes.length > 1 ? image.planes[1] : null;
+      final planeV = image.planes.length > 2 ? image.planes[2] : null;
+
+  final img.Image imgImage = img.Image(width: width, height: height);
+
+      // Fallback simple conversion using YUV -> RGB
+      final yBytes = planeY.bytes;
+      final uBytes = planeU?.bytes;
+      final vBytes = planeV?.bytes;
+
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          final int yp = yBytes[y * planeY.bytesPerRow + x] & 0xFF;
+
+          // UV are usually subsampled by 2
+          final int uvRow = (y / 2).floor();
+          final int uvCol = (x / 2).floor();
+
+          int u = 128;
+          int v = 128;
+
+          if (uBytes != null && vBytes != null) {
+            final int uIndex = uvRow * (planeU?.bytesPerRow ?? 0) + uvCol;
+            final int vIndex = uvRow * (planeV?.bytesPerRow ?? 0) + uvCol;
+            if (uIndex >= 0 && uIndex < uBytes.length) u = uBytes[uIndex] & 0xFF;
+            if (vIndex >= 0 && vIndex < vBytes.length) v = vBytes[vIndex] & 0xFF;
+          }
+
+          final int yVal = yp;
+          final int uVal = u - 128;
+          final int vVal = v - 128;
+
+          int r = (yVal + (1.370705 * vVal)).round();
+          int g = (yVal - (0.337633 * vVal) - (0.698001 * uVal)).round();
+          int b = (yVal + (1.732446 * uVal)).round();
+
+          r = r.clamp(0, 255);
+          g = g.clamp(0, 255);
+          b = b.clamp(0, 255);
+
+          imgImage.setPixelRgba(x, y, r, g, b, 255);
+        }
+      }
+
+      final jpg = img.encodeJpg(imgImage, quality: 75);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/frame_${DateTime.now().microsecondsSinceEpoch}.jpg');
+      await file.writeAsBytes(jpg);
+      return file.path;
+    } catch (e) {
+      rethrow;
+    }
+  }
+  
 
   void _handleFlashHover(bool hovering) {
     if (_isFlashHovering == hovering) return;
