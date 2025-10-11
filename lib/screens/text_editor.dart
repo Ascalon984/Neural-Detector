@@ -5,7 +5,6 @@ import '../utils/text_analyzer.dart';
 import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
-// removed unused import '../utils/app_localizations.dart'
 
 class TextEditorScreen extends StatefulWidget {
   const TextEditorScreen({super.key});
@@ -22,13 +21,17 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   late AnimationController _pulseController;
   late AnimationController _typingController;
   late AnimationController _rotateController;
+  late AnimationController _hexagonController;
+  late AnimationController _dataStreamController;
+  late AnimationController _glitchController;
   
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _textGlowAnimation;
-  // removed unused animations: _textColorAnimation and _rotateAnimation
+  late Animation<double> _hexagonAnimation;
+  late Animation<double> _dataStreamAnimation;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
@@ -45,22 +48,22 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     
     // Initialize multiple animation controllers for different effects
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 15),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
 
     _scanController = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
       vsync: this,
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 1, milliseconds: 500),
+      duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
@@ -70,9 +73,24 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
 
     _rotateController = AnimationController(
+      duration: const Duration(seconds: 30),
+      vsync: this,
+    )..repeat();
+    
+    _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
+    
+    _dataStreamController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
+    
+    _glitchController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
 
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(
@@ -81,8 +99,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       ).animate(_backgroundController);
 
       _glowAnimation = Tween<double>(
-        begin: 0.3,
-        end: 0.8,
+        begin: 0.4,
+        end: 0.9,
       ).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
@@ -97,8 +115,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       ));
 
       _pulseAnimation = Tween<double>(
-        begin: 0.98,
-        end: 1.02,
+        begin: 0.97,
+        end: 1.03,
       ).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
@@ -111,15 +129,46 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
-
-      // _textColorAnimation and _rotateAnimation removed; using glow controller only
+      
+      _hexagonAnimation = Tween<double>(
+        begin: 0.0,
+        end: 1.0,
+      ).animate(_hexagonController);
+      
+      _dataStreamAnimation = Tween<double>(
+        begin: 0.0,
+        end: 1.0,
+      ).animate(_dataStreamController);
+      
+      // Randomly trigger glitch effect
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
       _textGlowAnimation = AlwaysStoppedAnimation(0.2);
-  // _textColorAnimation and _rotateAnimation removed; using AlwaysStoppedAnimation where needed
+      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
+    }
+  }
+
+  void _triggerGlitch() {
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _glitchController.forward().then((_) {
+        _glitchController.reverse();
+      });
+      
+      // Schedule next glitch
+      Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     }
   }
 
@@ -130,7 +179,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     _scanController.dispose();
     _pulseController.dispose();
     _typingController.dispose();
-  _rotateController.dispose();
+    _rotateController.dispose();
+    _hexagonController.dispose();
+    _dataStreamController.dispose();
+    _glitchController.dispose();
     _textController.dispose();
     _textFocusNode.dispose();
     _editorScrollController.dispose();
@@ -148,11 +200,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Animated cyberpunk background
+          // Enhanced animated cyberpunk background
           _buildAnimatedBackground(),
           
-          // Grid overlay effect
-          _buildGridOverlay(),
+          // Hexagon grid overlay effect
+          _buildHexagonGridOverlay(),
+          
+          // Data stream effect
+          _buildDataStreamEffect(),
           
           // Scan line effect
           _buildScanLine(),
@@ -162,6 +217,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           
           // Floating particles effect
           _buildFloatingParticles(),
+          
           // Main content
           SafeArea(
             child: Padding(
@@ -190,7 +246,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             ),
           ),
           
-          // Cyberpunk frame borders
+          // Enhanced cyberpunk frame borders
           _buildCyberpunkFrame(),
         ],
       ),
@@ -203,9 +259,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            gradient: RadialGradient(
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.3,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
@@ -227,12 +283,30 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildGridOverlay() {
+  Widget _buildHexagonGridOverlay() {
     return IgnorePointer(
-      child: CustomPaint(
-        painter: _GridPainter(),
-        size: Size.infinite,
+      child: AnimatedBuilder(
+        animation: _hexagonAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _HexagonGridPainter(_hexagonAnimation.value),
+            size: Size.infinite,
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildDataStreamEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _dataStreamAnimation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _DataStreamPainter(_dataStreamAnimation.value),
+          size: Size.infinite,
+        );
+      },
     );
   }
 
@@ -246,7 +320,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           left: 0,
           right: 0,
           child: Container(
-            height: 3,
+            height: 4,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -258,9 +332,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 2,
+                  color: Colors.cyan.withOpacity(0.6),
+                  blurRadius: 15,
+                  spreadRadius: 3,
                 ),
               ],
             ),
@@ -274,10 +348,10 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return IgnorePointer(
       child: AnimatedBuilder(
-        animation: _glowAnimation,
+        animation: _glitchController,
         builder: (context, child) {
           return Opacity(
-            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            opacity: _glitchController.value,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -303,8 +377,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         return Row(
           children: [
             Container(
-              width: 70,
-              height: 70,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -314,24 +388,24 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(25),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                    blurRadius: 20,
-                    spreadRadius: 3,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                    blurRadius: 25,
+                    spreadRadius: 4,
                   ),
                   BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 15,
-                    spreadRadius: 2,
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 20,
+                    spreadRadius: 3,
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.edit_document,
                 color: Colors.white,
-                size: 35,
+                size: 40,
               ),
             ),
             const SizedBox(width: 20),
@@ -349,7 +423,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     child: const Text(
                       'EDITOR TEKS',
                       style: TextStyle(
-                        fontSize: 28,
+                        fontSize: 32,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         letterSpacing: 3,
@@ -357,12 +431,24 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  SizedBox(height: 5),
+                  Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.cyan.withOpacity(_glowAnimation.value),
+                          Colors.pink.withOpacity(_glowAnimation.value),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 5),
                   Text(
                     'MULAI DENGAN TEKS',
                     style: TextStyle(
                       color: Colors.pink.shade300,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 3,
                       fontFamily: 'Courier',
@@ -392,25 +478,25 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               minHeight: isSmallScreen ? 200 : 250,
             ),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(28),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.2),
-                  Colors.purple.shade900.withOpacity(0.2),
+                  Colors.blue.shade900.withOpacity(0.3),
+                  Colors.purple.shade900.withOpacity(0.3),
                   Colors.black.withOpacity(0.7),
                 ],
               ),
               border: Border.all(
                 color: Colors.cyan.withOpacity(_glowAnimation.value),
-                width: 2,
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                  blurRadius: 20,
-                  spreadRadius: 5,
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                  blurRadius: 25,
+                  spreadRadius: 6,
                 ),
               ],
             ),
@@ -423,13 +509,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     left: 0,
                     right: 0,
                     child: Container(
-                      height: 2,
+                      height: 3,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
                             Colors.transparent,
-                            Colors.cyan.withOpacity(0.6),
-                            Colors.pink.withOpacity(0.6),
+                            Colors.cyan.withOpacity(0.7),
+                            Colors.pink.withOpacity(0.7),
                             Colors.transparent,
                           ],
                         ),
@@ -438,7 +524,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   ),
                 
                 Padding(
-                  padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
+                  padding: EdgeInsets.all(isSmallScreen ? 18 : 22),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -451,7 +537,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                               'INPUT TEKS',
                               style: TextStyle(
                                 color: Colors.cyan.shade300,
-                                fontSize: isSmallScreen ? 14 : 16,
+                                fontSize: isSmallScreen ? 16 : 18,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.5,
                                 fontFamily: 'Orbitron',
@@ -464,20 +550,27 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             animation: _glowAnimation,
                             builder: (context, child) {
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.black.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(15),
                                   border: Border.all(
                                     color: Colors.cyan.withOpacity(_glowAnimation.value),
-                                    width: 1,
+                                    width: 1.5,
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
                                 ),
                                 child: Text(
                                   '${_textController.text.length} Karakter',
                                   style: TextStyle(
                                     color: Colors.cyan.shade300,
-                                    fontSize: isSmallScreen ? 10 : 11,
+                                    fontSize: isSmallScreen ? 11 : 12,
                                     fontWeight: FontWeight.bold,
                                     fontFamily: 'Courier',
                                   ),
@@ -488,16 +581,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         ],
                       ),
                       
-                      SizedBox(height: isSmallScreen ? 10 : 15),
+                      SizedBox(height: isSmallScreen ? 12 : 15),
                       
                       // Text field
                       Expanded(
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.4),
-                            borderRadius: BorderRadius.circular(15),
+                            color: Colors.black.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withOpacity(0.15),
                             ),
                           ),
                           child: TextField(
@@ -506,12 +599,12 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             expands: true,
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: isSmallScreen ? 14 : 16,
+                              fontSize: isSmallScreen ? 15 : 17,
                               fontFamily: 'Times New Roman',
                               shadows: [
                                 Shadow(
                                   color: Colors.cyan.withOpacity(_textGlowAnimation.value),
-                                  blurRadius: 8,
+                                  blurRadius: 10,
                                 ),
                               ],
                             ),
@@ -519,11 +612,11 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                               hintText: 'Mulai input teks...',
                               hintStyle: TextStyle(
                                 color: Colors.white38,
-                                fontSize: isSmallScreen ? 12 : 14,
+                                fontSize: isSmallScreen ? 13 : 15,
                                 fontFamily: 'Times New Roman',
                               ),
                               border: InputBorder.none,
-                              contentPadding: EdgeInsets.all(isSmallScreen ? 15 : 20),
+                              contentPadding: EdgeInsets.all(isSmallScreen ? 18 : 22),
                             ),
                             focusNode: _textFocusNode,
                             onChanged: (value) {
@@ -563,68 +656,63 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   List<Widget> _buildEditorCorners() {
+    final cornerSize = 35.0;
+    final borderWidth = 3.5;
+    
     return [
       // Top Left
       Positioned(
         top: 0,
         left: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-              top: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-            ),
-          ),
-        ),
+        child: _buildCornerWidget(true, true, cornerSize, borderWidth),
       ),
       // Top Right
       Positioned(
         top: 0,
         right: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            border: Border(
-              right: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-              top: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-            ),
-          ),
-        ),
+        child: _buildCornerWidget(false, true, cornerSize, borderWidth),
       ),
       // Bottom Left
       Positioned(
         bottom: 0,
         left: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-              bottom: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-            ),
-          ),
-        ),
+        child: _buildCornerWidget(true, false, cornerSize, borderWidth),
       ),
       // Bottom Right
       Positioned(
         bottom: 0,
         right: 0,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            border: Border(
-              right: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-              bottom: BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: 3),
-            ),
-          ),
-        ),
+        child: _buildCornerWidget(false, false, cornerSize, borderWidth),
       ),
     ];
+  }
+
+  Widget _buildCornerWidget(bool isLeft, bool isTop, double size, double borderWidth) {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            border: Border(
+              left: isLeft
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
+                  : BorderSide.none,
+              right: !isLeft
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
+                  : BorderSide.none,
+              top: isTop
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
+                  : BorderSide.none,
+              bottom: !isTop
+                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
+                  : BorderSide.none,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildStatsBar() {
@@ -635,26 +723,26 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
-          padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
+          padding: EdgeInsets.all(isSmallScreen ? 18 : 22),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.blue.shade900.withOpacity(0.3),
-                Colors.purple.shade900.withOpacity(0.3),
+                Colors.blue.shade900.withOpacity(0.4),
+                Colors.purple.shade900.withOpacity(0.4),
               ],
             ),
             border: Border.all(
               color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 1.5,
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.2),
-                blurRadius: 15,
-                spreadRadius: 2,
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                blurRadius: 18,
+                spreadRadius: 3,
               ),
             ],
           ),
@@ -675,30 +763,31 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(0.3),
+                color.withOpacity(0.4),
                 color.withOpacity(0.1),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.5),
-                blurRadius: 10,
+                color: color.withOpacity(_glowAnimation.value * 0.6),
+                blurRadius: 12,
+                spreadRadius: 2,
               ),
             ],
           ),
-          child: Icon(icon, color: color, size: isSmallScreen ? 20 : 22),
+          child: Icon(icon, color: color, size: isSmallScreen ? 22 : 24),
         ),
-        SizedBox(height: isSmallScreen ? 6 : 8),
+        SizedBox(height: isSmallScreen ? 8 : 10),
         Text(
           value,
           style: TextStyle(
             color: color,
-            fontSize: isSmallScreen ? 16 : 18,
+            fontSize: isSmallScreen ? 18 : 20,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
             letterSpacing: 1,
@@ -708,7 +797,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
           label,
           style: TextStyle(
             color: Colors.white70,
-            fontSize: isSmallScreen ? 10 : 11,
+            fontSize: isSmallScreen ? 11 : 12,
             fontWeight: FontWeight.w300,
             letterSpacing: 1.5,
           ),
@@ -733,7 +822,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             isSmallScreen: isSmallScreen,
           ),
         ),
-        SizedBox(width: isSmallScreen ? 10 : 15),
+        SizedBox(width: isSmallScreen ? 12 : 15),
         Expanded(
           flex: 2,
           child: _buildCyberButton(
@@ -763,56 +852,56 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(isDisabled ? 0.1 : 0.3),
-                color.withOpacity(isDisabled ? 0.05 : 0.1),
+                color.withOpacity(isDisabled ? 0.1 : 0.4),
+                color.withOpacity(isDisabled ? 0.05 : 0.2),
               ],
             ),
             border: Border.all(
               color: color.withOpacity(isDisabled ? 0.1 : _glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: isDisabled ? [] : [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 15,
-                spreadRadius: 2,
+                color: color.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: 18,
+                spreadRadius: 3,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             child: InkWell(
               onTap: isDisabled ? null : onPressed,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               child: Container(
-                padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 14 : 18),
+                padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 16 : 20),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (isAnalyzing)
                       SizedBox(
-                        width: 22,
-                        height: 22,
+                        width: 24,
+                        height: 24,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                          strokeWidth: 2.5,
                           value: _analysisProgress,
                           valueColor: AlwaysStoppedAnimation<Color>(color),
                         ),
                       )
                     else
-                      Icon(icon, color: color, size: isSmallScreen ? 20 : 22),
-                    SizedBox(width: isSmallScreen ? 8 : 12),
+                      Icon(icon, color: color, size: isSmallScreen ? 22 : 24),
+                    SizedBox(width: isSmallScreen ? 10 : 12),
                     Flexible(
                       child: Text(
                         text,
                         style: TextStyle(
                           color: isDisabled ? Colors.white30 : Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: isSmallScreen ? 12 : 14,
+                          fontSize: isSmallScreen ? 13 : 15,
                           letterSpacing: 1.2,
                           fontFamily: 'Orbitron',
                         ),
@@ -840,7 +929,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -850,6 +939,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -859,7 +955,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -869,6 +965,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -878,7 +981,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             bottom: 0,
             left: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -890,6 +993,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -899,7 +1009,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             bottom: 0,
             right: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -911,6 +1021,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -997,7 +1114,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         child: Container(
           width: isSmallScreen ? screenSize.width * 0.9 : null,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(28),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1012,24 +1129,24 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             ),
             border: Border.all(
               color: _aiDetectionPercentage > 50 ? Colors.red : Colors.cyan,
-              width: 2
+              width: 2.5
             ),
             boxShadow: [
               BoxShadow(
-                color: (_aiDetectionPercentage > 50 ? Colors.red : Colors.cyan).withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
+                color: (_aiDetectionPercentage > 50 ? Colors.red : Colors.cyan).withOpacity(0.6),
+                blurRadius: 25,
+                spreadRadius: 6,
               ),
             ],
           ),
           child: Padding(
-            padding: EdgeInsets.all(isSmallScreen ? 20 : 30),
+            padding: EdgeInsets.all(isSmallScreen ? 22 : 30),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: isSmallScreen ? 70 : 90,
-                  height: isSmallScreen ? 70 : 90,
+                  width: isSmallScreen ? 80 : 100,
+                  height: isSmallScreen ? 80 : 100,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -1040,39 +1157,39 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.cyan.withOpacity(0.5),
-                        blurRadius: 15,
-                        spreadRadius: 3,
+                        color: Colors.cyan.withOpacity(0.6),
+                        blurRadius: 20,
+                        spreadRadius: 4,
                       ),
                     ],
                   ),
                   child: Icon(
                     Icons.verified,
                     color: Colors.white,
-                    size: isSmallScreen ? 35 : 45,
+                    size: isSmallScreen ? 40 : 50,
                   ),
                 ),
-                SizedBox(height: isSmallScreen ? 15 : 25),
+                SizedBox(height: isSmallScreen ? 18 : 25),
                 Text(
                   'ANALISIS SELESAI',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: isSmallScreen ? 16 : 20,
+                    fontSize: isSmallScreen ? 18 : 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.cyan.shade300,
                     fontFamily: 'Orbitron',
                     letterSpacing: 1.5,
                   ),
                 ),
-                SizedBox(height: isSmallScreen ? 15 : 20),
+                SizedBox(height: isSmallScreen ? 18 : 20),
                 Container(
-                  padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
+                  padding: EdgeInsets.all(isSmallScreen ? 18 : 22),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(15),
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(
-                      color: Colors.cyan.withOpacity(0.3),
-                      width: 1,
+                      color: Colors.cyan.withOpacity(0.4),
+                      width: 1.5,
                     ),
                   ),
                   child: Column(
@@ -1091,14 +1208,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             '${_aiDetectionPercentage.toStringAsFixed(1)}%',
                             style: TextStyle(
                               color: _aiDetectionPercentage > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                              fontSize: 18,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Orbitron',
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: isSmallScreen ? 10 : 15),
+                      SizedBox(height: isSmallScreen ? 12 : 15),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1113,7 +1230,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                             '${_humanWrittenPercentage.toStringAsFixed(1)}%',
                             style: TextStyle(
                               color: Colors.cyan.shade300,
-                              fontSize: 18,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Orbitron',
                             ),
@@ -1123,7 +1240,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     ],
                   ),
                 ),
-                SizedBox(height: isSmallScreen ? 15 : 25),
+                SizedBox(height: isSmallScreen ? 18 : 25),
                 _buildCyberButton(
                   text: 'TUTUP',
                   icon: Icons.close,
@@ -1152,7 +1269,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       ),
     );
   }
-
 }
 
 class _EditorParticlesPainter extends CustomPainter {
@@ -1162,14 +1278,14 @@ class _EditorParticlesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.25)
+      ..color = Colors.cyan.withOpacity(0.4)
       ..style = PaintingStyle.fill;
 
     final random = math.Random(99);
-    for (int i = 0; i < 18; i++) {
+    for (int i = 0; i < 25; i++) {
       final x = (random.nextDouble() * size.width);
       final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 2 + 0.8;
+      final radius = random.nextDouble() * 3 + 1;
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }
@@ -1178,34 +1294,90 @@ class _EditorParticlesPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-class _GridPainter extends CustomPainter {
+class _HexagonGridPainter extends CustomPainter {
+  final double animationValue;
+  _HexagonGridPainter(this.animationValue);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.05)
+      ..color = Colors.cyan.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
 
-    const gridSize = 30.0;
+    const hexSize = 40.0;
+    const hexHeight = hexSize * 2;
+    final hexWidth = math.sqrt(3) * hexSize;
+    final vertDist = hexHeight * 3 / 4;
 
-    // Draw vertical lines
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+    int cols = (size.width / hexWidth).ceil() + 1;
+    int rows = (size.height / vertDist).ceil() + 1;
+
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final x = col * hexWidth + (row % 2) * hexWidth / 2;
+        final y = row * vertDist;
+        
+        // Add some animation by shifting hexagons
+        final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
+        final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
+        
+        _drawHexagon(canvas, Offset(x + offsetX, y + offsetY), hexSize, paint);
+      }
     }
+  }
 
-    // Draw horizontal lines
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+  void _drawHexagon(Canvas canvas, Offset center, double size, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = 2 * math.pi * i / 6 - math.pi / 2;
+      final x = center.dx + size * math.cos(angle);
+      final y = center.dy + size * math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _DataStreamPainter extends CustomPainter {
+  final double animationValue;
+  _DataStreamPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.pink.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final random = math.Random(123);
+    
+    for (int i = 0; i < 5; i++) {
+      final startX = random.nextDouble() * size.width;
+      final startY = -50.0;
+      final endY = size.height + 50;
+      
+      path.moveTo(startX, startY);
+      
+      for (double y = startY; y < endY; y += 20) {
+        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
+        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
+      }
+      
+      canvas.drawPath(path, paint);
+      path.reset();
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -31,11 +31,16 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   late AnimationController _scanController;
   late AnimationController _pulseController;
   late AnimationController _rotateController;
+  late AnimationController _hexagonController;
+  late AnimationController _dataStreamController;
+  late AnimationController _glitchController;
   
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _hexagonAnimation;
+  late Animation<double> _dataStreamAnimation;
 
   String? _selectedFileName;
   int? _selectedFileSize;
@@ -49,35 +54,50 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     
     // Initialize multiple animation controllers for different effects
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 15),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
 
     _scanController = AnimationController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 4),
       vsync: this,
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 1, milliseconds: 500),
+      duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
     _rotateController = AnimationController(
+      duration: const Duration(seconds: 30),
+      vsync: this,
+    )..repeat();
+    
+    _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
+    
+    _dataStreamController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
+    
+    _glitchController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
     
     // Initialize animation objects (use AlwaysStoppedAnimation when animations are disabled)
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
 
-      _glowAnimation = Tween<double>(begin: 0.3, end: 0.8).animate(CurvedAnimation(
+      _glowAnimation = Tween<double>(begin: 0.4, end: 0.9).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
@@ -87,15 +107,43 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         curve: Curves.easeInOut,
       ));
 
-      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(
+      _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
+      
+      _hexagonAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_hexagonController);
+      
+      _dataStreamAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_dataStreamController);
+      
+      // Randomly trigger glitch effect
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
+      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
+    }
+  }
+
+  void _triggerGlitch() {
+    if (AnimationConfig.enableBackgroundAnimations) {
+      _glitchController.forward().then((_) {
+        _glitchController.reverse();
+      });
+      
+      // Schedule next glitch
+      Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
+        if (mounted) {
+          _triggerGlitch();
+        }
+      });
     }
   }
 
@@ -106,6 +154,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     _scanController.dispose();
     _pulseController.dispose();
     _rotateController.dispose();
+    _hexagonController.dispose();
+    _dataStreamController.dispose();
+    _glitchController.dispose();
     super.dispose();
   }
 
@@ -119,11 +170,14 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Animated cyberpunk background
+          // Enhanced animated cyberpunk background
           _buildAnimatedBackground(),
           
-          // Grid overlay effect
-          _buildGridOverlay(),
+          // Hexagon grid overlay effect
+          _buildHexagonGridOverlay(),
+          
+          // Data stream effect
+          _buildDataStreamEffect(),
           
           // Scan line effect
           _buildScanLine(),
@@ -165,7 +219,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             ),
           ),
           
-          // Cyberpunk frame borders
+          // Enhanced cyberpunk frame borders
           _buildCyberpunkFrame(),
         ],
       ),
@@ -178,9 +232,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+            gradient: RadialGradient(
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.3,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
@@ -202,16 +256,35 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildGridOverlay() {
+  Widget _buildHexagonGridOverlay() {
     return IgnorePointer(
-      child: CustomPaint(
-        painter: _GridPainter(),
-        size: Size.infinite,
+      child: AnimatedBuilder(
+        animation: _hexagonAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _HexagonGridPainter(_hexagonAnimation.value),
+            size: Size.infinite,
+          );
+        },
       ),
     );
   }
 
+  Widget _buildDataStreamEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _dataStreamAnimation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _DataStreamPainter(_dataStreamAnimation.value),
+          size: Size.infinite,
+        );
+      },
+    );
+  }
+
   Widget _buildScanLine() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: _scanAnimation,
       builder: (context, child) {
@@ -220,7 +293,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           left: 0,
           right: 0,
           child: Container(
-            height: 3,
+            height: 4,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -232,9 +305,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 2,
+                  color: Colors.cyan.withOpacity(0.6),
+                  blurRadius: 15,
+                  spreadRadius: 3,
                 ),
               ],
             ),
@@ -245,12 +318,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   }
 
   Widget _buildGlitchEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
     return IgnorePointer(
       child: AnimatedBuilder(
-        animation: _glowAnimation,
+        animation: _glitchController,
         builder: (context, child) {
           return Opacity(
-            opacity: (_glowAnimation.value - 0.3).clamp(0.0, 0.1),
+            opacity: _glitchController.value,
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -290,8 +364,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         return Row(
           children: [
             Container(
-              width: isVerySmallScreen ? 40 : isSmallScreen ? 50 : 60,
-              height: isVerySmallScreen ? 40 : isSmallScreen ? 50 : 60,
+              width: isVerySmallScreen ? 50 : isSmallScreen ? 60 : 70,
+              height: isVerySmallScreen ? 50 : isSmallScreen ? 60 : 70,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -301,24 +375,24 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+                borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                    blurRadius: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20,
-                    spreadRadius: 2,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                    blurRadius: isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25,
+                    spreadRadius: 3,
                   ),
                   BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 15,
-                    spreadRadius: 1,
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 15,
+                    spreadRadius: 2,
                   ),
                 ],
               ),
               child: Icon(
                 Icons.cloud_upload,
                 color: Colors.white,
-                size: isVerySmallScreen ? 20 : isSmallScreen ? 25 : 30,
+                size: isVerySmallScreen ? 25 : isSmallScreen ? 30 : 35,
               ),
             ),
             SizedBox(width: isVerySmallScreen ? 12 : 15),
@@ -336,24 +410,36 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     child: Text(
                       'UNGGAH FILE',
                       style: TextStyle(
-                        fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 20 : 24,
+                        fontSize: isVerySmallScreen ? 18 : isSmallScreen ? 22 : 26,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
-                        letterSpacing: isVerySmallScreen ? 1 : 2,
+                        letterSpacing: isVerySmallScreen ? 1.2 : 2,
                         fontFamily: 'Orbitron',
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  SizedBox(height: isVerySmallScreen ? 2 : 3),
+                  SizedBox(height: isVerySmallScreen ? 3 : 5),
+                  Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.cyan.withOpacity(_glowAnimation.value),
+                          Colors.pink.withOpacity(_glowAnimation.value),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: isVerySmallScreen ? 3 : 5),
                   Text(
                     'PEMROSESAN FILE',
                     style: TextStyle(
                       color: Colors.pink.shade300,
-                      fontSize: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12,
+                      fontSize: isVerySmallScreen ? 9 : isSmallScreen ? 11 : 13,
                       fontWeight: FontWeight.w300,
-                      letterSpacing: isVerySmallScreen ? 1 : 2,
+                      letterSpacing: isVerySmallScreen ? 1.2 : 2,
                       fontFamily: 'Courier',
                     ),
                     maxLines: 1,
@@ -377,25 +463,25 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           child: Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
+              borderRadius: BorderRadius.circular(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.2),
-                  Colors.purple.shade900.withOpacity(0.2),
+                  Colors.blue.shade900.withOpacity(0.3),
+                  Colors.purple.shade900.withOpacity(0.3),
                   Colors.black.withOpacity(0.7),
                 ],
               ),
               border: Border.all(
                 color: Colors.cyan.withOpacity(_glowAnimation.value),
-                width: 2,
+                width: 2.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                  blurRadius: isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25,
-                  spreadRadius: 5,
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                  blurRadius: isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28,
+                  spreadRadius: 6,
                 ),
               ],
             ),
@@ -407,13 +493,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   left: 0,
                   right: 0,
                   child: Container(
-                    height: 2,
+                    height: 3,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          Colors.cyan.withOpacity(0.6),
-                          Colors.pink.withOpacity(0.6),
+                          Colors.cyan.withOpacity(0.7),
+                          Colors.pink.withOpacity(0.7),
                           Colors.transparent,
                         ],
                       ),
@@ -423,24 +509,24 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 
                 // Content
                 Padding(
-                  padding: EdgeInsets.all(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
+                  padding: EdgeInsets.all(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       // Upload icon with animation
                       _buildUploadIcon(isVerySmallScreen, isSmallScreen),
                       
-                      SizedBox(height: isVerySmallScreen ? 15 : 20),
+                      SizedBox(height: isVerySmallScreen ? 18 : 22),
                       
                       // File info or placeholder
                       _buildFileInfo(isVerySmallScreen, isSmallScreen),
                       
-                      SizedBox(height: isVerySmallScreen ? 12 : 15),
+                      SizedBox(height: isVerySmallScreen ? 15 : 18),
                       
                       // Progress bar if uploading
                       if (_isUploading) _buildProgressBar(isVerySmallScreen, isSmallScreen),
                       
-                      SizedBox(height: isVerySmallScreen ? 12 : 15),
+                      SizedBox(height: isVerySmallScreen ? 15 : 18),
                       
                       // Status indicator
                       _buildStatusIndicator(isVerySmallScreen, isSmallScreen),
@@ -467,14 +553,14 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           animation: _glowAnimation,
           builder: (context, child) {
             return Container(
-              width: isVerySmallScreen ? 80 : isSmallScreen ? 100 : 120,
-              height: isVerySmallScreen ? 80 : isSmallScreen ? 100 : 120,
+              width: isVerySmallScreen ? 90 : isSmallScreen ? 110 : 130,
+              height: isVerySmallScreen ? 90 : isSmallScreen ? 110 : 130,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    Colors.pink.withOpacity(_glowAnimation.value * 0.1),
+                    Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                    Colors.pink.withOpacity(_glowAnimation.value * 0.2),
                     Colors.transparent,
                   ],
                 ),
@@ -490,13 +576,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             return Transform.rotate(
               angle: _rotateController.value * 2 * math.pi,
               child: Container(
-                width: isVerySmallScreen ? 70 : isSmallScreen ? 85 : 100,
-                height: isVerySmallScreen ? 70 : isSmallScreen ? 85 : 100,
+                width: isVerySmallScreen ? 80 : isSmallScreen ? 95 : 110,
+                height: isVerySmallScreen ? 80 : isSmallScreen ? 95 : 110,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.cyan.withOpacity(0.3),
-                    width: 2,
+                    color: Colors.cyan.withOpacity(0.4),
+                    width: 2.5,
                   ),
                 ),
               ),
@@ -509,8 +595,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           animation: _glowAnimation,
           builder: (context, child) {
             return Container(
-              width: isVerySmallScreen ? 50 : isSmallScreen ? 65 : 80,
-              height: isVerySmallScreen ? 50 : isSmallScreen ? 65 : 80,
+              width: isVerySmallScreen ? 60 : isSmallScreen ? 75 : 90,
+              height: isVerySmallScreen ? 60 : isSmallScreen ? 75 : 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -521,16 +607,16 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                    blurRadius: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20,
-                    spreadRadius: 3,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                    blurRadius: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22,
+                    spreadRadius: 4,
                   ),
                 ],
               ),
               child: Icon(
                 _selectedFileName != null ? Icons.description : Icons.cloud_upload,
                 color: Colors.white,
-                size: isVerySmallScreen ? 25 : isSmallScreen ? 32 : 40,
+                size: isVerySmallScreen ? 30 : isSmallScreen ? 37 : 45,
               ),
             );
           },
@@ -545,23 +631,23 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         Text(
           _selectedFileName ?? 'KLIK UNTUK MENGUNGGAH',
           style: TextStyle(
-            fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 14 : 16,
+            fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            letterSpacing: isVerySmallScreen ? 0.8 : 1,
+            letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
             fontFamily: 'Orbitron',
           ),
           textAlign: TextAlign.center,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        SizedBox(height: isVerySmallScreen ? 6 : 8),
+        SizedBox(height: isVerySmallScreen ? 8 : 10),
         if (_selectedFileName != null) ...[
           Text(
             '${_formatBytes(_selectedFileSize ?? 0)} • ${_formatDate(_selectedFileDate)}',
             style: TextStyle(
               color: Colors.white70,
-              fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,
+              fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 13 : 15,
               fontWeight: FontWeight.w300,
             ),
             textAlign: TextAlign.center,
@@ -573,9 +659,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             'MENDUKUNG: PDF, DOC, DOCX, TXT',
             style: TextStyle(
               color: Colors.cyan.shade300,
-              fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,
+              fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 13 : 15,
               fontWeight: FontWeight.w300,
-              letterSpacing: isVerySmallScreen ? 0.8 : 1,
+              letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
             ),
             textAlign: TextAlign.center,
             maxLines: 1,
@@ -590,9 +676,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     return Column(
       children: [
         Container(
-          height: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
+          height: isVerySmallScreen ? 5 : isSmallScreen ? 7 : 9,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(isVerySmallScreen ? 2 : isSmallScreen ? 3 : 4),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 3 : isSmallScreen ? 4 : 5),
             color: Colors.black.withOpacity(0.5),
           ),
           child: Stack(
@@ -600,9 +686,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               // Progress track
               Container(
                 width: double.infinity,
-                height: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
+                height: isVerySmallScreen ? 5 : isSmallScreen ? 7 : 9,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(isVerySmallScreen ? 2 : isSmallScreen ? 3 : 4),
+                  borderRadius: BorderRadius.circular(isVerySmallScreen ? 3 : isSmallScreen ? 4 : 5),
                   color: Colors.blue.shade900.withOpacity(0.3),
                 ),
               ),
@@ -612,10 +698,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                 animation: _glowAnimation,
                 builder: (context, child) {
                   return Container(
-                    width: (MediaQuery.of(context).size.width - (isVerySmallScreen ? 60 : isSmallScreen ? 80 : 100)) * _uploadProgress,
-                    height: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
+                    width: (MediaQuery.of(context).size.width - (isVerySmallScreen ? 70 : isSmallScreen ? 90 : 110)) * _uploadProgress,
+                    height: isVerySmallScreen ? 5 : isSmallScreen ? 7 : 9,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 2 : isSmallScreen ? 3 : 4),
+                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 3 : isSmallScreen ? 4 : 5),
                       gradient: LinearGradient(
                         colors: [
                           Colors.cyan.withOpacity(_glowAnimation.value),
@@ -624,8 +710,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.cyan.withOpacity(_glowAnimation.value * 0.5),
-                          blurRadius: isVerySmallScreen ? 4 : isSmallScreen ? 6 : 8,
+                          color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                          blurRadius: isVerySmallScreen ? 5 : isSmallScreen ? 7 : 9,
                           spreadRadius: 1,
                         ),
                       ],
@@ -636,15 +722,15 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             ],
           ),
         ),
-        SizedBox(height: isVerySmallScreen ? 6 : 8),
+        SizedBox(height: isVerySmallScreen ? 8 : 10),
         Text(
           'SEDANG MEMPROSES: ${(_uploadProgress * 100).toStringAsFixed(0)}%',
           style: TextStyle(
             color: Colors.cyan.shade300,
-            fontSize: isVerySmallScreen ? 9 : isSmallScreen ? 11 : 13,
+            fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,
             fontWeight: FontWeight.bold,
             fontFamily: 'Orbitron',
-            letterSpacing: isVerySmallScreen ? 0.8 : 1,
+            letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -661,21 +747,21 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       builder: (context, child) {
         return Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 18, 
-            vertical: isVerySmallScreen ? 6 : isSmallScreen ? 8 : 10
+            horizontal: isVerySmallScreen ? 14 : isSmallScreen ? 17 : 20, 
+            vertical: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12
           ),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+            color: Colors.black.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
             border: Border.all(
               color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 1.5,
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: isVerySmallScreen ? 6 : isSmallScreen ? 8 : 10,
-                spreadRadius: 1,
+                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12,
+                spreadRadius: 2,
               ),
             ],
           ),
@@ -685,17 +771,17 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               Icon(
                 Icons.verified,
                 color: Colors.cyan.shade300,
-                size: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
+                size: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
               ),
-              SizedBox(width: isVerySmallScreen ? 4 : 6),
+              SizedBox(width: isVerySmallScreen ? 6 : 8),
               Text(
                 'Berhasil Di unggah',
                 style: TextStyle(
                   color: Colors.cyan.shade300,
-                  fontSize: isVerySmallScreen ? 9 : isSmallScreen ? 11 : 13,
+                  fontSize: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 14,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Orbitron',
-                  letterSpacing: isVerySmallScreen ? 0.8 : 1,
+                  letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
                 ),
               ),
             ],
@@ -706,8 +792,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   }
 
   List<Widget> _buildUploadAreaCorners(bool isVerySmallScreen, bool isSmallScreen) {
-    final cornerSize = isVerySmallScreen ? 20.0 : isSmallScreen ? 25.0 : 30.0;
-    final borderWidth = isVerySmallScreen ? 2.0 : isSmallScreen ? 2.5 : 3.0;
+    final cornerSize = isVerySmallScreen ? 25.0 : isSmallScreen ? 30.0 : 35.0;
+    final borderWidth = isVerySmallScreen ? 2.5 : isSmallScreen ? 3.0 : 3.5;
     
     return [
       // Top Left
@@ -779,7 +865,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           ),
         ),
         if (_selectedFileName != null) ...[
-          SizedBox(width: isVerySmallScreen ? 8 : 10),
+          SizedBox(width: isVerySmallScreen ? 10 : 12),
           Expanded(
             child: _buildCyberButton(
               text: _isUploading ? 'MEMPROSES' : 'ANALISIS',
@@ -810,60 +896,60 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
             gradient: LinearGradient(
               colors: [
-                color.withOpacity(0.3),
-                color.withOpacity(0.1),
+                color.withOpacity(0.4),
+                color.withOpacity(0.2),
               ],
             ),
             border: Border.all(
               color: color.withOpacity(_glowAnimation.value),
-              width: 2,
+              width: 2.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: isVerySmallScreen ? 8 : isSmallScreen ? 10 : 15,
-                spreadRadius: 1,
+                color: color.withOpacity(_glowAnimation.value * 0.4),
+                blurRadius: isVerySmallScreen ? 10 : isSmallScreen ? 12 : 18,
+                spreadRadius: 2,
               ),
             ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
             child: InkWell(
               onTap: onPressed,
-              borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+              borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 18, 
-                  vertical: isVerySmallScreen ? 12 : isSmallScreen ? 14 : 16
+                  horizontal: isVerySmallScreen ? 14 : isSmallScreen ? 17 : 20, 
+                  vertical: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (isAnalyzing)
                       SizedBox(
-                        width: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
-                        height: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
+                        width: isVerySmallScreen ? 18 : isSmallScreen ? 20 : 22,
+                        height: isVerySmallScreen ? 18 : isSmallScreen ? 20 : 22,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                          strokeWidth: 2.5,
                           value: _uploadProgress,
                           valueColor: AlwaysStoppedAnimation<Color>(color),
                         ),
                       )
                     else
-                      Icon(icon, color: color, size: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20),
-                    SizedBox(width: isVerySmallScreen ? 6 : 8),
+                      Icon(icon, color: color, size: isVerySmallScreen ? 18 : isSmallScreen ? 20 : 22),
+                    SizedBox(width: isVerySmallScreen ? 8 : 10),
                     Flexible(
                       child: Text(
                         text,
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: isVerySmallScreen ? 11 : isSmallScreen ? 13 : 15,
-                          letterSpacing: isVerySmallScreen ? 0.8 : 1,
+                          fontSize: isVerySmallScreen ? 12 : isSmallScreen ? 14 : 16,
+                          letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
                           fontFamily: 'Orbitron',
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -890,7 +976,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -900,6 +986,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -909,7 +1002,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 2,
+              height: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -919,6 +1012,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -928,7 +1028,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             bottom: 0,
             left: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -940,6 +1040,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -949,7 +1056,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             bottom: 0,
             right: 0,
             child: Container(
-              width: 2,
+              width: 3,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -961,6 +1068,13 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     Colors.transparent,
                   ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1145,7 +1259,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             maxHeight: screenSize.height * 0.7,
           ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -1160,25 +1274,25 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             ),
             border: Border.all(
               color: aiPct > 50 ? Colors.red : Colors.cyan,
-              width: 2
+              width: 2.5
             ),
             boxShadow: [
               BoxShadow(
-                color: (aiPct > 50 ? Colors.red : Colors.cyan).withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
+                color: (aiPct > 50 ? Colors.red : Colors.cyan).withOpacity(0.6),
+                blurRadius: 25,
+                spreadRadius: 6,
               ),
             ],
           ),
           child: SingleChildScrollView(
             child: Padding(
-              padding: EdgeInsets.all(isVerySmallScreen ? 15 : isSmallScreen ? 20 : 25),
+              padding: EdgeInsets.all(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: isVerySmallScreen ? 60 : isSmallScreen ? 70 : 80,
-                    height: isVerySmallScreen ? 60 : isSmallScreen ? 70 : 80,
+                    width: isVerySmallScreen ? 70 : isSmallScreen ? 80 : 90,
+                    height: isVerySmallScreen ? 70 : isSmallScreen ? 80 : 90,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Colors.cyan, Colors.pink],
@@ -1186,39 +1300,39 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.cyan.withOpacity(0.5),
-                          blurRadius: isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20,
-                          spreadRadius: 3,
+                          color: Colors.cyan.withOpacity(0.6),
+                          blurRadius: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22,
+                          spreadRadius: 4,
                         ),
                       ],
                     ),
                     child: Icon(
                       Icons.verified,
                       color: Colors.white,
-                      size: isVerySmallScreen ? 30 : isSmallScreen ? 35 : 40,
+                      size: isVerySmallScreen ? 35 : isSmallScreen ? 40 : 45,
                     ),
                   ),
-                  SizedBox(height: isVerySmallScreen ? 15 : 20),
+                  SizedBox(height: isVerySmallScreen ? 18 : 22),
                   Text(
                     'ANALISIS SELESAI',
                     style: TextStyle(
-                      fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
+                      fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.cyan.shade300,
                       fontFamily: 'Orbitron',
-                      letterSpacing: isVerySmallScreen ? 0.8 : 1,
+                      letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: isVerySmallScreen ? 12 : 15),
+                  SizedBox(height: isVerySmallScreen ? 15 : 18),
                   Container(
-                    padding: EdgeInsets.all(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+                    padding: EdgeInsets.all(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : isSmallScreen ? 15 : 20),
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
                       border: Border.all(
-                        color: Colors.cyan.withOpacity(0.3),
-                        width: 1,
+                        color: Colors.cyan.withOpacity(0.4),
+                        width: 1.5,
                       ),
                     ),
                     child: Column(
@@ -1230,21 +1344,21 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                               'Deteksi AI:',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 14,
+                                fontSize: 16,
                               ),
                             ),
                             Text(
                               '${aiPct.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                                fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
+                                fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: isVerySmallScreen ? 10 : 12),
+                        SizedBox(height: isVerySmallScreen ? 12 : 15),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -1252,14 +1366,14 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                               'Ditulis Manusia:',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 14,
+                                fontSize: 16,
                               ),
                             ),
                             Text(
                               '${humanPct.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: Colors.cyan.shade300,
-                                fontSize: isVerySmallScreen ? 14 : isSmallScreen ? 16 : 18,
+                                fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
                                 fontWeight: FontWeight.bold,
                                 fontFamily: 'Orbitron',
                               ),
@@ -1269,7 +1383,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       ],
                     ),
                   ),
-                  SizedBox(height: isVerySmallScreen ? 15 : 20),
+                  SizedBox(height: isVerySmallScreen ? 18 : 22),
                   _buildCyberButton(
                     text: 'TUTUP',
                     icon: Icons.close,
@@ -1288,36 +1402,92 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   }
 }
 
-class _GridPainter extends CustomPainter {
+class _HexagonGridPainter extends CustomPainter {
+  final double animationValue;
+  _HexagonGridPainter(this.animationValue);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.05)
+      ..color = Colors.cyan.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
+    
+    const hexSize = 40.0;
+    const hexHeight = hexSize * 2;
+    final hexWidth = math.sqrt(3) * hexSize;
+    final vertDist = hexHeight * 3 / 4;
 
-    const gridSize = 30.0;
+    int cols = (size.width / hexWidth).ceil() + 1;
+    int rows = (size.height / vertDist).ceil() + 1;
 
-    // Draw vertical lines
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final x = col * hexWidth + (row % 2) * hexWidth / 2;
+        final y = row * vertDist;
+        
+        // Add some animation by shifting hexagons
+        final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
+        final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
+        
+        _drawHexagon(canvas, Offset(x + offsetX, y + offsetY), hexSize, paint);
+      }
     }
+  }
 
-    // Draw horizontal lines
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+  void _drawHexagon(Canvas canvas, Offset center, double size, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = 2 * math.pi * i / 6 - math.pi / 2;
+      final x = center.dx + size * math.cos(angle);
+      final y = center.dy + size * math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _DataStreamPainter extends CustomPainter {
+  final double animationValue;
+  _DataStreamPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.pink.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final random = math.Random(123);
+    
+    for (int i = 0; i < 5; i++) {
+      final startX = random.nextDouble() * size.width;
+      final startY = -50.0;
+      final endY = size.height + 50;
+      
+      path.moveTo(startX, startY);
+      
+      for (double y = startY; y < endY; y += 20) {
+        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
+        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
+      }
+      
+      canvas.drawPath(path, paint);
+      path.reset();
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class _ParticlesPainter extends CustomPainter {
@@ -1328,15 +1498,15 @@ class _ParticlesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.3)
+      ..color = Colors.cyan.withOpacity(0.4)
       ..style = PaintingStyle.fill;
     
     final random = math.Random(42); // Fixed seed for consistent particles
     
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 30; i++) {
       final x = (random.nextDouble() * size.width);
       final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 2 + 1;
+      final radius = random.nextDouble() * 3 + 1;
       
       canvas.drawCircle(Offset(x, y), radius, paint);
     }

@@ -285,6 +285,11 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
   CameraController? _cameraController;
   TextRecognizer? _textRecognizer;
   ObjectDetector? _objectDetector;
+  // Suggested ROI and OCR hint for manual capture
+  Rect? _suggestedRoi; // coordinates in preview image space (will be transformed for overlay)
+  String? _suggestedText;
+  double _suggestedConfidence = 0.0;
+  Timer? _suggestionClearTimer;
   bool _isProcessingFrame = false;
   int _throttleMs = 500; // Increased throttle for better performance
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
@@ -389,7 +394,18 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
 
                       if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 8) {
                         debugPrint('ROI OCR detected text len=${recognized.text.length}');
-                        try { await _takePicture(); } catch (_) {}
+                        // Instead of auto-capturing, store a suggested ROI and show overlay so user can capture manually
+                        setState(() {
+                          _suggestedRoi = Rect.fromLTWH(left.toDouble(), top.toDouble(), w.toDouble(), h.toDouble());
+                          _suggestedText = recognized.text.trim();
+                          _suggestedConfidence = detection.confidence;
+                        });
+
+                        // Clear any previous timer and schedule suggestion clear
+                        _suggestionClearTimer?.cancel();
+                        _suggestionClearTimer = Timer(const Duration(seconds: 6), () {
+                          if (mounted) setState(() { _suggestedRoi = null; _suggestedText = null; _suggestedConfidence = 0.0; });
+                        });
                       }
 
                       try { await File(tmpPath).delete(); } catch (_) {}
@@ -420,7 +436,20 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
 
               if (recognized.text.trim().isNotEmpty && recognized.text.trim().length > 8) {
                 debugPrint('Stream OCR detected significant text length=${recognized.text.length}');
-                try { await _takePicture(); } catch (_) {}
+                // Show suggestion for full-frame OCR instead of auto-capture
+                final full = img.decodeImage(preprocessed);
+                if (full != null) {
+                  setState(() {
+                    _suggestedRoi = Rect.fromLTWH(0, 0, full.width.toDouble(), full.height.toDouble());
+                    _suggestedText = recognized.text.trim();
+                    _suggestedConfidence = detection.confidence;
+                  });
+
+                  _suggestionClearTimer?.cancel();
+                  _suggestionClearTimer = Timer(const Duration(seconds: 6), () {
+                    if (mounted) setState(() { _suggestedRoi = null; _suggestedText = null; _suggestedConfidence = 0.0; });
+                  });
+                }
               }
             } catch (e) {
               debugPrint('Stream OCR error after detection: $e');
@@ -1237,6 +1266,55 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
               ],
             ),
           ),
+          // Suggestion overlay (shows when _suggestedRoi != null)
+          if (_suggestedRoi != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 120,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.cyan.withOpacity(_glowAnimation.value), width: 1.5),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _suggestedText ?? 'Teks terdeteksi',
+                            style: const TextStyle(color: Colors.white, fontSize: 14),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('${(_suggestedConfidence * 100).toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white70)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _dismissSuggestion,
+                          child: const Text('Tutup', style: TextStyle(color: Colors.white)),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _isCapturing ? null : _captureSuggested,
+                          child: const Text('Capture now'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           if (_isAnalyzing)
             AnimatedBuilder(
@@ -1653,6 +1731,31 @@ class _CameraScanScreenState extends State<CameraScanScreen> with TickerProvider
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  void _dismissSuggestion() {
+    _suggestionClearTimer?.cancel();
+    setState(() {
+      _suggestedRoi = null;
+      _suggestedText = null;
+      _suggestedConfidence = 0.0;
+    });
+  }
+
+  Future<void> _captureSuggested() async {
+    // User requested a manual capture based on suggestion
+    _suggestionClearTimer?.cancel();
+    setState(() {
+      _isCapturing = true;
+    });
+
+    try {
+      await _takePicture();
+    } finally {
+      if (mounted) setState(() { _isCapturing = false; });
+      // Clear suggestion after capture
+      setState(() { _suggestedRoi = null; _suggestedText = null; _suggestedConfidence = 0.0; });
     }
   }
 
