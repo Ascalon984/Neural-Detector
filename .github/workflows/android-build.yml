@@ -88,15 +88,16 @@ jobs:
           flutter build apk --release --target-platform android-arm64
 
       # Build 2: AAB Rilis Lengkap (untuk publikasi ke Play Store)
-      - name: 📦 Build Full Release AAB (with Obfuscation & Size Analysis)
+      - name: 📦 Build Full Release AAB (with Obfuscation)
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
           echo "Building optimized AAB for release..."
+          # Note: --analyze-size cannot be combined with --split-debug-info
+          # Keep split-debug-info for obfuscation mapping; run analyze-size separately if needed.
           flutter build appbundle \
             --release \
             --obfuscate \
             --split-debug-info=build/symbols \
-            --analyze-size \
             --tree-shake-icons
 
       # Build 3: APK Split-per-ABI (untuk distribusi manual)
