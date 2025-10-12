@@ -47,6 +47,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   DateTime? _selectedFileDate;
   bool _isUploading = false;
   double _uploadProgress = 0.0;
+  String? _fileContent;
+  
 
   @override
   void initState() {
@@ -1100,6 +1102,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               _selectedFileName = info['name'] as String?;
               _selectedFileSize = info['size'] as int?;
               _selectedFileDate = webModified;
+              _fileContent = info['content'] as String?;
             });
           }
           
@@ -1133,11 +1136,20 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           modified = null;
         }
 
+        // Read file content
+        String? content;
+        try {
+          content = await file.readAsString();
+        } catch (_) {
+          content = null;
+        }
+
         if (mounted) {
           setState(() {
             _selectedFileName = p.basename(filePath);
             _selectedFileSize = length;
             _selectedFileDate = modified;
+            _fileContent = content;
           });
         }
 
@@ -1198,7 +1210,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     });
     
     // Run analyzer (we pass filename as placeholder text; replace with real text extractor later)
-    Map<String, double> result = await TextAnalyzer.analyzeText(_selectedFileName ?? '');
+    Map<String, double> result = await TextAnalyzer.analyzeText(_fileContent ?? _selectedFileName ?? '');
     // apply sensitivity adjustment
     try {
       result = await applySensitivityToResult(result);
@@ -1206,6 +1218,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
 
     final aiPct = (result['ai_detection'] ?? 0.0);
     final humanPct = (result['human_written'] ?? 0.0);
+
+  // (highlight generation removed since the "LIHAT TEKS" view was removed)
 
     // Save persistent history
     final sized = _selectedFileSize != null ? _formatBytes(_selectedFileSize!) : '-';
@@ -1240,6 +1254,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       _showAnalysisResult(aiPct, humanPct);
     }
   }
+
+  
 
   void _showAnalysisResult(double aiPct, double humanPct) {
     if (!mounted) return;
@@ -1384,13 +1400,19 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     ),
                   ),
                   SizedBox(height: isVerySmallScreen ? 18 : 22),
-                  _buildCyberButton(
-                    text: 'TUTUP',
-                    icon: Icons.close,
-                    onPressed: () => Navigator.pop(context),
-                    color: Colors.cyan,
-                    isVerySmallScreen: isVerySmallScreen,
-                    isSmallScreen: isSmallScreen,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCyberButton(
+                          text: 'TUTUP',
+                          icon: Icons.close,
+                          onPressed: () => Navigator.pop(context),
+                          color: Colors.cyan,
+                          isVerySmallScreen: isVerySmallScreen,
+                          isSmallScreen: isSmallScreen,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1400,6 +1422,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       ),
     );
   }
+
+
 }
 
 class _HexagonGridPainter extends CustomPainter {
