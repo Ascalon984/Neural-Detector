@@ -4,7 +4,6 @@ import 'bottom_nav_bar.dart';
 import '../screens/home_screen.dart';
 import '../screens/text_editor.dart';
 import '../screens/file_upload.dart';
-import '../screens/camera_scan_screen.dart';
 import '../screens/history_screen.dart';
 import '../screens/settings_screen.dart';
 import '../theme/theme_provider.dart';
@@ -57,7 +56,7 @@ class _MainShellState extends State<MainShell> {
           HomeScreen(onNavTap: _onTap, currentIndex: _currentIndex),
           const TextEditorScreen(),
           const FileUploadScreen(),
-          const CameraScanScreen(),
+          // Camera screen removed
           const HistoryScreen(),
           const SettingsScreen(),
         ],

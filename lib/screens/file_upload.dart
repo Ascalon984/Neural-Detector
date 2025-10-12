@@ -425,6 +425,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   SizedBox(height: isVerySmallScreen ? 3 : 5),
                   Container(
                     height: 3,
+                    width: 40,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -489,7 +490,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             ),
             child: Stack(
               children: [
-                // Scan line inside upload area
+                // Scan line inside upload area (subtle cyan only)
                 Positioned(
                   top: _scanAnimation.value * 400,
                   left: 0,
@@ -501,7 +502,6 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                         colors: [
                           Colors.transparent,
                           Colors.cyan.withOpacity(0.7),
-                          Colors.pink.withOpacity(0.7),
                           Colors.transparent,
                         ],
                       ),
@@ -509,35 +509,36 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   ),
                 ),
                 
-                // Content
-                Padding(
-                  padding: EdgeInsets.all(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Upload icon with animation
-                      _buildUploadIcon(isVerySmallScreen, isSmallScreen),
-                      
-                      SizedBox(height: isVerySmallScreen ? 18 : 22),
-                      
-                      // File info or placeholder
-                      _buildFileInfo(isVerySmallScreen, isSmallScreen),
-                      
-                      SizedBox(height: isVerySmallScreen ? 15 : 18),
-                      
-                      // Progress bar if uploading
-                      if (_isUploading) _buildProgressBar(isVerySmallScreen, isSmallScreen),
-                      
-                      SizedBox(height: isVerySmallScreen ? 15 : 18),
-                      
-                      // Status indicator
-                      _buildStatusIndicator(isVerySmallScreen, isSmallScreen),
-                    ],
+                // Content (centered)
+                Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Upload icon with animation
+                        _buildUploadIcon(isVerySmallScreen, isSmallScreen),
+
+                        SizedBox(height: isVerySmallScreen ? 18 : 22),
+
+                        // File info or placeholder
+                        _buildFileInfo(isVerySmallScreen, isSmallScreen),
+
+                        SizedBox(height: isVerySmallScreen ? 15 : 18),
+
+                        // Progress bar if uploading
+                        if (_isUploading) _buildProgressBar(isVerySmallScreen, isSmallScreen),
+
+                        SizedBox(height: isVerySmallScreen ? 15 : 18),
+
+                        // Status indicator
+                        _buildStatusIndicator(isVerySmallScreen, isSmallScreen),
+                      ],
+                    ),
                   ),
                 ),
-                
-                // Corner accents
-                ..._buildUploadAreaCorners(isVerySmallScreen, isSmallScreen),
               ],
             ),
           ),
@@ -793,65 +794,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  List<Widget> _buildUploadAreaCorners(bool isVerySmallScreen, bool isSmallScreen) {
-    final cornerSize = isVerySmallScreen ? 25.0 : isSmallScreen ? 30.0 : 35.0;
-    final borderWidth = isVerySmallScreen ? 2.5 : isSmallScreen ? 3.0 : 3.5;
-    
-    return [
-      // Top Left
-      Positioned(
-        top: 0,
-        left: 0,
-        child: _buildCornerWidget(true, true, cornerSize, borderWidth),
-      ),
-      // Top Right
-      Positioned(
-        top: 0,
-        right: 0,
-        child: _buildCornerWidget(false, true, cornerSize, borderWidth),
-      ),
-      // Bottom Left
-      Positioned(
-        bottom: 0,
-        left: 0,
-        child: _buildCornerWidget(true, false, cornerSize, borderWidth),
-      ),
-      // Bottom Right
-      Positioned(
-        bottom: 0,
-        right: 0,
-        child: _buildCornerWidget(false, false, cornerSize, borderWidth),
-      ),
-    ];
-  }
-
-  Widget _buildCornerWidget(bool isLeft, bool isTop, double size, double borderWidth) {
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        return Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            border: Border(
-              left: isLeft
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-              right: !isLeft
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-              top: isTop
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-              bottom: !isTop
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-            ),
-          ),
-        );
-      },
-    );
-  }
+  
 
   Widget _buildActionButtons(bool isVerySmallScreen, bool isSmallScreen) {
     return Row(
@@ -972,112 +915,58 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     return IgnorePointer(
       child: Stack(
         children: [
-          // Top border
+          // Top thin glass-blue navbar line (match editor)
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1a253e).withOpacity(0.95),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.2),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-          // Bottom border
+          // Bottom subtle border
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.12),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
-          // Left border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Right border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],

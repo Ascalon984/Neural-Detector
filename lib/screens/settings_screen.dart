@@ -400,14 +400,18 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildHeader() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
         return Row(
           children: [
             Container(
-              width: 60,
-              height: 60,
+              width: isVerySmallScreen ? 40 : (isSmallScreen ? 50 : 60),
+              height: isVerySmallScreen ? 40 : (isSmallScreen ? 50 : 60),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -417,27 +421,27 @@ class _SettingsScreenState extends State<SettingsScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : (isSmallScreen ? 15 : 20)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
-                    blurRadius: 20,
-                    spreadRadius: 3,
-                  ),
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
                     blurRadius: 15,
                     spreadRadius: 2,
                   ),
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.settings,
                 color: Colors.white,
-                size: 30,
+                size: isVerySmallScreen ? 20 : (isSmallScreen ? 25 : 30),
               ),
             ),
-            const SizedBox(width: 18),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,19 +456,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                     child: Text(
                       'PENGATURAN',
                       style: TextStyle(
-                        fontSize: MediaQuery.of(context).size.width < 360 ? 22 : 26,
+                        fontSize: isVerySmallScreen ? 18 : (isSmallScreen ? 22 : 26),
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         letterSpacing: 2,
                         fontFamily: 'Orbitron',
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  SizedBox(height: 5),
+                  SizedBox(height: isVerySmallScreen ? 2 : 4),
                   Container(
-                    height: 3,
+                    height: 2,
+                    width: 40,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -473,19 +476,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ],
                       ),
                     ),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'PENGATURAN APLIKASI & SISTEM',
-                    style: TextStyle(
-                      color: Colors.pink.shade300,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 2,
-                      fontFamily: 'Courier',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -1123,112 +1113,34 @@ class _SettingsScreenState extends State<SettingsScreen>
     return IgnorePointer(
       child: Stack(
         children: [
-          // Top border
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Bottom border
+          // Bottom navbar-like thin bar (match Home)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1a253e).withOpacity(0.95),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.2),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                        offset: const Offset(0, -1),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
-          // Left border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Right border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],

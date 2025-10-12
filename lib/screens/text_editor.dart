@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../config/animation_config.dart';
 import 'dart:math' as math;
+import '../config/animation_config.dart';
 import '../utils/text_analyzer.dart';
 import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
@@ -17,26 +17,18 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     with TickerProviderStateMixin {
   late AnimationController _backgroundController;
   late AnimationController _glowController;
-  late AnimationController _scanController;
   late AnimationController _pulseController;
   late AnimationController _typingController;
-  late AnimationController _rotateController;
   late AnimationController _hexagonController;
-  late AnimationController _dataStreamController;
-  late AnimationController _glitchController;
   
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
-  late Animation<double> _scanAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _textGlowAnimation;
   late Animation<double> _hexagonAnimation;
-  late Animation<double> _dataStreamAnimation;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
-  final ScrollController _editorScrollController = ScrollController();
-  final ScrollController _outerScrollController = ScrollController();
   bool _isAnalyzing = false;
   double _analysisProgress = 0.0;
   double _aiDetectionPercentage = 0.0;
@@ -46,49 +38,29 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   void initState() {
     super.initState();
     
-    // Initialize multiple animation controllers for different effects
+    // Initialize animation controllers
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 15),
+      duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 3),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _scanController = AnimationController(
       duration: const Duration(seconds: 4),
       vsync: this,
-    )..repeat();
+    )..repeat(reverse: true);
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 2, milliseconds: 500),
+      duration: Duration(seconds: 3, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
-    _typingController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-
-    _rotateController = AnimationController(
-      duration: const Duration(seconds: 30),
-      vsync: this,
-    )..repeat();
-    
     _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
-    
-    _dataStreamController = AnimationController(
-      duration: const Duration(seconds: 8),
-      vsync: this,
-    )..repeat();
-    
-    _glitchController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+
+    _typingController = AnimationController(
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
 
@@ -99,76 +71,39 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       ).animate(_backgroundController);
 
       _glowAnimation = Tween<double>(
-        begin: 0.4,
-        end: 0.9,
+        begin: 0.3,
+        end: 0.7,
       ).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
 
-      _scanAnimation = Tween<double>(
-        begin: -0.2,
-        end: 1.2,
-      ).animate(CurvedAnimation(
-        parent: _scanController,
-        curve: Curves.easeInOut,
-      ));
-
       _pulseAnimation = Tween<double>(
-        begin: 0.97,
-        end: 1.03,
+        begin: 0.98,
+        end: 1.02,
       ).animate(CurvedAnimation(
         parent: _pulseController,
         curve: Curves.easeInOut,
       ));
 
       _textGlowAnimation = Tween<double>(
-        begin: 0.1,
-        end: 0.3,
+        begin: 0.05,
+        end: 0.15,
       ).animate(CurvedAnimation(
         parent: _glowController,
         curve: Curves.easeInOut,
       ));
-      
+
       _hexagonAnimation = Tween<double>(
         begin: 0.0,
         end: 1.0,
       ).animate(_hexagonController);
-      
-      _dataStreamAnimation = Tween<double>(
-        begin: 0.0,
-        end: 1.0,
-      ).animate(_dataStreamController);
-      
-      // Randomly trigger glitch effect
-      Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) {
-          _triggerGlitch();
-        }
-      });
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
-      _scanAnimation = AlwaysStoppedAnimation(0.0);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _textGlowAnimation = AlwaysStoppedAnimation(0.2);
+      _textGlowAnimation = AlwaysStoppedAnimation(0.1);
       _hexagonAnimation = AlwaysStoppedAnimation(0.0);
-      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
-    }
-  }
-
-  void _triggerGlitch() {
-    if (AnimationConfig.enableBackgroundAnimations) {
-      _glitchController.forward().then((_) {
-        _glitchController.reverse();
-      });
-      
-      // Schedule next glitch
-      Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
-        if (mounted) {
-          _triggerGlitch();
-        }
-      });
     }
   }
 
@@ -176,23 +111,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   void dispose() {
     _backgroundController.dispose();
     _glowController.dispose();
-    _scanController.dispose();
     _pulseController.dispose();
-    _typingController.dispose();
-    _rotateController.dispose();
     _hexagonController.dispose();
-    _dataStreamController.dispose();
-    _glitchController.dispose();
+    _typingController.dispose();
     _textController.dispose();
     _textFocusNode.dispose();
-    _editorScrollController.dispose();
-    _outerScrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get screen size for responsive design
     final screenSize = MediaQuery.of(context).size;
     final isSmallScreen = screenSize.width < 600;
     
@@ -200,77 +128,80 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Enhanced animated cyberpunk background
-          _buildAnimatedBackground(),
+          // Simplified animated background
+          _buildSimplifiedBackground(),
+
+          // Subtle animated scanlines to give a retro-futuristic/cyberpunk feel
+          _buildScanlines(),
           
-          // Hexagon grid overlay effect
-          _buildHexagonGridOverlay(),
-          
-          // Data stream effect
-          _buildDataStreamEffect(),
-          
-          // Scan line effect
-          _buildScanLine(),
-          
-          // Glitch effect overlay
-          _buildGlitchEffect(),
-          
-          // Floating particles effect
-          _buildFloatingParticles(),
-          
-          // Main content
+          // Hexagon background overlay (match home screen)
+          if (AnimationConfig.enableBackgroundAnimations)
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _hexagonAnimation,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _HexagonGridPainter(_hexagonAnimation.value),
+                    size: Size.infinite,
+                  );
+                },
+              ),
+            ),
+
+          // Main content (scrollable to avoid overflow on small screens)
           SafeArea(
-            child: Padding(
-              padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
-              child: ScrollConfiguration(
-                behavior: const MaterialScrollBehavior().copyWith(
-                  scrollbars: false,
-                ),
-                child: SingleChildScrollView(
-                  controller: _outerScrollController,
-                  reverse: true,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.vertical),
+                child: Padding(
+                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildHeader(),
-                      SizedBox(height: isSmallScreen ? 15 : 25),
-                      _buildTextEditorArea(),
-                      SizedBox(height: isSmallScreen ? 15 : 25),
-                      _buildStatsBar(),
-                      SizedBox(height: isSmallScreen ? 15 : 25),
-                      _buildActionButtons(),
+                      // Header
+                      _buildMinimalistHeader(isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 20 : 30),
+                      
+                      // Text editor
+                      _buildMinimalistTextEditor(isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 16 : 24),
+                      
+                      // Stats bar
+                      _buildMinimalistStatsBar(isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 16 : 24),
+                      
+                      // Action buttons
+                      _buildMinimalistActionButtons(isSmallScreen),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-          
-          // Enhanced cyberpunk frame borders
-          _buildCyberpunkFrame(),
         ],
       ),
     );
   }
 
-  Widget _buildAnimatedBackground() {
+  Widget _buildSimplifiedBackground() {
     return AnimatedBuilder(
       animation: _backgroundAnimation,
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
             gradient: RadialGradient(
-              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
-              radius: 1.2 + _backgroundAnimation.value * 0.3,
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.2, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.2,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
-                  const Color(0xFF1a0033),
+                  const Color(0xFF0f172a),
                   _backgroundAnimation.value,
                 )!,
                 Color.lerp(
                   const Color(0xFF0d1117),
-                  const Color(0xFF0a0e27),
+                  const Color(0xFF0f172a),
                   _backgroundAnimation.value,
                 )!,
                 Colors.black,
@@ -283,190 +214,106 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildHexagonGridOverlay() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _hexagonAnimation,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _HexagonGridPainter(_hexagonAnimation.value),
-            size: Size.infinite,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildDataStreamEffect() {
-    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
-    return AnimatedBuilder(
-      animation: _dataStreamAnimation,
-      builder: (context, child) {
-        return CustomPaint(
-          painter: _DataStreamPainter(_dataStreamAnimation.value),
-          size: Size.infinite,
-        );
-      },
-    );
-  }
-
-  Widget _buildScanLine() {
-    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
-    return AnimatedBuilder(
-      animation: _scanAnimation,
-      builder: (context, child) {
-        return Positioned(
-          top: _scanAnimation.value * MediaQuery.of(context).size.height,
-          left: 0,
-          right: 0,
-          child: Container(
-            height: 4,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  Colors.cyan.withOpacity(0.8),
-                  Colors.pink.withOpacity(0.8),
-                  Colors.transparent,
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.cyan.withOpacity(0.6),
-                  blurRadius: 15,
-                  spreadRadius: 3,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildGlitchEffect() {
-    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _glitchController,
-        builder: (context, child) {
-          return Opacity(
-            opacity: _glitchController.value,
-            child: Container(
+  Widget _buildMinimalistHeader(bool isSmallScreen) {
+    return Row(
+      children: [
+        // Icon
+        AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              width: isSmallScreen ? 50 : 60,
+              height: isSmallScreen ? 50 : 60,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.pink.withOpacity(0.1),
-                    Colors.cyan.withOpacity(0.1),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        return Row(
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
+                color: const Color(0xFF1a253e).withOpacity(0.85),
                 gradient: LinearGradient(
                   colors: [
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
+                    const Color(0xFF2a4675).withOpacity(0.95),
+                    const Color(0xFF1a253e).withOpacity(0.85),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
+                border: Border.all(
+                  color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.5),
+                  width: 1.5,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
-                    blurRadius: 25,
-                    spreadRadius: 4,
+                    color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.25),
+                    blurRadius: 18,
+                    spreadRadius: 2,
                   ),
                   BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
-                    blurRadius: 20,
-                    spreadRadius: 3,
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.edit_document,
                 color: Colors.white,
-                size: 40,
+                size: isSmallScreen ? 25 : 30,
               ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ShaderMask(
+            );
+          },
+        ),
+        
+        SizedBox(width: isSmallScreen ? 16 : 20),
+        
+        // Title
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AnimatedBuilder(
+                animation: _glowAnimation,
+                builder: (context, child) {
+                  // also read _textGlowAnimation so analyzer doesn't flag it as unused
+                  final double glow = _glowAnimation.value;
+                  final double textGlow = _textGlowAnimation.value;
+                  final double combined = (glow + textGlow * 0.5).clamp(0.0, 1.0).toDouble();
+
+                  return ShaderMask(
                     shaderCallback: (bounds) => LinearGradient(
                       colors: [
-                        Colors.cyan.withOpacity(_glowAnimation.value),
-                        Colors.pink.withOpacity(_glowAnimation.value),
+                        const Color(0xFF00FFD1).withOpacity(combined),
+                        const Color(0xFFFF4DFF).withOpacity(combined),
                       ],
                     ).createShader(bounds),
-                    child: const Text(
+                    child: Text(
                       'EDITOR TEKS',
                       style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
+                        fontSize: isSmallScreen ? 22 : 28,
+                        fontWeight: FontWeight.w700,
                         color: Colors.white,
-                        letterSpacing: 3,
+                        letterSpacing: 1.5 + textGlow * 2.0,
                         fontFamily: 'Orbitron',
                       ),
                     ),
-                  ),
-                  SizedBox(height: 5),
-                  Container(
-                    height: 3,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.cyan.withOpacity(_glowAnimation.value),
-                          Colors.pink.withOpacity(_glowAnimation.value),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'MULAI DENGAN TEKS',
-                    style: TextStyle(
-                      color: Colors.pink.shade300,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 3,
-                      fontFamily: 'Courier',
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
-            ),
-          ],
-        );
-      },
+              SizedBox(height: 4),
+              Text(
+                'Analisis AI untuk teks Anda',
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: isSmallScreen ? 12 : 14,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildTextEditorArea() {
+  Widget _buildMinimalistTextEditor(bool isSmallScreen) {
     final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 600;
-    
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
@@ -478,166 +325,95 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               minHeight: isSmallScreen ? 200 : 250,
             ),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.blue.shade900.withOpacity(0.3),
-                  Colors.purple.shade900.withOpacity(0.3),
-                  Colors.black.withOpacity(0.7),
-                ],
-              ),
+              color: const Color(0xFF1a253e).withOpacity(0.75),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.cyan.withOpacity(_glowAnimation.value),
-                width: 2.5,
+                color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.6),
+                width: 1.5,
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  const Color(0xFF2a4675).withOpacity(0.85),
+                  const Color(0xFF1a253e).withOpacity(0.75),
+                ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
-                  blurRadius: 25,
-                  spreadRadius: 6,
+                  color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.15),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Stack(
+            child: Column(
               children: [
-                // Scan line inside editor
-                if (AnimationConfig.enableBackgroundAnimations)
-                  Positioned(
-                    top: _scanAnimation.value * 300,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Colors.cyan.withOpacity(0.7),
-                            Colors.pink.withOpacity(0.7),
-                            Colors.transparent,
-                          ],
-                        ),
+                // Editor header
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 16 : 20,
+                    vertical: isSmallScreen ? 12 : 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2a4675).withOpacity(0.95),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.6),
+                        width: 1,
                       ),
                     ),
-                  ),
-                
-                Padding(
-                  padding: EdgeInsets.all(isSmallScreen ? 18 : 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Editor header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              'INPUT TEKS',
-                              style: TextStyle(
-                                color: Colors.cyan.shade300,
-                                fontSize: isSmallScreen ? 16 : 18,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.5,
-                                fontFamily: 'Orbitron',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          AnimatedBuilder(
-                            animation: _glowAnimation,
-                            builder: (context, child) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(
-                                    color: Colors.cyan.withOpacity(_glowAnimation.value),
-                                    width: 1.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                                      blurRadius: 8,
-                                      spreadRadius: 1,
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  '${_textController.text.length} Karakter',
-                                  style: TextStyle(
-                                    color: Colors.cyan.shade300,
-                                    fontSize: isSmallScreen ? 11 : 12,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'Courier',
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.1),
+                        blurRadius: 8,
+                        spreadRadius: 0,
                       ),
-                      
-                      SizedBox(height: isSmallScreen ? 12 : 15),
-                      
-                      // Text field
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.15),
-                            ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'INPUT TEKS',
+                        style: TextStyle(
+                          color: const Color(0xFF00FFD1),
+                          fontSize: isSmallScreen ? 14 : 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Orbitron',
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1a253e).withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF4a9fff).withOpacity(0.3),
                           ),
-                          child: TextField(
-                            controller: _textController,
-                            maxLines: null,
-                            expands: true,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: isSmallScreen ? 15 : 17,
-                              fontFamily: 'Times New Roman',
-                              shadows: [
-                                Shadow(
-                                  color: Colors.cyan.withOpacity(_textGlowAnimation.value),
-                                  blurRadius: 10,
-                                ),
-                              ],
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF4a9fff).withOpacity(0.1),
+                              blurRadius: 4,
+                              spreadRadius: 0,
                             ),
-                            decoration: InputDecoration(
-                              hintText: 'Mulai input teks...',
-                              hintStyle: TextStyle(
-                                color: Colors.white38,
-                                fontSize: isSmallScreen ? 13 : 15,
-                                fontFamily: 'Times New Roman',
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.all(isSmallScreen ? 18 : 22),
-                            ),
-                            focusNode: _textFocusNode,
-                            onChanged: (value) {
-                              setState(() {});
-                              _typingController.forward().then((_) {
-                                _typingController.reset();
-                              });
-                              
-                              // Scroll to keep editor visible
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                try {
-                                  _outerScrollController.animateTo(
-                                    _outerScrollController.position.maxScrollExtent,
-                                    duration: const Duration(milliseconds: 200),
-                                    curve: Curves.easeInOut,
-                                  );
-                                } catch (_) {
-                                  // Ignore if position isn't ready
-                                }
-                              });
-                            },
+                          ],
+                        ),
+                        child: Text(
+                          '${_textController.text.length} Karakter',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: isSmallScreen ? 11 : 12,
+                            fontFamily: 'Courier',
                           ),
                         ),
                       ),
@@ -645,8 +421,39 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   ),
                 ),
                 
-                // Corner accents
-                ..._buildEditorCorners(),
+                // Text field
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                    child: TextField(
+                      controller: _textController,
+                      maxLines: null,
+                      expands: true,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isSmallScreen ? 15 : 17,
+                        fontFamily: 'Roboto',
+                        height: 1.5,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Mulai mengetik atau tempel teks di sini...',
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: isSmallScreen ? 15 : 17,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      focusNode: _textFocusNode,
+                      onChanged: (value) {
+                        setState(() {});
+                        _typingController.forward().then((_) {
+                          _typingController.reset();
+                        });
+                      },
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -655,179 +462,109 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  List<Widget> _buildEditorCorners() {
-    final cornerSize = 35.0;
-    final borderWidth = 3.5;
-    
-    return [
-      // Top Left
-      Positioned(
-        top: 0,
-        left: 0,
-        child: _buildCornerWidget(true, true, cornerSize, borderWidth),
-      ),
-      // Top Right
-      Positioned(
-        top: 0,
-        right: 0,
-        child: _buildCornerWidget(false, true, cornerSize, borderWidth),
-      ),
-      // Bottom Left
-      Positioned(
-        bottom: 0,
-        left: 0,
-        child: _buildCornerWidget(true, false, cornerSize, borderWidth),
-      ),
-      // Bottom Right
-      Positioned(
-        bottom: 0,
-        right: 0,
-        child: _buildCornerWidget(false, false, cornerSize, borderWidth),
-      ),
-    ];
-  }
-
-  Widget _buildCornerWidget(bool isLeft, bool isTop, double size, double borderWidth) {
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        return Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            border: Border(
-              left: isLeft
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-              right: !isLeft
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-              top: isTop
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-              bottom: !isTop
-                  ? BorderSide(color: Colors.pink.withOpacity(_glowAnimation.value), width: borderWidth)
-                  : BorderSide.none,
-            ),
+  Widget _buildMinimalistStatsBar(bool isSmallScreen) {
+    return Container(
+      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF071226).withOpacity(0.32),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Color.lerp(const Color(0xFF00FFD1), const Color(0xFFFF4DFF), _glowAnimation.value)!.withOpacity(0.5),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF4DFF).withOpacity(_glowAnimation.value * 0.03),
+            blurRadius: 12,
+            spreadRadius: 0,
           ),
-        );
-      },
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildMinimalistStatItem(
+            'KATA', 
+            _countWords().toString(), 
+            Icons.text_fields, 
+            Colors.cyan, 
+            isSmallScreen
+          ),
+          _buildMinimalistStatItem(
+            'BARIS', 
+            _countLines().toString(), 
+            Icons.format_line_spacing, 
+            Colors.pink, 
+            isSmallScreen
+          ),
+          _buildMinimalistStatItem(
+            'KEPADATAN', 
+            '${_calculateDensity()}%', 
+            Icons.analytics, 
+            Colors.purple, 
+            isSmallScreen
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildStatsBar() {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 600;
-    
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        return Container(
-          padding: EdgeInsets.all(isSmallScreen ? 18 : 22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.blue.shade900.withOpacity(0.4),
-                Colors.purple.shade900.withOpacity(0.4),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                blurRadius: 18,
-                spreadRadius: 3,
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatItem('KATA', _countWords().toString(), Icons.text_fields, Colors.cyan, isSmallScreen),
-              _buildStatItem('BARIS', _countLines().toString(), Icons.format_line_spacing, Colors.pink, isSmallScreen),
-              _buildStatItem('KEPADATAN', '${_calculateDensity()}%', Icons.analytics, Colors.purple, isSmallScreen),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon, Color color, bool isSmallScreen) {
+  Widget _buildMinimalistStatItem(
+    String label, 
+    String value, 
+    IconData icon, 
+    Color color, 
+    bool isSmallScreen
+  ) {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [
-                color.withOpacity(0.4),
-                color.withOpacity(0.1),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.6),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Icon(icon, color: color, size: isSmallScreen ? 22 : 24),
-        ),
-        SizedBox(height: isSmallScreen ? 8 : 10),
+        Icon(icon, color: color, size: isSmallScreen ? 20 : 24),
+        SizedBox(height: isSmallScreen ? 6 : 8),
         Text(
           value,
           style: TextStyle(
             color: color,
-            fontSize: isSmallScreen ? 18 : 20,
-            fontWeight: FontWeight.bold,
+            fontSize: isSmallScreen ? 16 : 18,
+            fontWeight: FontWeight.w600,
             fontFamily: 'Orbitron',
-            letterSpacing: 1,
           ),
         ),
+        SizedBox(height: 2),
         Text(
           label,
           style: TextStyle(
-            color: Colors.white70,
-            fontSize: isSmallScreen ? 11 : 12,
-            fontWeight: FontWeight.w300,
-            letterSpacing: 1.5,
+            color: Colors.grey.shade400,
+            fontSize: isSmallScreen ? 10 : 11,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildActionButtons() {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 600;
-    
+  Widget _buildMinimalistActionButtons(bool isSmallScreen) {
     return Row(
       children: [
+        // Clear button
         Expanded(
-          child: _buildCyberButton(
+          child: _buildMinimalistButton(
             text: 'HAPUS',
-            icon: Icons.delete_sweep,
+            icon: Icons.delete_outline,
             onPressed: _clearText,
-            color: Colors.red,
+            color: Colors.red.shade400,
             isDisabled: _textController.text.isEmpty,
             isSmallScreen: isSmallScreen,
           ),
         ),
-        SizedBox(width: isSmallScreen ? 12 : 15),
+        
+        SizedBox(width: isSmallScreen ? 12 : 16),
+        
+        // Analyze button
         Expanded(
           flex: 2,
-          child: _buildCyberButton(
+          child: _buildMinimalistButton(
             text: _isAnalyzing ? 'MENGANALISIS...' : 'ANALISIS TEKS',
-            icon: _isAnalyzing ? Icons.psychology : Icons.auto_awesome,
+            icon: _isAnalyzing ? Icons.hourglass_bottom : Icons.search,
             onPressed: _textController.text.isEmpty ? null : _analyzeText,
             color: Colors.cyan,
             isAnalyzing: _isAnalyzing,
@@ -838,7 +575,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildCyberButton({
+  Widget _buildMinimalistButton({
     required String text,
     required IconData icon,
     required VoidCallback? onPressed,
@@ -851,58 +588,68 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       animation: _glowAnimation,
       builder: (context, child) {
         return Container(
+          height: isSmallScreen ? 50 : 56,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: LinearGradient(
-              colors: [
-                color.withOpacity(isDisabled ? 0.1 : 0.4),
-                color.withOpacity(isDisabled ? 0.05 : 0.2),
-              ],
-            ),
+            color: isDisabled 
+              ? Colors.grey.shade800.withOpacity(0.3)
+              : color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: color.withOpacity(isDisabled ? 0.1 : _glowAnimation.value),
-              width: 2.5,
+              color: isDisabled 
+                ? Colors.grey.shade700.withOpacity(0.3)
+                : color.withOpacity(_glowAnimation.value * 0.7),
+              width: 1,
             ),
-            boxShadow: isDisabled ? [] : [
-              BoxShadow(
-                color: color.withOpacity(_glowAnimation.value * 0.4),
-                blurRadius: 18,
-                spreadRadius: 3,
-              ),
-            ],
+            boxShadow: isDisabled
+                ? []
+                : [
+                    BoxShadow(
+                      color: color.withOpacity(_glowAnimation.value * 0.18),
+                      blurRadius: 16,
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Material(
             color: Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(12),
             child: InkWell(
               onTap: isDisabled ? null : onPressed,
-              borderRadius: BorderRadius.circular(22),
-              child: Container(
-                padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 16 : 20),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (isAnalyzing)
                       SizedBox(
-                        width: 24,
-                        height: 24,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          value: _analysisProgress,
-                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          strokeWidth: 2,
+                            value: _analysisProgress > 0 ? _analysisProgress : null,
+                            valueColor: AlwaysStoppedAnimation<Color>(color),
                         ),
                       )
                     else
-                      Icon(icon, color: color, size: isSmallScreen ? 22 : 24),
-                    SizedBox(width: isSmallScreen ? 10 : 12),
+                      Icon(
+                        icon, 
+                        color: isDisabled ? Colors.grey.shade600 : color, 
+                        size: isSmallScreen ? 20 : 22
+                      ),
+                    SizedBox(width: isSmallScreen ? 8 : 12),
                     Flexible(
                       child: Text(
                         text,
                         style: TextStyle(
-                          color: isDisabled ? Colors.white30 : Colors.white,
-                          fontWeight: FontWeight.bold,
+                          color: isDisabled ? Colors.grey.shade600 : Colors.white,
+                          fontWeight: FontWeight.w600,
                           fontSize: isSmallScreen ? 13 : 15,
-                          letterSpacing: 1.2,
                           fontFamily: 'Orbitron',
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -919,119 +666,17 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildCyberpunkFrame() {
+  // Animated scanline overlay for retro/cyberpunk aesthetic
+  Widget _buildScanlines() {
     return IgnorePointer(
-      child: Stack(
-        children: [
-          // Top border
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Bottom border
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Left border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Right border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      child: AnimatedBuilder(
+        animation: _backgroundAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            size: Size.infinite,
+            painter: _ScanlinePainter(_backgroundAnimation.value),
+          );
+        },
       ),
     );
   }
@@ -1066,12 +711,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     });
 
     try {
-      // Start progress animation
-      for (int i = 0; i <= 90; i += 10) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        setState(() {
-          _analysisProgress = i / 100;
-        });
+      // Simulate analysis progress
+      for (int i = 0; i <= 100; i += 5) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (mounted) {
+          setState(() {
+            _analysisProgress = i / 100;
+          });
+        }
       }
 
       // Actual text analysis
@@ -1081,7 +728,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       } catch (_) {}
 
       setState(() {
-        _analysisProgress = 1.0;
         _aiDetectionPercentage = result['ai_detection']!;
         _humanWrittenPercentage = result['human_written']!;
       });
@@ -1111,142 +757,125 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.all(isSmallScreen ? 16 : 24),
         child: Container(
           width: isSmallScreen ? screenSize.width * 0.9 : null,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _aiDetectionPercentage > 50 
-                  ? Colors.red.shade900.withOpacity(0.9)
-                  : Colors.blue.shade900.withOpacity(0.9),
-                _aiDetectionPercentage > 50
-                  ? Colors.deepOrange.shade900.withOpacity(0.9)
-                  : Colors.purple.shade900.withOpacity(0.9),
-              ],
-            ),
+            color: Colors.grey.shade900.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: _aiDetectionPercentage > 50 ? Colors.red : Colors.cyan,
-              width: 2.5
+              color: _aiDetectionPercentage > 50 
+                ? Colors.red.withOpacity(0.5)
+                : Colors.cyan.withOpacity(0.5),
+              width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: (_aiDetectionPercentage > 50 ? Colors.red : Colors.cyan).withOpacity(0.6),
-                blurRadius: 25,
-                spreadRadius: 6,
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 20,
+                spreadRadius: 5,
               ),
             ],
           ),
           child: Padding(
-            padding: EdgeInsets.all(isSmallScreen ? 22 : 30),
+            padding: EdgeInsets.all(isSmallScreen ? 20 : 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: isSmallScreen ? 80 : 100,
-                  height: isSmallScreen ? 80 : 100,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.cyan,
-                        Colors.pink,
-                      ],
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyan.withOpacity(0.6),
-                        blurRadius: 20,
-                        spreadRadius: 4,
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      width: isSmallScreen ? 50 : 60,
+                      height: isSmallScreen ? 50 : 60,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: _aiDetectionPercentage > 50 
+                            ? [Colors.red.shade400, Colors.red.shade600]
+                            : [Colors.cyan.shade400, Colors.blue.shade600],
+                        ),
+                        shape: BoxShape.circle,
                       ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.verified,
-                    color: Colors.white,
-                    size: isSmallScreen ? 40 : 50,
-                  ),
-                ),
-                SizedBox(height: isSmallScreen ? 18 : 25),
-                Text(
-                  'ANALISIS SELESAI',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 18 : 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.cyan.shade300,
-                    fontFamily: 'Orbitron',
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                SizedBox(height: isSmallScreen ? 18 : 20),
-                Container(
-                  padding: EdgeInsets.all(isSmallScreen ? 18 : 22),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.cyan.withOpacity(0.4),
-                      width: 1.5,
+                      child: Icon(
+                        _aiDetectionPercentage > 50 
+                          ? Icons.warning
+                          : Icons.verified,
+                        color: Colors.white,
+                        size: isSmallScreen ? 25 : 30,
+                      ),
                     ),
+                    SizedBox(width: isSmallScreen ? 16 : 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ANALISIS SELESAI',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 18 : 20,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Teks Anda telah dianalisis',
+                            style: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: isSmallScreen ? 13 : 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                SizedBox(height: isSmallScreen ? 20 : 24),
+                
+                // Results
+                Container(
+                  padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Deteksi AI:',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            '${_aiDetectionPercentage.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              color: _aiDetectionPercentage > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ],
+                      // AI Detection
+                      _buildResultItem(
+                        'Deteksi AI',
+                        '${_aiDetectionPercentage.toStringAsFixed(1)}%',
+                        _aiDetectionPercentage > 50 ? Colors.red : Colors.green,
+                        isSmallScreen,
                       ),
-                      SizedBox(height: isSmallScreen ? 12 : 15),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Ditulis Manusia:',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            '${_humanWrittenPercentage.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              color: Colors.cyan.shade300,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ],
+                      
+                      SizedBox(height: isSmallScreen ? 12 : 16),
+                      
+                      // Human Written
+                      _buildResultItem(
+                        'Ditulis Manusia',
+                        '${_humanWrittenPercentage.toStringAsFixed(1)}%',
+                        Colors.cyan,
+                        isSmallScreen,
                       ),
                     ],
                   ),
                 ),
-                SizedBox(height: isSmallScreen ? 18 : 25),
-                _buildCyberButton(
-                  text: 'TUTUP',
-                  icon: Icons.close,
-                  onPressed: () => Navigator.pop(context),
-                  color: Colors.cyan,
-                  isSmallScreen: isSmallScreen,
+                
+                SizedBox(height: isSmallScreen ? 20 : 24),
+                
+                // Close button
+                SizedBox(
+                  width: double.infinity,
+                  child: _buildMinimalistButton(
+                    text: 'TUTUP',
+                    icon: Icons.close,
+                    onPressed: () => Navigator.pop(context),
+                    color: Colors.cyan,
+                    isSmallScreen: isSmallScreen,
+                  ),
                 ),
               ],
             ),
@@ -1256,44 +885,81 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildFloatingParticles() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _rotateController,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _EditorParticlesPainter(_rotateController.value),
-            size: Size.infinite,
-          );
-        },
-      ),
+  Widget _buildResultItem(
+    String label,
+    String value,
+    Color color,
+    bool isSmallScreen,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade300,
+            fontSize: isSmallScreen ? 14 : 16,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: isSmallScreen ? 16 : 18,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'Orbitron',
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _EditorParticlesPainter extends CustomPainter {
-  final double animationValue;
-  _EditorParticlesPainter(this.animationValue);
+// Simple custom painter that draws faint horizontal scanlines and a subtle vignette
+class _ScanlinePainter extends CustomPainter {
+  final double progress;
+
+  _ScanlinePainter(this.progress);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.4)
+    final Paint linePaint = Paint()
+      ..color = const Color(0xFF00FFD1).withOpacity(0.03)
       ..style = PaintingStyle.fill;
 
-    final random = math.Random(99);
-    for (int i = 0; i < 25; i++) {
-      final x = (random.nextDouble() * size.width);
-      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 3 + 1;
-      canvas.drawCircle(Offset(x, y), radius, paint);
+    // spacing and offset to animate lines slowly
+    const double spacing = 6.0;
+    final double offset = (progress * spacing * 2) % spacing;
+
+    for (double y = -spacing; y < size.height + spacing; y += spacing) {
+      final double yy = y + offset;
+      // slightly vary opacity per line for depth
+      final double alpha = 0.02 + (0.01 * ((y / spacing) % 3));
+      linePaint.color = const Color(0xFF00FFD1).withOpacity(alpha);
+      canvas.drawRect(Rect.fromLTWH(0, yy, size.width, 1.0), linePaint);
     }
+
+    // subtle vignette to focus center
+    final Rect rect = Offset.zero & size;
+    final Gradient vignette = RadialGradient(
+      colors: [Colors.transparent, Colors.black.withOpacity(0.55)],
+      stops: [0.6, 1.0],
+      center: Alignment.center,
+      radius: 0.9,
+    );
+    final Paint vignettePaint = Paint()
+      ..shader = vignette.createShader(rect)
+      ..blendMode = BlendMode.darken;
+    canvas.drawRect(rect, vignettePaint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _ScanlinePainter oldDelegate) {
+    return oldDelegate.progress != progress;
+  }
 }
 
+// Hexagon grid painter (copied from home_screen to reuse hex background)
 class _HexagonGridPainter extends CustomPainter {
   final double animationValue;
   _HexagonGridPainter(this.animationValue);
@@ -1317,11 +983,8 @@ class _HexagonGridPainter extends CustomPainter {
       for (int col = 0; col < cols; col++) {
         final x = col * hexWidth + (row % 2) * hexWidth / 2;
         final y = row * vertDist;
-        
-        // Add some animation by shifting hexagons
         final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
         final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
-        
         _drawHexagon(canvas, Offset(x + offsetX, y + offsetY), hexSize, paint);
       }
     }
@@ -1341,41 +1004,6 @@ class _HexagonGridPainter extends CustomPainter {
     }
     path.close();
     canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-class _DataStreamPainter extends CustomPainter {
-  final double animationValue;
-  _DataStreamPainter(this.animationValue);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.pink.withOpacity(0.2)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-
-    final path = Path();
-    final random = math.Random(123);
-    
-    for (int i = 0; i < 5; i++) {
-      final startX = random.nextDouble() * size.width;
-      final startY = -50.0;
-      final endY = size.height + 50;
-      
-      path.moveTo(startX, startY);
-      
-      for (double y = startY; y < endY; y += 20) {
-        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
-        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
-      }
-      
-      canvas.drawPath(path, paint);
-      path.reset();
-    }
   }
 
   @override

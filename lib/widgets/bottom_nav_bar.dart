@@ -65,12 +65,12 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
     return 9.0; // Large phones/tablets
   }
 
-  static const List<String> _labels = ['HOME', 'EDIT', 'UPLOAD', 'SCAN', 'HISTORY', 'SETTINGS'];
+  // Removed camera/scan entry
+  static const List<String> _labels = ['HOME', 'EDIT', 'UPLOAD', 'HISTORY', 'SETTINGS'];
   static const List<IconData> _icons = [
     Icons.home_outlined,
     Icons.edit_note,
     Icons.upload_file,
-    Icons.camera_alt_outlined,
     Icons.history,
     Icons.settings_outlined,
   ];

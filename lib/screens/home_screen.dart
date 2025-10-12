@@ -36,6 +36,11 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _hexagonAnimation;
   late Animation<double> _dataStreamAnimation;
   
+  // Dashboard state
+  String _selectedPeriod = 'daily'; // daily, weekly, monthly
+  List<double> _aiRateData = [];
+  List<int> _scanFreqData = [];
+  
   // Search/filter state
   late TextEditingController _searchController;
   late Map<String, dynamic> _searchFilters;
@@ -50,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen>
     _searchController.addListener(_onSearchChanged);
     // initialize search filters
     _searchFilters = {
-      'source': 'all', // all/history/upload/camera/editor
+      'source': 'all', // all/history/upload/editor
       'minConfidence': 50,
       'sensitivityOverride': null,
       'dateFrom': null,
@@ -58,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen>
       'onlyAi': false,
       'sort': 'relevance', // relevance/newest/confidence
     };
+
+    // generate sample dashboard data
+    _generateDashboardData();
     
     // Initialize multiple animation controllers for different effects
     _backgroundController = AnimationController(
@@ -166,6 +174,22 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  void _generateDashboardData() {
+    // Create simple deterministic sample data for charts so UI looks complete.
+    final rnd = math.Random(42);
+    if (_selectedPeriod == 'daily') {
+      _aiRateData = List.generate(24, (i) => 40 + rnd.nextDouble() * 60); // hourly
+      _scanFreqData = List.generate(24, (i) => 5 + rnd.nextInt(20));
+    } else if (_selectedPeriod == 'weekly') {
+      _aiRateData = List.generate(7, (i) => 30 + rnd.nextDouble() * 70); // days
+      _scanFreqData = List.generate(7, (i) => 50 + rnd.nextInt(200));
+    } else {
+      // monthly (last 30 days)
+      _aiRateData = List.generate(30, (i) => 35 + rnd.nextDouble() * 65);
+      _scanFreqData = List.generate(30, (i) => 20 + rnd.nextInt(150));
+    }
+  }
+
   void _triggerGlitch() {
     if (AnimationConfig.enableBackgroundAnimations) {
       _glitchController.forward().then((_) {
@@ -215,7 +239,11 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+    final isNarrowScreen = screenWidth < 350;
+    final isExtremelySmallScreen = screenWidth < 320;
     
     return Scaffold(
       backgroundColor: Colors.black,
@@ -235,48 +263,44 @@ class _HomeScreenState extends State<HomeScreen>
           
           // Glitch effect overlay
           _buildGlitchEffect(),
-
-          // Floating particles effect
-          _buildFloatingParticles(),
           
           // Main content
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Lock the top area (header/search/stats) while making the features list scrollable
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16, // Fixed horizontal padding instead of percentage
-                    isSmallScreen ? 8 : 16, // Reduced vertical padding for small screens
-                    16,
-                    isSmallScreen ? 8 : 16,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Fixed top area
-                      _buildHeader(isSmallScreen),
-                      SizedBox(height: isSmallScreen ? 8 : 16),
-                      _buildSearchBar(),
-                      SizedBox(height: isSmallScreen ? 12 : 20),
-                      _buildStatsOverview(isSmallScreen),
-                      SizedBox(height: isSmallScreen ? 8 : 16),
-
-                      // separator between fixed top and scrollable area
-                      _buildTopSeparator(),
-
-                      // Scrollable features area
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              _buildFeatureCards(isSmallScreen),
-                              SizedBox(height: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                return SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      isVerySmallScreen ? 8 : 12,
+                      16,
+                      isVerySmallScreen ? 8 : 12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        _buildHeader(isSmallScreen, isVerySmallScreen),
+                        SizedBox(height: isVerySmallScreen ? 8 : 12),
+                        
+                        // Search bar
+                        _buildSearchBar(isSmallScreen, isVerySmallScreen, isNarrowScreen),
+                        SizedBox(height: isVerySmallScreen ? 8 : 12),
+                        
+                        // Mini dashboard with charts
+                        _buildMiniDashboard(isSmallScreen, isVerySmallScreen, isNarrowScreen),
+                        SizedBox(height: isVerySmallScreen ? 8 : 12),
+                        
+                        // Stats overview
+                        _buildStatsOverview(isSmallScreen, isVerySmallScreen, isExtremelySmallScreen),
+                        SizedBox(height: isVerySmallScreen ? 8 : 12),
+                        
+                        // Feature cards
+                        _buildFeatureCards(isSmallScreen, isVerySmallScreen),
+                        SizedBox(height: 16),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -407,15 +431,15 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildHeader(bool isSmallScreen) {
+  Widget _buildHeader(bool isSmallScreen, bool isVerySmallScreen) {
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
         return Row(
           children: [
             Container(
-              width: isSmallScreen ? 60 : 80, // Smaller icon for small screens
-              height: isSmallScreen ? 60 : 80,
+              width: isVerySmallScreen ? 40 : (isSmallScreen ? 50 : 60),
+              height: isVerySmallScreen ? 40 : (isSmallScreen ? 50 : 60),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -425,27 +449,27 @@ class _HomeScreenState extends State<HomeScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(isSmallScreen ? 20 : 25),
+                borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : (isSmallScreen ? 15 : 20)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
-                    blurRadius: 25,
-                    spreadRadius: 4,
+                    blurRadius: 15,
+                    spreadRadius: 2,
                   ),
                   BoxShadow(
                     color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
-                    blurRadius: 20,
-                    spreadRadius: 3,
+                    blurRadius: 12,
+                    spreadRadius: 1,
                   ),
                 ],
               ),
               child: Icon(
                 Icons.home,
                 color: Colors.white,
-                size: isSmallScreen ? 30 : 40, // Smaller icon for small screens
+                size: isVerySmallScreen ? 20 : (isSmallScreen ? 25 : 30),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,17 +484,18 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Text(
                       'BERANDA',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 24 : 32, // Smaller font for small screens
+                        fontSize: isVerySmallScreen ? 18 : (isSmallScreen ? 22 : 26),
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
-                        letterSpacing: 3,
+                        letterSpacing: 2,
                         fontFamily: 'Orbitron',
                       ),
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  SizedBox(height: isVerySmallScreen ? 2 : 4),
                   Container(
-                    height: 3,
+                    height: 2,
+                    width: 40,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -489,186 +514,701 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(bool isSmallScreen, bool isVerySmallScreen, bool isNarrowScreen) {
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
           scale: _pulseAnimation.value,
-          child: LayoutBuilder(builder: (context, constraints) {
-            final availableWidth = constraints.maxWidth;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Reduced padding
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30), // Slightly smaller border radius
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.blue.shade900.withOpacity(0.5),
-                    Colors.purple.shade900.withOpacity(0.5),
-                  ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isVerySmallScreen ? 12 : 16,
+                  vertical: isVerySmallScreen ? 8 : 12,
                 ),
-                border: Border.all(
-                  color: Colors.cyan.withOpacity(_glowAnimation.value),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      // Make search icon act as submit button (left side)
-                      GestureDetector(
-                        onTap: () => _onSearchSubmitted(_searchController.text),
-                        child: Container(
-                          padding: const EdgeInsets.all(6), // Reduced padding
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.cyan.withOpacity(0.1),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                          child: Icon(Icons.search, color: Colors.cyan.shade300, size: 20), // Smaller icon
-                        ),
-                      ),
-                      const SizedBox(width: 10), // Reduced spacing
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onSubmitted: (q) => _onSearchSubmitted(q),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: 'Telusuri hasil pemindaian...',
-                            hintStyle: TextStyle(
-                              color: Colors.white38,
-                              fontSize: 16,
-                            ),
-                            border: InputBorder.none,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _openFilterSheet,
-                        icon: Container(
-                          padding: const EdgeInsets.all(8), // Reduced padding
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.cyan.withOpacity(_glowAnimation.value),
-                                Colors.pink.withOpacity(_glowAnimation.value),
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                                blurRadius: 10,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.tune, color: Colors.white, size: 20), // Smaller icon
-                        ),
-                      ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(isVerySmallScreen ? 20 : 25),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.blue.shade900.withOpacity(0.5),
+                      Colors.purple.shade900.withOpacity(0.5),
                     ],
                   ),
-
-                  // Suggestions dropdown constrained to search box width so it won't widen parent
-                  if (_suggestions.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 8),
-                      width: availableWidth - 8, // a little padding
-                      constraints: const BoxConstraints(maxHeight: 150), // Reduced max height
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.75),
-                        borderRadius: BorderRadius.circular(12), // Smaller border radius
-                        border: Border.all(color: Colors.cyan.withOpacity(0.2)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.cyan.withOpacity(0.1),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: _suggestions.length,
-                        separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white12),
-                        itemBuilder: (ctx, i) {
-                          final s = _suggestions[i];
-                          return ListTile(
-                            dense: true,
-                            title: Text(s, style: const TextStyle(color: Colors.white)),
-                            leading: const Icon(Icons.history, color: Colors.white70, size: 16), // Smaller icon
-                            onTap: () {
-                              _searchController.text = s;
-                              _onSearchSubmitted(s);
-                            },
-                          );
-                        },
-                      ),
+                  border: Border.all(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
+                      blurRadius: 10,
+                      spreadRadius: 1,
                     ),
-
-                  if (_loadingSuggestions) 
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: LinearProgressIndicator(
-                        minHeight: 2, // Reduced height
-                        backgroundColor: Colors.white10,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.cyan.withOpacity(_glowAnimation.value),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // Search icon
+                    GestureDetector(
+                      onTap: () => _onSearchSubmitted(_searchController.text),
+                      child: Container(
+                        padding: EdgeInsets.all(isVerySmallScreen ? 4 : 6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.cyan.withOpacity(0.1),
+                        ),
+                        child: Icon(
+                          Icons.search,
+                          color: Colors.cyan.shade300,
+                          size: isVerySmallScreen ? 16 : 20,
                         ),
                       ),
                     ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        onSubmitted: (q) => _onSearchSubmitted(q),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isVerySmallScreen ? 14 : 16,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Telusuri hasil pemindaian...',
+                          hintStyle: TextStyle(
+                            color: Colors.white38,
+                            fontSize: isVerySmallScreen ? 14 : 16,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _openFilterSheet,
+                      icon: Container(
+                        padding: EdgeInsets.all(isVerySmallScreen ? 6 : 8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.cyan.withOpacity(_glowAnimation.value),
+                              Colors.pink.withOpacity(_glowAnimation.value),
+                            ],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.tune,
+                          color: Colors.white,
+                          size: isVerySmallScreen ? 16 : 20,
+                        ),
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
               ),
-            );
-          }),
+
+              // Suggestions dropdown
+              if (_suggestions.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  constraints: BoxConstraints(
+                    maxHeight: isVerySmallScreen ? 120 : 150,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.cyan.withOpacity(0.2)),
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: _suggestions.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white12),
+                    itemBuilder: (ctx, i) {
+                      final s = _suggestions[i];
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          s,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isVerySmallScreen ? 13 : 14,
+                          ),
+                        ),
+                        leading: Icon(
+                          Icons.history,
+                          color: Colors.white70,
+                          size: isVerySmallScreen ? 14 : 16,
+                        ),
+                        onTap: () {
+                          _searchController.text = s;
+                          _onSearchSubmitted(s);
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+              // Loading indicator
+              if (_loadingSuggestions) 
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: LinearProgressIndicator(
+                    minHeight: 2,
+                    backgroundColor: Colors.white10,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.cyan.withOpacity(_glowAnimation.value),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildTopSeparator() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0), // Reduced padding
-      child: Container(
-        height: 8, // Reduced height
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10), // Smaller border radius
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              Colors.cyan.withOpacity(0.1),
-              Colors.transparent,
-              Colors.pink.withOpacity(0.1),
-            ],
-            stops: const [0.0, 0.5, 1.0],
+  Widget _buildMiniDashboard(bool isSmallScreen, bool isVerySmallScreen, bool isNarrowScreen) {
+    return AnimatedBuilder(
+      animation: _fadeAnimation,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _fadeAnimation.value,
+          child: Container(
+            padding: EdgeInsets.all(isVerySmallScreen ? 8 : 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyan.withOpacity(_glowAnimation.value * 0.1),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Dashboard',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isVerySmallScreen ? 14 : 16,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Orbitron',
+                      ),
+                    ),
+                    ToggleButtons(
+                      isSelected: [
+                        _selectedPeriod == 'daily',
+                        _selectedPeriod == 'weekly',
+                        _selectedPeriod == 'monthly'
+                      ],
+                      onPressed: (i) {
+                        setState(() {
+                          _selectedPeriod = i == 0 ? 'daily' : i == 1 ? 'weekly' : 'monthly';
+                          _generateDashboardData();
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white70,
+                      selectedColor: Colors.black,
+                      fillColor: Colors.cyanAccent,
+                      constraints: BoxConstraints(
+                        minWidth: isVerySmallScreen ? 28 : 32,
+                        minHeight: isVerySmallScreen ? 24 : 28,
+                      ),
+                      children: const [
+                        Text('H', style: TextStyle(fontSize: 12)),
+                        Text('M', style: TextStyle(fontSize: 12)),
+                        Text('B', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+                SizedBox(height: isVerySmallScreen ? 6 : 8),
+
+                // Charts
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniChartCard(
+                        title: 'AI Rate (avg %)',
+                        subtitle: 'Rata-rata tingkat AI',
+                        isSmall: isSmallScreen || isVerySmallScreen,
+                        child: CustomPaint(
+                          size: Size(
+                            double.infinity,
+                            isVerySmallScreen ? 50 : (isSmallScreen ? 60 : 80),
+                          ),
+                          painter: _LineChartPainter(
+                            _aiRateData.map((e) => e.toDouble()).toList(),
+                            Colors.cyanAccent.withOpacity(0.9),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: isVerySmallScreen ? 6 : 10),
+                    Expanded(
+                      child: _MiniChartCard(
+                        title: 'Scan frequency',
+                        subtitle: 'Frekuensi pemindaian',
+                        isSmall: isSmallScreen || isVerySmallScreen,
+                        child: CustomPaint(
+                          size: Size(
+                            double.infinity,
+                            isVerySmallScreen ? 50 : (isSmallScreen ? 60 : 80),
+                          ),
+                          painter: _BarLineChartPainter(
+                            _scanFreqData.map((e) => e.toDouble()).toList(),
+                            Colors.pinkAccent.withOpacity(0.9),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 8, offset: const Offset(0, 2)),
-            BoxShadow(color: Colors.cyan.withOpacity(0.05), blurRadius: 10, spreadRadius: 2),
-          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsOverview(bool isSmallScreen, bool isVerySmallScreen, bool isExtremelySmallScreen) {
+    return AnimatedBuilder(
+      animation: _fadeAnimation,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _fadeAnimation.value,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // 计算间距和每张卡片的最大宽度
+              final double gap = isExtremelySmallScreen ? 4 : (isVerySmallScreen ? 6 : 12);
+              final double totalGaps = isExtremelySmallScreen ? gap : (gap * 3); // 卡片之间的总间距
+              final double perCardMax = isExtremelySmallScreen 
+                  ? (constraints.maxWidth - gap) / 2.0  // 两行布局，每行两个卡片
+                  : (constraints.maxWidth - totalGaps).clamp(0.0, constraints.maxWidth) / 4.0; // 一行四个卡片
+
+              Widget constrainedCard(Widget card) => ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: perCardMax),
+                    child: Flexible(child: card),
+                  );
+
+              // 如果是极小屏幕，使用两行布局
+              if (isExtremelySmallScreen) {
+                return Column(
+                  children: [
+                    // 第一行：hit rate 和 speed
+                    Row(
+                      children: [
+                        constrainedCard(_buildCompactStatCard(
+                          value: '98.7%',
+                          label: 'HIT RATE',
+                          icon: Icons.verified,
+                          color: Colors.cyan,
+                          isSmall: isSmallScreen || isVerySmallScreen,
+                          isVerySmall: isVerySmallScreen,
+                          isExtremelySmall: isExtremelySmallScreen,
+                        )),
+                        SizedBox(width: gap),
+                        constrainedCard(_buildCompactStatCard(
+                          value: '2.1s',
+                          label: 'SPEED',
+                          icon: Icons.bolt,
+                          color: Colors.pink,
+                          isSmall: isSmallScreen || isVerySmallScreen,
+                          isVerySmall: isVerySmallScreen,
+                          isExtremelySmall: isExtremelySmallScreen,
+                        )),
+                      ],
+                    ),
+                    SizedBox(height: gap),
+                    // 第二行：volume 和 efficiency
+                    Row(
+                      children: [
+                        constrainedCard(_buildCompactStatCard(
+                          value: '1.2k',
+                          label: 'VOLUME',
+                          icon: Icons.folder_open,
+                          color: Colors.purple,
+                          isSmall: isSmallScreen || isVerySmallScreen,
+                          isVerySmall: isVerySmallScreen,
+                          isExtremelySmall: isExtremelySmallScreen,
+                        )),
+                        SizedBox(width: gap),
+                        constrainedCard(_buildCompactStatCard(
+                          value: '94.3%',
+                          label: 'EFFICIENCY',
+                          icon: Icons.speed,
+                          color: Colors.green,
+                          isSmall: isSmallScreen || isVerySmallScreen,
+                          isVerySmall: isVerySmallScreen,
+                          isExtremelySmall: isExtremelySmallScreen,
+                        )),
+                      ],
+                    ),
+                  ],
+                );
+              }
+              
+              // 正常屏幕，使用一行布局
+              return Row(
+                children: [
+                  constrainedCard(_buildCompactStatCard(
+                    value: '98.7%',
+                    label: 'RATE',
+                    icon: Icons.verified,
+                    color: Colors.cyan,
+                    isSmall: isSmallScreen || isVerySmallScreen,
+                    isVerySmall: isVerySmallScreen,
+                    isExtremelySmall: isExtremelySmallScreen,
+                  )),
+                  SizedBox(width: gap),
+                  constrainedCard(_buildCompactStatCard(
+                    value: '2.1s',
+                    label: 'SPEED',
+                    icon: Icons.bolt,
+                    color: Colors.pink,
+                    isSmall: isSmallScreen || isVerySmallScreen,
+                    isVerySmall: isVerySmallScreen,
+                    isExtremelySmall: isExtremelySmallScreen,
+                  )),
+                  SizedBox(width: gap),
+                  constrainedCard(_buildCompactStatCard(
+                    value: '1.2k',
+                    label: 'VOL',
+                    icon: Icons.folder_open,
+                    color: Colors.purple,
+                    isSmall: isSmallScreen || isVerySmallScreen,
+                    isVerySmall: isVerySmallScreen,
+                    isExtremelySmall: isExtremelySmallScreen,
+                  )),
+                  SizedBox(width: gap),
+                  constrainedCard(_buildCompactStatCard(
+                    value: '94.3%',
+                    label: 'EFF',
+                    icon: Icons.speed,
+                    color: Colors.green,
+                    isSmall: isSmallScreen || isVerySmallScreen,
+                    isVerySmall: isVerySmallScreen,
+                    isExtremelySmall: isExtremelySmallScreen,
+                  )),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactStatCard({
+    required String value,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required bool isSmall,
+    required bool isVerySmall,
+    bool isExtremelySmall = false,
+  }) {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isExtremelySmall ? 4 : (isVerySmall ? 6 : (isSmall ? 8 : 10)),
+            vertical: isExtremelySmall ? 4 : (isVerySmall ? 6 : (isSmall ? 8 : 10)),
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(isExtremelySmall ? 8 : 12),
+            border: Border.all(color: Colors.white10),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(_glowAnimation.value * 0.2),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: EdgeInsets.all(isExtremelySmall ? 2 : (isVerySmall ? 4 : 6)),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withOpacity(0.95),
+                      color.withOpacity(0.6),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withOpacity(_glowAnimation.value * 0.4),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: isExtremelySmall ? 12 : (isVerySmall ? 14 : (isSmall ? 16 : 18)),
+                ),
+              ),
+              SizedBox(width: isExtremelySmall ? 4 : (isVerySmall ? 6 : 8)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // value should scale down if space is tight
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                            fontSize: isExtremelySmall ? 10 : (isVerySmall ? 12 : (isSmall ? 14 : 16)),
+                            fontFamily: 'Orbitron',
+                          ),
+                        ),
+                      ),
+                    ),
+                    // label scales down instead of ellipsizing so it remains readable and keeps layout
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: const Color.fromARGB(179, 255, 255, 255),
+                            fontSize: isExtremelySmall ? 7 : (isVerySmall ? 8 : (isSmall ? 10 : 11)),
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFeatureCards(bool isSmallScreen, bool isVerySmallScreen) {
+    return Column(
+      children: [
+        _buildFeatureCard(
+          icon: Icons.edit,
+          title: 'EDITOR TEKS',
+          subtitle: 'Deteksi AI Saat Mengetik',
+          gradient: [Colors.cyan, Colors.blue],
+          onTap: () => _navigateTo(1),
+          isSmallScreen: isSmallScreen,
+          isVerySmallScreen: isVerySmallScreen,
         ),
+        SizedBox(height: isVerySmallScreen ? 8 : 12),
+        _buildFeatureCard(
+          icon: Icons.upload_file,
+          title: 'UNGGAH FILE',
+          subtitle: 'Mulai Analisis Dokumen',
+          gradient: [Colors.purple, Colors.pink],
+          onTap: () => _navigateTo(2),
+          isSmallScreen: isSmallScreen,
+          isVerySmallScreen: isVerySmallScreen,
+        ),
+        SizedBox(height: isVerySmallScreen ? 8 : 12),
+        _buildFeatureCard(
+          icon: Icons.history,
+          title: 'ARSIP DATA',
+          subtitle: 'Riwayat Pemindaian',
+          gradient: [Colors.blue, Colors.purple],
+          onTap: () => _navigateTo(3),
+          isSmallScreen: isSmallScreen,
+          isVerySmallScreen: isVerySmallScreen,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Color> gradient,
+    required VoidCallback onTap,
+    required bool isSmallScreen,
+    required bool isVerySmallScreen,
+  }) {
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: GestureDetector(
+            onTap: onTap,
+            child: Container(
+              height: isVerySmallScreen ? 70 : (isSmallScreen ? 80 : 90),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : 16),
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    gradient[0].withOpacity(0.5),
+                    gradient[1].withOpacity(0.25),
+                  ],
+                ),
+                border: Border.all(
+                  color: gradient[0].withOpacity(_glowAnimation.value),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: gradient[0].withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.4),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(isVerySmallScreen ? 10 : 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: isVerySmallScreen ? 40 : (isSmallScreen ? 45 : 50),
+                      height: isVerySmallScreen ? 40 : (isSmallScreen ? 45 : 50),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: gradient,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(isVerySmallScreen ? 10 : 12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: gradient[0].withOpacity(_glowAnimation.value * 0.6),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: isVerySmallScreen ? 20 : (isSmallScreen ? 22 : 25),
+                      ),
+                    ),
+                    SizedBox(width: isVerySmallScreen ? 10 : 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: isVerySmallScreen ? 12 : (isSmallScreen ? 14 : 16),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                          SizedBox(height: isVerySmallScreen ? 2 : 4),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: isVerySmallScreen ? 9 : (isSmallScreen ? 10 : 12),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      color: gradient[0].withOpacity(_glowAnimation.value),
+                      size: isVerySmallScreen ? 16 : (isSmallScreen ? 18 : 20),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCyberpunkFrame() {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          // Only bottom border for navbar
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1a253e).withOpacity(0.95),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.2),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                        offset: const Offset(0, -1),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -678,14 +1218,22 @@ class _HomeScreenState extends State<HomeScreen>
     if (q.trim().isEmpty) return;
     final filters = Map<String, dynamic>.from(_searchFilters);
     if (widget.onNavTap != null) {
-      // set bridge so History screen can pick it up and then switch tab to index 4 (history)
+      // set bridge so History screen can pick it up and then switch tab to history index (now 3)
       SearchBridge.set(q, filters);
-      widget.onNavTap!(4);
+      widget.onNavTap!(3);
       return;
     }
 
     // fallback: push history screen
-    Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryScreen(initialQuery: q, initialFilters: filters)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HistoryScreen(
+          initialQuery: q,
+          initialFilters: filters,
+        ),
+      ),
+    );
   }
 
   Future<void> _openFilterSheet() async {
@@ -728,26 +1276,46 @@ class _HomeScreenState extends State<HomeScreen>
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Filter', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, fontFamily: 'Orbitron')),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, null),
-                          style: TextButton.styleFrom(foregroundColor: Colors.white70),
-                          child: const Text('Batal'),
-                        ),
-                      ]),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Filter',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Orbitron',
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, null),
+                            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                            child: const Text('Batal'),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 15),
-                      const Text('Sumber', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                      const Text(
+                        'Sumber',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
                       const SizedBox(height: 10),
-                      Wrap(spacing: 10, runSpacing: 10, children: [
-                        _neonChip('all', 'Semua', source, (v) => setC(() => source = v)),
-                        _neonChip('history', 'Riwayat', source, (v) => setC(() => source = v)),
-                        _neonChip('upload', 'Unggah', source, (v) => setC(() => source = v)),
-                        _neonChip('camera', 'Kamera', source, (v) => setC(() => source = v)),
-                        _neonChip('editor', 'Editor', source, (v) => setC(() => source = v)),
-                      ]),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          _neonChip('all', 'Semua', source, (v) => setC(() => source = v)),
+                          _neonChip('history', 'Riwayat', source, (v) => setC(() => source = v)),
+                          _neonChip('upload', 'Unggah', source, (v) => setC(() => source = v)),
+                          _neonChip('editor', 'Editor', source, (v) => setC(() => source = v)),
+                        ],
+                      ),
                       const SizedBox(height: 15),
-                      Text('Kepercayaan minimum: $minConf%', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                      Text(
+                        'Kepercayaan minimum: $minConf%',
+                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           activeTrackColor: Colors.purpleAccent,
@@ -756,10 +1324,20 @@ class _HomeScreenState extends State<HomeScreen>
                           overlayColor: Colors.pinkAccent.withOpacity(0.3),
                           trackHeight: 8,
                         ),
-                        child: Slider(value: minConf.toDouble(), min: 50, max: 100, divisions: 50, label: '$minConf%', onChanged: (v) => setC(() => minConf = v.round())),
+                        child: Slider(
+                          value: minConf.toDouble(),
+                          min: 50,
+                          max: 100,
+                          divisions: 50,
+                          label: '$minConf%',
+                          onChanged: (v) => setC(() => minConf = v.round()),
+                        ),
                       ),
                       const SizedBox(height: 10),
-                      Text('Penggantian sensitivitas: $sensitivity', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                      Text(
+                        'Penggantian sensitivitas: $sensitivity',
+                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           activeTrackColor: Colors.cyanAccent,
@@ -768,83 +1346,118 @@ class _HomeScreenState extends State<HomeScreen>
                           overlayColor: Colors.cyanAccent.withOpacity(0.3),
                           trackHeight: 8,
                         ),
-                        child: Slider(value: sensitivity.toDouble(), min: 1, max: 10, divisions: 9, label: '$sensitivity', onChanged: (v) => setC(() => sensitivity = v.round())),
+                        child: Slider(
+                          value: sensitivity.toDouble(),
+                          min: 1,
+                          max: 10,
+                          divisions: 9,
+                          label: '$sensitivity',
+                          onChanged: (v) => setC(() => sensitivity = v.round()),
+                        ),
                       ),
                       const SizedBox(height: 15),
-                      Row(children: [
-                        Transform.scale(
-                          scale: 1.2,
-                          child: Checkbox(
-                            value: onlyAi,
-                            onChanged: (v) => setC(() => onlyAi = v ?? false),
-                            checkColor: Colors.black,
-                            activeColor: Colors.cyanAccent,
+                      Row(
+                        children: [
+                          Transform.scale(
+                            scale: 1.2,
+                            child: Checkbox(
+                              value: onlyAi,
+                              onChanged: (v) => setC(() => onlyAi = v ?? false),
+                              checkColor: Colors.black,
+                              activeColor: Colors.cyanAccent,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Flexible(
-                          child: Text('Hanya yang terdeteksi AI', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                        ),
-                      ]),
+                          const SizedBox(width: 10),
+                          const Flexible(
+                            child: Text(
+                              'Hanya yang terdeteksi AI',
+                              style: TextStyle(color: Colors.white70, fontSize: 16),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 15),
-                      const Text('Urutkan berdasarkan', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                      const Text(
+                        'Urutkan berdasarkan',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
                       const SizedBox(height: 10),
-                      Wrap(spacing: 10, children: [
-                        _neonChip('relevance', 'Relevansi', sort, (v) => setC(() => sort = v)),
-                        _neonChip('newest', 'Terbaru', sort, (v) => setC(() => sort = v)),
-                        _neonChip('confidence', 'Kepercayaan', sort, (v) => setC(() => sort = v)),
-                      ]),
+                      Wrap(
+                        spacing: 10,
+                        children: [
+                          _neonChip('relevance', 'Relevansi', sort, (v) => setC(() => sort = v)),
+                          _neonChip('newest', 'Terbaru', sort, (v) => setC(() => sort = v)),
+                          _neonChip('confidence', 'Kepercayaan', sort, (v) => setC(() => sort = v)),
+                        ],
+                      ),
                       const SizedBox(height: 20),
-                      Row(children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => setState(() {
-                              // reset filters to defaults
-                              _searchFilters = {
-                                'source': 'all',
-                                'minConfidence': 50,
-                                'sensitivityOverride': null,
-                                'dateFrom': null,
-                                'dateTo': null,
-                                'onlyAi': false,
-                                'sort': 'relevance',
-                              };
-                              Navigator.pop(ctx, _searchFilters);
-                            }),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.white24),
-                              foregroundColor: Colors.white70,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('Reset', style: TextStyle(fontSize: 16)),
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(colors: [Colors.cyanAccent, Colors.pinkAccent]),
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.2), blurRadius: 15, spreadRadius: 2)],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: () => Navigator.pop(ctx, {
-                                'source': source,
-                                'minConfidence': minConf,
-                                'sensitivityOverride': sensitivity,
-                                'onlyAi': onlyAi,
-                                'sort': sort,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => setState(() {
+                                // reset filters to defaults
+                                _searchFilters = {
+                                  'source': 'all',
+                                  'minConfidence': 50,
+                                  'sensitivityOverride': null,
+                                  'dateFrom': null,
+                                  'dateTo': null,
+                                  'onlyAi': false,
+                                  'sort': 'relevance',
+                                };
+                                Navigator.pop(ctx, _searchFilters);
                               }),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white24),
+                                foregroundColor: Colors.white70,
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                               ),
-                              child: const Text('Terapkan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+                              child: const Text('Reset', style: TextStyle(fontSize: 16)),
                             ),
                           ),
-                        ),
-                      ]),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Colors.cyanAccent, Colors.pinkAccent],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.cyan.withOpacity(0.2),
+                                    blurRadius: 15,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx, {
+                                  'source': source,
+                                  'minConfidence': minConf,
+                                  'sensitivityOverride': sensitivity,
+                                  'onlyAi': onlyAi,
+                                  'sort': sort,
+                                }),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                child: const Text(
+                                  'Terapkan',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -868,10 +1481,10 @@ class _HomeScreenState extends State<HomeScreen>
       onTap: () => onTap(value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: active ? Colors.cyan.withOpacity(0.2) : Colors.white10,
-          borderRadius: BorderRadius.circular(12), // Smaller border radius
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: active ? Colors.cyanAccent : Colors.white24),
           boxShadow: active
               ? [BoxShadow(color: Colors.cyan.withOpacity(0.15), blurRadius: 10, spreadRadius: 2)]
@@ -880,409 +1493,17 @@ class _HomeScreenState extends State<HomeScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (active) const Icon(Icons.check, size: 14, color: Colors.cyanAccent), // Smaller icon
+            if (active) const Icon(Icons.check, size: 14, color: Colors.cyanAccent),
             if (active) const SizedBox(width: 4),
-            Text(label, style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: 13)), // Smaller font
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : Colors.white70,
+                fontSize: 13,
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatsOverview(bool isSmallScreen) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            value: '98.7%',
-            label: 'HIT RATE',
-            icon: Icons.verified,
-            color: Colors.cyan,
-            isSmallScreen: isSmallScreen,
-          ),
-        ),
-        const SizedBox(width: 10), // Reduced spacing
-        Expanded(
-          child: _buildStatCard(
-            value: '2.1s',
-            label: 'SPEED',
-            icon: Icons.bolt,
-            color: Colors.pink,
-            isSmallScreen: isSmallScreen,
-          ),
-        ),
-        const SizedBox(width: 10), // Reduced spacing
-        Expanded(
-          child: _buildStatCard(
-            value: '1.2k',
-            label: 'SCANS',
-            icon: Icons.analytics,
-            color: Colors.purple,
-            isSmallScreen: isSmallScreen,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({
-    required String value,
-    required String label,
-    required IconData icon,
-    required Color color,
-    required bool isSmallScreen,
-  }) {
-    return AnimatedBuilder(
-      animation: _fadeAnimation,
-      builder: (context, child) {
-        return Opacity(
-          opacity: _fadeAnimation.value,
-          child: Container(
-            padding: EdgeInsets.all(isSmallScreen ? 12 : 18), // Reduced padding for small screens
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 18), // Smaller border radius
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: AnimationConfig.enableBackgroundAnimations 
-                  ? Alignment.bottomRight 
-                  : Alignment.center,
-                colors: [
-                  color.withOpacity(0.3),
-                  color.withOpacity(0.1),
-                ],
-              ),
-              border: Border.all(
-                color: color.withOpacity(_glowAnimation.value),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(_glowAnimation.value * 0.3),
-                  blurRadius: 15,
-                  spreadRadius: 3,
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(isSmallScreen ? 6 : 10), // Reduced padding for small screens
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        color.withOpacity(0.4),
-                        color.withOpacity(0.1),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(_glowAnimation.value * 0.6),
-                        blurRadius: 15,
-                      ),
-                    ],
-                  ),
-                  child: Icon(icon, color: color, size: isSmallScreen ? 20 : 24), // Smaller icon
-                ),
-                SizedBox(height: isSmallScreen ? 6 : 10), // Reduced spacing
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 16 : 20, // Smaller font for small screens
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                    fontFamily: 'Orbitron',
-                    letterSpacing: 1,
-                  ),
-                ),
-                SizedBox(height: isSmallScreen ? 3 : 5), // Reduced spacing
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: isSmallScreen ? 9 : 11, // Smaller font for small screens
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFeatureCards(bool isSmallScreen) {
-    return Column(
-      children: [
-        _buildFeatureCard(
-          icon: Icons.edit,
-          title: 'EDITOR TEKS',
-          subtitle: 'Deteksi AI saat mengetik',
-          gradient: [Colors.cyan, Colors.blue],
-          onTap: () => _navigateTo(1),
-          isSmallScreen: isSmallScreen,
-        ),
-        SizedBox(height: isSmallScreen ? 12 : 18), // Reduced spacing
-        _buildFeatureCard(
-          icon: Icons.upload_file,
-          title: 'UNGGAH FILE',
-          subtitle: 'Mulai analisis dokumen',
-          gradient: [Colors.purple, Colors.pink],
-          onTap: () => _navigateTo(2),
-          isSmallScreen: isSmallScreen,
-        ),
-        SizedBox(height: isSmallScreen ? 12 : 18), // Reduced spacing
-        _buildFeatureCard(
-          icon: Icons.camera_alt,
-          title: 'PEMINDAI',
-          subtitle: 'OCR pemindaian secara langsung',
-          gradient: [Colors.pink, Colors.cyan],
-          onTap: () => _navigateTo(3),
-          isSmallScreen: isSmallScreen,
-        ),
-        SizedBox(height: isSmallScreen ? 12 : 18), // Reduced spacing
-        _buildFeatureCard(
-          icon: Icons.history,
-          title: 'ARSIP DATA',
-          subtitle: 'Database riwayat pemindaian',
-          gradient: [Colors.blue, Colors.purple],
-          onTap: () => _navigateTo(4),
-          isSmallScreen: isSmallScreen,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeatureCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required List<Color> gradient,
-    required VoidCallback onTap,
-    required bool isSmallScreen,
-  }) {
-    return AnimatedBuilder(
-      animation: _pulseAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _pulseAnimation.value,
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              height: isSmallScreen ? 90 : 110, // Reduced height for small screens
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 22), // Smaller border radius
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    gradient[0].withOpacity(0.5),
-                    gradient[1].withOpacity(0.25),
-                  ],
-                ),
-                border: Border.all(
-                  color: gradient[0].withOpacity(_glowAnimation.value),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: gradient[0].withOpacity(_glowAnimation.value * 0.4),
-                    blurRadius: 20,
-                    spreadRadius: 3,
-                    offset: const Offset(0, 6),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.4),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(isSmallScreen ? 12 : 18), // Reduced padding
-                child: Row(
-                  children: [
-                    Container(
-                      width: isSmallScreen ? 50 : 70, // Smaller for small screens
-                      height: isSmallScreen ? 50 : 70, // Smaller for small screens
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: gradient,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 18), // Smaller border radius
-                        boxShadow: [
-                          BoxShadow(
-                            color: gradient[0].withOpacity(_glowAnimation.value * 0.6),
-                            blurRadius: 20,
-                            spreadRadius: 3,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Icon(icon, color: Colors.white, size: isSmallScreen ? 25 : 35), // Smaller icon
-                    ),
-                    SizedBox(width: isSmallScreen ? 12 : 18), // Reduced spacing
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            title,
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 14 : 18, // Smaller font for small screens
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                            SizedBox(height: isSmallScreen ? 4 : 6), // Reduced spacing
-                            Text(
-                              subtitle,
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: isSmallScreen ? 11 : 13, // Smaller font for small screens
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: gradient[0].withOpacity(_glowAnimation.value),
-                      size: isSmallScreen ? 20 : 24, // Smaller icon
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCyberpunkFrame() {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          // Top border
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Bottom border
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Left border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Right border
-          Positioned(
-            top: 0,
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1292,41 +1513,156 @@ class _HomeScreenState extends State<HomeScreen>
       widget.onNavTap!(index);
     }
   }
+}
 
-  Widget _buildFloatingParticles() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _rotateController,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _HomeParticlesPainter(_rotateController.value),
-            size: Size.infinite,
-          );
-        },
+class _MiniChartCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+  final bool isSmall;
+  
+  const _MiniChartCard({
+    Key? key,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    required this.isSmall,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(isSmall ? 6 : 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isSmall ? 10 : 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: isSmall ? 2 : 4),
+          SizedBox(
+            height: isSmall ? 50 : 60,
+            child: child,
+          ),
+          SizedBox(height: isSmall ? 2 : 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: isSmall ? 8 : 10,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _HomeParticlesPainter extends CustomPainter {
-  final double animationValue;
-  _HomeParticlesPainter(this.animationValue);
+// Simple smooth line painter for small charts
+class _LineChartPainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+  
+  _LineChartPainter(this.data, this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.4)
-      ..style = PaintingStyle.fill;
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
 
-    final random = math.Random(42);
+    if (data.isEmpty) return;
 
-    for (int i = 0; i < 30; i++) {
-      final x = (random.nextDouble() * size.width);
-      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 3 + 1;
+    final min = data.reduce((a, b) => a < b ? a : b);
+    final max = data.reduce((a, b) => a > b ? a : b);
+    final range = (max - min) == 0 ? 1.0 : (max - min);
 
-      canvas.drawCircle(Offset(x, y), radius, paint);
+    final path = Path();
+    for (int i = 0; i < data.length; i++) {
+      final dx = (i / (data.length - 1)) * size.width;
+      final norm = (data[i] - min) / range;
+      final dy = size.height - (norm * size.height);
+      if (i == 0) {
+        path.moveTo(dx, dy);
+      } else {
+        path.lineTo(dx, dy);
+      }
     }
+
+    // draw glow/backdrop
+    final glow = Paint()
+      ..color = color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    
+    canvas.drawPath(path, glow);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// Painter that draws a thinner line but scaled for integer counts
+class _BarLineChartPainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+  
+  _BarLineChartPainter(this.data, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+
+    if (data.isEmpty) return;
+
+    final min = data.reduce((a, b) => a < b ? a : b);
+    final max = data.reduce((a, b) => a > b ? a : b);
+    final range = (max - min) == 0 ? 1.0 : (max - min);
+
+    final path = Path();
+    for (int i = 0; i < data.length; i++) {
+      final dx = (i / (data.length - 1)) * size.width;
+      final norm = (data[i] - min) / range;
+      final dy = size.height - (norm * size.height);
+      if (i == 0) {
+        path.moveTo(dx, dy);
+      } else {
+        path.lineTo(dx, dy);
+      }
+    }
+
+    // faint fill
+    final fillPaint = Paint()
+      ..color = color.withOpacity(0.08)
+      ..style = PaintingStyle.fill;
+    
+    final fillPath = Path.from(path);
+    fillPath.lineTo(size.width, size.height);
+    fillPath.lineTo(0, size.height);
+    fillPath.close();
+    canvas.drawPath(fillPath, fillPaint);
+
+    // draw line
+    canvas.drawPath(path, paint);
   }
 
   @override

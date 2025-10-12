@@ -218,8 +218,7 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
+  final screenHeight = MediaQuery.of(context).size.height;
     
     return Scaffold(
       backgroundColor: Colors.black,
@@ -237,10 +236,10 @@ class _HistoryScreenState extends State<HistoryScreen>
               builder: (context, constraints) {
                 return Padding(
                       padding: EdgeInsets.fromLTRB(
-                        screenWidth * 0.05,
-                        screenHeight * 0.02,
-                        screenWidth * 0.05,
-                        screenHeight * 0.02,
+                        16,
+                        12,
+                        16,
+                        12,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,95 +406,87 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Widget _buildHeader() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenHeight < 700;
+    final isVerySmallScreen = screenHeight < 600;
+
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
         return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
+            Container(
+              width: isVerySmallScreen ? 40 : (isSmallScreen ? 50 : 60),
+              height: isVerySmallScreen ? 40 : (isSmallScreen ? 50 : 60),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(isVerySmallScreen ? 12 : (isSmallScreen ? 15 : 20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                  BoxShadow(
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.history,
+                color: Colors.white,
+                size: isVerySmallScreen ? 20 : (isSmallScreen ? 25 : 30),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
                       colors: [
                         Colors.cyan.withOpacity(_glowAnimation.value),
                         Colors.pink.withOpacity(_glowAnimation.value),
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: Text(
+                      'ARSIP DATA',
+                      style: TextStyle(
+                        fontSize: isVerySmallScreen ? 18 : (isSmallScreen ? 22 : 26),
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 2,
+                        fontFamily: 'Orbitron',
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
-                        blurRadius: 25,
-                        spreadRadius: 4,
-                      ),
-                      BoxShadow(
-                        color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
-                        blurRadius: 20,
-                        spreadRadius: 3,
-                      ),
-                    ],
                   ),
-                  child: const Icon(
-                    Icons.history,
-                    color: Colors.white,
-                    size: 35,
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ShaderMask(
-                      shaderCallback: (bounds) => LinearGradient(
+                  SizedBox(height: isVerySmallScreen ? 2 : 4),
+                  Container(
+                    height: 2,
+                    width: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
                         colors: [
                           Colors.cyan.withOpacity(_glowAnimation.value),
                           Colors.pink.withOpacity(_glowAnimation.value),
                         ],
-                      ).createShader(bounds),
-                      child: const Text(
-                        'ARSIP DATA',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 3,
-                          fontFamily: 'Orbitron',
-                        ),
                       ),
                     ),
-                    SizedBox(height: 5),
-                    Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.cyan.withOpacity(_glowAnimation.value),
-                            Colors.pink.withOpacity(_glowAnimation.value),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'DATA RIWAYAT PEMINDAIAN',
-                      style: TextStyle(
-                        color: Colors.pink.shade300,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w300,
-                        letterSpacing: 2,
-                        fontFamily: 'Courier',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
+            // Keep the existing filter button for interactions
             _buildFilterButton(),
           ],
         );
@@ -1115,108 +1106,58 @@ class _HistoryScreenState extends State<HistoryScreen>
     return IgnorePointer(
       child: Stack(
         children: [
+          // Top thin glass-blue navbar line (match editor)
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1a253e).withOpacity(0.95),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.2),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
+          // Bottom subtle border
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.12),
+                        blurRadius: 8,
+                        spreadRadius: 0,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            bottom: 0,
-            left: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.pink.withOpacity(_glowAnimation.value),
-                    Colors.cyan.withOpacity(_glowAnimation.value),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],
