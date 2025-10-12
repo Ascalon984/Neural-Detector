@@ -215,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenHeight < 700;
     
     return Scaffold(
       backgroundColor: Colors.black,
@@ -246,21 +246,21 @@ class _HomeScreenState extends State<HomeScreen>
                 // Lock the top area (header/search/stats) while making the features list scrollable
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
-                    screenWidth * 0.05,
-                    screenHeight * 0.02,
-                    screenWidth * 0.05,
-                    screenHeight * 0.02,
+                    16, // Fixed horizontal padding instead of percentage
+                    isSmallScreen ? 8 : 16, // Reduced vertical padding for small screens
+                    16,
+                    isSmallScreen ? 8 : 16,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Fixed top area
-                      _buildHeader(),
-                      SizedBox(height: screenHeight * 0.02),
+                      _buildHeader(isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 8 : 16),
                       _buildSearchBar(),
-                      SizedBox(height: screenHeight * 0.03),
-                      _buildStatsOverview(),
-                      SizedBox(height: screenHeight * 0.02),
+                      SizedBox(height: isSmallScreen ? 12 : 20),
+                      _buildStatsOverview(isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 8 : 16),
 
                       // separator between fixed top and scrollable area
                       _buildTopSeparator(),
@@ -270,8 +270,8 @@ class _HomeScreenState extends State<HomeScreen>
                         child: SingleChildScrollView(
                           child: Column(
                             children: [
-                              _buildFeatureCards(),
-                              SizedBox(height: math.max(16, screenHeight * 0.02)),
+                              _buildFeatureCards(isSmallScreen),
+                              SizedBox(height: 16),
                             ],
                           ),
                         ),
@@ -407,15 +407,15 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isSmallScreen) {
     return AnimatedBuilder(
       animation: _glowAnimation,
       builder: (context, child) {
         return Row(
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: isSmallScreen ? 60 : 80, // Smaller icon for small screens
+              height: isSmallScreen ? 60 : 80,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -425,7 +425,7 @@ class _HomeScreenState extends State<HomeScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: BorderRadius.circular(isSmallScreen ? 20 : 25),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
@@ -439,13 +439,13 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.home,
                 color: Colors.white,
-                size: 40,
+                size: isSmallScreen ? 30 : 40, // Smaller icon for small screens
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,10 +457,10 @@ class _HomeScreenState extends State<HomeScreen>
                         Colors.pink.withOpacity(_glowAnimation.value),
                       ],
                     ).createShader(bounds),
-                    child: const Text(
+                    child: Text(
                       'BERANDA',
                       style: TextStyle(
-                        fontSize: 32,
+                        fontSize: isSmallScreen ? 24 : 32, // Smaller font for small screens
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         letterSpacing: 3,
@@ -498,9 +498,9 @@ class _HomeScreenState extends State<HomeScreen>
           child: LayoutBuilder(builder: (context, constraints) {
             final availableWidth = constraints.maxWidth;
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Reduced padding
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(35),
+                borderRadius: BorderRadius.circular(30), // Slightly smaller border radius
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -511,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 border: Border.all(
                   color: Colors.cyan.withOpacity(_glowAnimation.value),
-                  width: 2.5,
+                  width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -530,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen>
                       GestureDetector(
                         onTap: () => _onSearchSubmitted(_searchController.text),
                         child: Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6), // Reduced padding
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.cyan.withOpacity(0.1),
@@ -542,10 +542,10 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                             ],
                           ),
-                          child: Icon(Icons.search, color: Colors.cyan.shade300, size: 22),
+                          child: Icon(Icons.search, color: Colors.cyan.shade300, size: 20), // Smaller icon
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10), // Reduced spacing
                       Expanded(
                         child: TextField(
                           controller: _searchController,
@@ -567,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen>
                       IconButton(
                         onPressed: _openFilterSheet,
                         icon: Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(8), // Reduced padding
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
@@ -584,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.tune, color: Colors.white, size: 22),
+                          child: const Icon(Icons.tune, color: Colors.white, size: 20), // Smaller icon
                         ),
                       ),
                     ],
@@ -595,10 +595,10 @@ class _HomeScreenState extends State<HomeScreen>
                     Container(
                       margin: const EdgeInsets.only(top: 8),
                       width: availableWidth - 8, // a little padding
-                      constraints: const BoxConstraints(maxHeight: 180),
+                      constraints: const BoxConstraints(maxHeight: 150), // Reduced max height
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.75),
-                        borderRadius: BorderRadius.circular(15),
+                        borderRadius: BorderRadius.circular(12), // Smaller border radius
                         border: Border.all(color: Colors.cyan.withOpacity(0.2)),
                         boxShadow: [
                           BoxShadow(
@@ -617,7 +617,7 @@ class _HomeScreenState extends State<HomeScreen>
                           return ListTile(
                             dense: true,
                             title: Text(s, style: const TextStyle(color: Colors.white)),
-                            leading: const Icon(Icons.history, color: Colors.white70, size: 18),
+                            leading: const Icon(Icons.history, color: Colors.white70, size: 16), // Smaller icon
                             onTap: () {
                               _searchController.text = s;
                               _onSearchSubmitted(s);
@@ -631,7 +631,7 @@ class _HomeScreenState extends State<HomeScreen>
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: LinearProgressIndicator(
-                        minHeight: 3,
+                        minHeight: 2, // Reduced height
                         backgroundColor: Colors.white10,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           Colors.cyan.withOpacity(_glowAnimation.value),
@@ -649,11 +649,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildTopSeparator() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
+      padding: const EdgeInsets.symmetric(vertical: 8.0), // Reduced padding
       child: Container(
-        height: 12,
+        height: 8, // Reduced height
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(10), // Smaller border radius
           gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
@@ -868,10 +868,10 @@ class _HomeScreenState extends State<HomeScreen>
       onTap: () => onTap(value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
         decoration: BoxDecoration(
           color: active ? Colors.cyan.withOpacity(0.2) : Colors.white10,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12), // Smaller border radius
           border: Border.all(color: active ? Colors.cyanAccent : Colors.white24),
           boxShadow: active
               ? [BoxShadow(color: Colors.cyan.withOpacity(0.15), blurRadius: 10, spreadRadius: 2)]
@@ -880,16 +880,16 @@ class _HomeScreenState extends State<HomeScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (active) const Icon(Icons.check, size: 16, color: Colors.cyanAccent),
-            if (active) const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: 14)),
+            if (active) const Icon(Icons.check, size: 14, color: Colors.cyanAccent), // Smaller icon
+            if (active) const SizedBox(width: 4),
+            Text(label, style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: 13)), // Smaller font
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatsOverview() {
+  Widget _buildStatsOverview(bool isSmallScreen) {
     return Row(
       children: [
         Expanded(
@@ -898,24 +898,27 @@ class _HomeScreenState extends State<HomeScreen>
             label: 'HIT RATE',
             icon: Icons.verified,
             color: Colors.cyan,
+            isSmallScreen: isSmallScreen,
           ),
         ),
-        const SizedBox(width: 15),
+        const SizedBox(width: 10), // Reduced spacing
         Expanded(
           child: _buildStatCard(
             value: '2.1s',
             label: 'SPEED',
             icon: Icons.bolt,
             color: Colors.pink,
+            isSmallScreen: isSmallScreen,
           ),
         ),
-        const SizedBox(width: 15),
+        const SizedBox(width: 10), // Reduced spacing
         Expanded(
           child: _buildStatCard(
             value: '1.2k',
             label: 'SCANS',
             icon: Icons.analytics,
             color: Colors.purple,
+            isSmallScreen: isSmallScreen,
           ),
         ),
       ],
@@ -927,6 +930,7 @@ class _HomeScreenState extends State<HomeScreen>
     required String label,
     required IconData icon,
     required Color color,
+    required bool isSmallScreen,
   }) {
     return AnimatedBuilder(
       animation: _fadeAnimation,
@@ -934,9 +938,9 @@ class _HomeScreenState extends State<HomeScreen>
         return Opacity(
           opacity: _fadeAnimation.value,
           child: Container(
-            padding: const EdgeInsets.all(18),
+            padding: EdgeInsets.all(isSmallScreen ? 12 : 18), // Reduced padding for small screens
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 18), // Smaller border radius
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: AnimationConfig.enableBackgroundAnimations 
@@ -962,7 +966,7 @@ class _HomeScreenState extends State<HomeScreen>
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: EdgeInsets.all(isSmallScreen ? 6 : 10), // Reduced padding for small screens
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
@@ -978,25 +982,25 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: color, size: 24),
+                  child: Icon(icon, color: color, size: isSmallScreen ? 20 : 24), // Smaller icon
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: isSmallScreen ? 6 : 10), // Reduced spacing
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: isSmallScreen ? 16 : 20, // Smaller font for small screens
                     fontWeight: FontWeight.bold,
                     color: color,
                     fontFamily: 'Orbitron',
                     letterSpacing: 1,
                   ),
                 ),
-                const SizedBox(height: 5),
+                SizedBox(height: isSmallScreen ? 3 : 5), // Reduced spacing
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 11,
+                    fontSize: isSmallScreen ? 9 : 11, // Smaller font for small screens
                     fontWeight: FontWeight.w300,
                     letterSpacing: 1.5,
                   ),
@@ -1009,7 +1013,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildFeatureCards() {
+  Widget _buildFeatureCards(bool isSmallScreen) {
     return Column(
       children: [
         _buildFeatureCard(
@@ -1018,30 +1022,34 @@ class _HomeScreenState extends State<HomeScreen>
           subtitle: 'Deteksi AI saat mengetik',
           gradient: [Colors.cyan, Colors.blue],
           onTap: () => _navigateTo(1),
+          isSmallScreen: isSmallScreen,
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: isSmallScreen ? 12 : 18), // Reduced spacing
         _buildFeatureCard(
           icon: Icons.upload_file,
           title: 'UNGGAH FILE',
           subtitle: 'Mulai analisis dokumen',
           gradient: [Colors.purple, Colors.pink],
           onTap: () => _navigateTo(2),
+          isSmallScreen: isSmallScreen,
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: isSmallScreen ? 12 : 18), // Reduced spacing
         _buildFeatureCard(
           icon: Icons.camera_alt,
           title: 'PEMINDAI',
           subtitle: 'OCR pemindaian secara langsung',
           gradient: [Colors.pink, Colors.cyan],
           onTap: () => _navigateTo(3),
+          isSmallScreen: isSmallScreen,
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: isSmallScreen ? 12 : 18), // Reduced spacing
         _buildFeatureCard(
           icon: Icons.history,
           title: 'ARSIP DATA',
           subtitle: 'Database riwayat pemindaian',
           gradient: [Colors.blue, Colors.purple],
           onTap: () => _navigateTo(4),
+          isSmallScreen: isSmallScreen,
         ),
       ],
     );
@@ -1053,6 +1061,7 @@ class _HomeScreenState extends State<HomeScreen>
     required String subtitle,
     required List<Color> gradient,
     required VoidCallback onTap,
+    required bool isSmallScreen,
   }) {
     return AnimatedBuilder(
       animation: _pulseAnimation,
@@ -1062,9 +1071,9 @@ class _HomeScreenState extends State<HomeScreen>
           child: GestureDetector(
             onTap: onTap,
             child: Container(
-              height: 110,
+              height: isSmallScreen ? 90 : 110, // Reduced height for small screens
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 22), // Smaller border radius
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
@@ -1075,7 +1084,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 border: Border.all(
                   color: gradient[0].withOpacity(_glowAnimation.value),
-                  width: 2.5,
+                  width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -1093,19 +1102,19 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.all(18),
+                padding: EdgeInsets.all(isSmallScreen ? 12 : 18), // Reduced padding
                 child: Row(
                   children: [
                     Container(
-                      width: 70,
-                      height: 70,
+                      width: isSmallScreen ? 50 : 70, // Smaller for small screens
+                      height: isSmallScreen ? 50 : 70, // Smaller for small screens
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: gradient,
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(isSmallScreen ? 12 : 18), // Smaller border radius
                         boxShadow: [
                           BoxShadow(
                             color: gradient[0].withOpacity(_glowAnimation.value * 0.6),
@@ -1115,9 +1124,9 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ],
                       ),
-                      child: Icon(icon, color: Colors.white, size: 35),
+                      child: Icon(icon, color: Colors.white, size: isSmallScreen ? 25 : 35), // Smaller icon
                     ),
-                    const SizedBox(width: 18),
+                    SizedBox(width: isSmallScreen ? 12 : 18), // Reduced spacing
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1125,31 +1134,31 @@ class _HomeScreenState extends State<HomeScreen>
                         children: [
                           Text(
                             title,
-                            style: const TextStyle(
-                              fontSize: 18,
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 14 : 18, // Smaller font for small screens
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                               letterSpacing: 1.5,
                               fontFamily: 'Orbitron',
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            subtitle,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
+                            SizedBox(height: isSmallScreen ? 4 : 6), // Reduced spacing
+                            Text(
+                              subtitle,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: isSmallScreen ? 11 : 13, // Smaller font for small screens
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                         ],
                       ),
                     ),
                     Icon(
                       Icons.arrow_forward_ios,
                       color: gradient[0].withOpacity(_glowAnimation.value),
-                      size: 24,
+                      size: isSmallScreen ? 20 : 24, // Smaller icon
                     ),
                   ],
                 ),

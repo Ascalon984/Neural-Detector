@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../config/animation_config.dart';
-import '../theme/theme_provider.dart';
+// provider and theme provider removed because dark mode and language features were removed
 import '../utils/settings_manager.dart';
 import '../utils/history_manager.dart';
 import '../models/scan_history.dart';
@@ -38,9 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _highAccuracy = false;
   double _scanSensitivity = 0.5;
   double _previousSensitivity = 0.5;
-  String _selectedLanguage = 'Indonesia';
-
-  final List<String> _languages = ['Indonesia', 'English'];
+  // language support removed per user request
 
   @override
   void initState() {
@@ -125,11 +122,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
     }
 
-    _loadSensitivity();
-    _loadHighAccuracy();
-    _loadAutoScan();
-    _loadNotifications();
-    _loadLanguage();
+  _loadSensitivity();
+  _loadHighAccuracy();
+  _loadAutoScan();
+  _loadNotifications();
   }
 
   void _triggerGlitch() {
@@ -160,16 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     super.dispose();
   }
 
-  Future<void> _loadLanguage() async {
-    try {
-      final code = await SettingsManager.getLanguage();
-      if (mounted) {
-        setState(() {
-          _selectedLanguage = (code == 'id') ? 'Indonesia' : 'English';
-        });
-      }
-    } catch (_) {}
-  }
+  // language handling removed
 
   Future<void> _loadSensitivity() async {
     try {
@@ -582,16 +569,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 const SizedBox(height: 20),
                 
                 _buildSectionHeader('PREFERENSI SISTEM'),
-                Consumer<ThemeProvider>(
-                  builder: (context, themeProvider, child) => _buildSettingSwitch(
-                    title: 'Mode Gelap',
-                    subtitle: 'Tema antarmuka Cyberpunk',
-                    value: themeProvider.isDarkMode,
-                    onChanged: (value) => themeProvider.toggleTheme(),
-                    icon: Icons.dark_mode,
-                    color: Colors.pink,
-                  ),
-                ),
+                // Dark mode removed from settings per user request
                 _buildSettingSwitch(
                   title: 'Notifikasi',
                   subtitle: 'Terima pemberitahuan penyelesaian pemindaian',
@@ -603,7 +581,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   icon: Icons.notifications,
                   color: Colors.blue,
                 ),
-                _buildLanguageSelector(),
+                // Language selector removed per user request
                 const SizedBox(height: 20),
                 
                 _buildSectionHeader('DATA & PRIVASI'),
@@ -899,94 +877,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildLanguageSelector() {
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        return Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.blue.shade900.withOpacity(0.4),
-                Colors.cyan.shade900.withOpacity(0.4),
-              ],
-            ),
-            border: Border.all(
-              color: Colors.cyan.withOpacity(_glowAnimation.value),
-              width: 2.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.cyan.withOpacity(_glowAnimation.value * 0.4),
-                blurRadius: 12,
-                spreadRadius: 2,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.language, color: Colors.cyan.shade300, size: 22),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Bahasa',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      fontFamily: 'Orbitron',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.cyan.withOpacity(_glowAnimation.value),
-                    width: 1.5,
-                  ),
-                ),
-                child: DropdownButton<String>(
-                  value: _selectedLanguage,
-                  dropdownColor: Colors.black87,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  icon: const Icon(Icons.arrow_drop_down, color: Colors.cyan),
-                  underline: Container(height: 0),
-                  isExpanded: true,
-                  items: _languages.map((String language) {
-                    return DropdownMenuItem<String>(
-                      value: language,
-                      child: Text(language),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedLanguage = newValue;
-                      });
-                      final code = (_selectedLanguage == 'Indonesian') ? 'id' : 'en';
-                      SettingsManager.setLanguage(code);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  // Language selector removed per user request
 
   Widget _buildSettingButton({
     required String title,
