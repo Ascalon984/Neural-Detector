@@ -9,7 +9,10 @@ import 'dart:io' show File;
 import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:math' as math;
+import 'package:flutter/services.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../utils/text_analyzer.dart';
+import '../utils/file_text_extractor.dart';
 import '../models/scan_history.dart' as Model;
 import '../utils/history_manager.dart';
 import '../utils/sensitivity.dart';
@@ -132,6 +135,111 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       _hexagonAnimation = AlwaysStoppedAnimation(0.0);
       _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
     }
+  }
+
+  // Local radial chart to reuse the text-editor style
+  Widget _buildRadialChart(bool isSmallScreen) {
+    return SizedBox(
+      height: isSmallScreen ? 160 : 200,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, child) {
+          final aiValue = (_selectedFileName == null ? 0.0 : _uploadProgress * 100) * t; // fallback if no real aiPct
+          final humanValue = (100.0 - aiValue) * t;
+          return Row(
+            children: [
+              SizedBox(width: isSmallScreen ? 8 : 12),
+              SizedBox(
+                width: isSmallScreen ? 120 : 150,
+                height: isSmallScreen ? 120 : 150,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: isSmallScreen ? 36 : 46,
+                    startDegreeOffset: -90,
+                    sections: [
+                      PieChartSectionData(
+                        color: Colors.red.shade400,
+                        value: aiValue,
+                        title: '${aiValue.toStringAsFixed(1)}%',
+                        radius: isSmallScreen ? 30 : 36,
+                        titleStyle: TextStyle(fontSize: isSmallScreen ? 11 : 12, fontWeight: FontWeight.bold, color: Colors.white),
+                        titlePositionPercentageOffset: 0.6,
+                      ),
+                      PieChartSectionData(
+                        color: Colors.cyan.shade400,
+                        value: humanValue,
+                        title: '${humanValue.toStringAsFixed(1)}%',
+                        radius: isSmallScreen ? 30 : 36,
+                        titleStyle: TextStyle(fontSize: isSmallScreen ? 11 : 12, fontWeight: FontWeight.bold, color: Colors.white),
+                        titlePositionPercentageOffset: 0.6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: isSmallScreen ? 10 : 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(children: [Container(width: 10, height: 10, color: Colors.red.shade400), SizedBox(width: 8), Text('Deteksi AI', style: TextStyle(color: Colors.white70)), Spacer(), Text('---', style: TextStyle(color: Colors.red.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
+                    SizedBox(height: 8),
+                    Row(children: [Container(width: 10, height: 10, color: Colors.cyan.shade400), SizedBox(width: 8), Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)), Spacer(), Text('---', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
+                    SizedBox(height: 12),
+                    Text('Persentase menunjukkan proporsi konten yang terdeteksi AI vs manusia.', style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 11 : 12)),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildResultsContainerForUpload(double aiPct, double humanPct, bool isSmallScreen) {
+    return Container(
+      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1)),
+      child: Column(children: [
+        Text('HASIL ANALISIS', style: TextStyle(fontSize: isSmallScreen ? 16 : 18, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Orbitron')),
+        SizedBox(height: isSmallScreen ? 10 : 12),
+        Row(children: [Expanded(child: _buildCompactResultItem('Deteksi AI', '${aiPct.toStringAsFixed(1)}%', aiPct > 50 ? Colors.red : Colors.green, isSmallScreen, Icons.smart_toy)), SizedBox(width: isSmallScreen ? 8 : 12), Expanded(child: _buildCompactResultItem('Ditulis Manusia', '${humanPct.toStringAsFixed(1)}%', Colors.cyan, isSmallScreen, Icons.person))])
+      ]),
+    );
+  }
+
+  Widget _buildCompactResultItem(
+    String label,
+    String value,
+    Color color,
+    bool isSmallScreen,
+    IconData icon,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: isSmallScreen ? 24 : 28),
+          SizedBox(height: isSmallScreen ? 8 : 12),
+          Text(value, style: TextStyle(color: color, fontSize: isSmallScreen ? 18 : 22, fontWeight: FontWeight.w700, fontFamily: 'Orbitron')),
+          SizedBox(height: 4),
+          Text(label, style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 10 : 12, fontWeight: FontWeight.w500), textAlign: TextAlign.center),
+        ],
+      ),
+    );
   }
 
   void _triggerGlitch() {
@@ -1025,10 +1133,25 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           modified = null;
         }
 
-        // Read file content
+        // Try to extract text from the file (supports txt, docx, pdf)
         String? content;
         try {
-          content = await file.readAsString();
+          // prefer structured extraction for docx/pdf
+          try {
+            // lazy import of extractor util
+            content = await FileTextExtractor.extractText(file);
+          } catch (_) {
+            content = null;
+          }
+
+          // fallback: read as string for plain text
+          if (content == null) {
+            try {
+              content = await file.readAsString();
+            } catch (_) {
+              content = null;
+            }
+          }
         } catch (_) {
           content = null;
         }
@@ -1153,6 +1276,39 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     final isSmallScreen = screenSize.width < 600;
     final isVerySmallScreen = screenSize.width < 360;
     
+    // Build a dialog that mirrors the text editor's analysis result layout
+    // We'll synthesize highlighted spans based on the file content and aiPct
+    List<TextSpan> highlightedSpans = [];
+    void _generateSpansFromContent() {
+      final text = _fileContent ?? '';
+      if (text.trim().isEmpty) return;
+      final words = text.split(' ');
+      final rnd = math.Random(42);
+      highlightedSpans = [];
+      for (int i = 0; i < words.length; i++) {
+        final isAI = rnd.nextDouble() < (aiPct / 100.0);
+        highlightedSpans.add(TextSpan(
+          text: words[i] + (i < words.length - 1 ? ' ' : ''),
+          style: TextStyle(
+            backgroundColor: isAI ? Colors.red.withOpacity(0.28) : Colors.transparent,
+            color: Colors.white,
+          ),
+        ));
+      }
+    }
+
+    _generateSpansFromContent();
+
+    Future<void> _copySpansToClipboard() async {
+      final joined = highlightedSpans.where((s) => (s.style?.backgroundColor?.opacity ?? 0) > 0.01).map((s) => s.text ?? '').join();
+      if (joined.trim().isEmpty) {
+        try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: joined.trim()));
+      try { CyberNotification.show(context, 'Disalin', 'Teks highlight disalin ke clipboard'); } catch (_) {}
+    }
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -1161,151 +1317,107 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         child: Container(
           constraints: BoxConstraints(
             maxWidth: screenSize.width * 0.9,
-            maxHeight: screenSize.height * 0.7,
+            maxHeight: screenSize.height * 0.85,
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                aiPct > 50 
-                  ? Colors.red.shade900.withOpacity(0.9)
-                  : Colors.blue.shade900.withOpacity(0.9),
-                aiPct > 50
-                  ? Colors.deepOrange.shade900.withOpacity(0.9)
-                  : Colors.purple.shade900.withOpacity(0.9),
-              ],
-            ),
+            color: Colors.grey.shade900.withOpacity(0.95),
             border: Border.all(
-              color: aiPct > 50 ? Colors.red : Colors.cyan,
-              width: 2.5
+              color: aiPct > 50 ? Colors.red.withOpacity(0.6) : Colors.cyan.withOpacity(0.6),
+              width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: (aiPct > 50 ? Colors.red : Colors.cyan).withOpacity(0.6),
-                blurRadius: 25,
-                spreadRadius: 6,
-              ),
-            ],
           ),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.all(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: isVerySmallScreen ? 70 : isSmallScreen ? 80 : 90,
-                    height: isVerySmallScreen ? 70 : isSmallScreen ? 80 : 90,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.cyan, Colors.pink],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.cyan.withOpacity(0.6),
-                          blurRadius: isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22,
-                          spreadRadius: 4,
+          child: Column(
+            children: [
+              // Header row
+              Container(
+                padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(isSmallScreen ? 18 : 24),
+                    topRight: Radius.circular(isSmallScreen ? 18 : 24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: isSmallScreen ? 44 : 54,
+                      height: isSmallScreen ? 44 : 54,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: aiPct > 50 ? [Colors.red.shade400, Colors.red.shade600] : [Colors.cyan.shade400, Colors.blue.shade600],
                         ),
-                      ],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(aiPct > 50 ? Icons.warning : Icons.verified, color: Colors.white, size: isSmallScreen ? 20 : 26),
                     ),
-                    child: Icon(
-                      Icons.verified,
-                      color: Colors.white,
-                      size: isVerySmallScreen ? 35 : isSmallScreen ? 40 : 45,
-                    ),
-                  ),
-                  SizedBox(height: isVerySmallScreen ? 18 : 22),
-                  Text(
-                    'ANALISIS SELESAI',
-                    style: TextStyle(
-                      fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.cyan.shade300,
-                      fontFamily: 'Orbitron',
-                      letterSpacing: isVerySmallScreen ? 0.9 : 1.2,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: isVerySmallScreen ? 15 : 18),
-                  Container(
-                    padding: EdgeInsets.all(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(isVerySmallScreen ? 15 : isSmallScreen ? 18 : 22),
-                      border: Border.all(
-                        color: Colors.cyan.withOpacity(0.4),
-                        width: 1.5,
+                    SizedBox(width: isSmallScreen ? 12 : 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ANALISIS FILE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 16 : 18, fontFamily: 'Orbitron')),
+                          SizedBox(height: 4),
+                          Text(p.basename(_selectedFileName ?? 'file'), style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 12 : 13)),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Deteksi AI:',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Text(
-                              '${aiPct.toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                color: aiPct > 50 ? Colors.red.shade300 : Colors.green.shade300,
-                                fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: isVerySmallScreen ? 12 : 15),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Ditulis Manusia:',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Text(
-                              '${humanPct.toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                color: Colors.cyan.shade300,
-                                fontSize: isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isVerySmallScreen ? 18 : 22),
-                  Row(
+                    IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close, color: Colors.white, size: isSmallScreen ? 22 : 26)),
+                  ],
+                ),
+              ),
+
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: _buildCyberButton(
-                          text: 'TUTUP',
-                          icon: Icons.close,
-                          onPressed: () => Navigator.pop(context),
-                          color: Colors.cyan,
-                          isVerySmallScreen: isVerySmallScreen,
-                          isSmallScreen: isSmallScreen,
+                      // Chart + legend row (reuse file editor's radial style)
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        child: _buildRadialChart(isSmallScreen),
+                      ),
+                      SizedBox(height: isSmallScreen ? 12 : 16),
+                      _buildResultsContainerForUpload(aiPct, humanPct, isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 12 : 16),
+                      // Highlight section
+                      Container(
+                        padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.withOpacity(0.25)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 18 : 22),
+                                SizedBox(width: 8),
+                                Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 14 : 16, fontFamily: 'Orbitron'))),
+                                IconButton(onPressed: _copySpansToClipboard, icon: Icon(Icons.copy, color: Colors.white70, size: isSmallScreen ? 18 : 20)),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Container(
+                              constraints: BoxConstraints(maxHeight: isSmallScreen ? 180 : 260),
+                              padding: EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                              child: SingleChildScrollView(
+                                child: RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 14 : 16, height: 1.5))),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

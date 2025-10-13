@@ -18,7 +18,10 @@ dependencies:
   flutter_animate: ^4.2.0
   permission_handler: ^12.0.1
   provider: ^6.0.5
+  fl_chart: ^1.1.1
   ffi: ^2.1.4
+  archive: ^3.3.8
+  xml: ^6.2.0
   shared_preferences: ^2.5.3
   google_mlkit_text_recognition: ^0.15.0
   google_mlkit_commons: ^0.11.0
@@ -31,6 +34,8 @@ dependencies:
   share_plus: ^12.0.0
   cross_file: ^0.3.4
   tflite_flutter: ^0.11.0
+  pdfx: ^2.9.2
+  syncfusion_flutter_pdf: ^31.1.23
   # Removed unused dependencies: image_picker, animated_text_kit, glass_kit,
   # device_info_plus, flutter_image_compress, image_cropper, flutter_isolate,
   # wakelock_plus
