@@ -138,7 +138,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   }
 
   // Local radial chart to reuse the text-editor style
-  Widget _buildRadialChart(bool isSmallScreen) {
+  // Now accepts aiPct and humanPct (values 0..100)
+  Widget _buildRadialChart(bool isSmallScreen, double aiPct, double humanPct) {
     return SizedBox(
       height: isSmallScreen ? 160 : 200,
       child: TweenAnimationBuilder<double>(
@@ -146,8 +147,8 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         duration: const Duration(milliseconds: 700),
         curve: Curves.easeOutCubic,
         builder: (context, t, child) {
-          final aiValue = (_selectedFileName == null ? 0.0 : _uploadProgress * 100) * t; // fallback if no real aiPct
-          final humanValue = (100.0 - aiValue) * t;
+          final aiValue = (aiPct) * t;
+          final humanValue = (humanPct) * t;
           return Row(
             children: [
               SizedBox(width: isSmallScreen ? 8 : 12),
@@ -163,7 +164,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       PieChartSectionData(
                         color: Colors.red.shade400,
                         value: aiValue,
-                        title: '${aiValue.toStringAsFixed(1)}%',
+                        title: '${aiPct.toStringAsFixed(1)}%'.toString(),
                         radius: isSmallScreen ? 30 : 36,
                         titleStyle: TextStyle(fontSize: isSmallScreen ? 11 : 12, fontWeight: FontWeight.bold, color: Colors.white),
                         titlePositionPercentageOffset: 0.6,
@@ -171,7 +172,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       PieChartSectionData(
                         color: Colors.cyan.shade400,
                         value: humanValue,
-                        title: '${humanValue.toStringAsFixed(1)}%',
+                        title: '${humanPct.toStringAsFixed(1)}%'.toString(),
                         radius: isSmallScreen ? 30 : 36,
                         titleStyle: TextStyle(fontSize: isSmallScreen ? 11 : 12, fontWeight: FontWeight.bold, color: Colors.white),
                         titlePositionPercentageOffset: 0.6,
@@ -186,9 +187,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(children: [Container(width: 10, height: 10, color: Colors.red.shade400), SizedBox(width: 8), Text('Deteksi AI', style: TextStyle(color: Colors.white70)), Spacer(), Text('---', style: TextStyle(color: Colors.red.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
+                    Row(children: [Container(width: 10, height: 10, color: Colors.red.shade400), SizedBox(width: 8), Text('Deteksi AI', style: TextStyle(color: Colors.white70)), Spacer(), Text('${aiPct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.red.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
                     SizedBox(height: 8),
-                    Row(children: [Container(width: 10, height: 10, color: Colors.cyan.shade400), SizedBox(width: 8), Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)), Spacer(), Text('---', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
+                    Row(children: [Container(width: 10, height: 10, color: Colors.cyan.shade400), SizedBox(width: 8), Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)), Spacer(), Text('${humanPct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
                     SizedBox(height: 12),
                     Text('Persentase menunjukkan proporsi konten yang terdeteksi AI vs manusia.', style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 11 : 12)),
                   ],
@@ -1101,6 +1102,14 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               _selectedFileDate = webModified;
               _fileContent = info['content'] as String?;
             });
+            // If extraction returned null, show a helpful notice for web users
+            if ((info['content'] as String?) == null) {
+              try {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Tidak dapat mengekstrak teks dari file di web. Jika file PDF berupa gambar (scan), gunakan OCR atau coba upload DOCX/TXT.'), duration: Duration(seconds: 4))
+                );
+              } catch (_) {}
+            }
           }
           
           // If auto-scan is enabled in settings, start analysis automatically (web)
@@ -1377,7 +1386,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       // Chart + legend row (reuse file editor's radial style)
                       Container(
                         padding: EdgeInsets.all(8),
-                        child: _buildRadialChart(isSmallScreen),
+                        child: _buildRadialChart(isSmallScreen, aiPct, humanPct),
                       ),
                       SizedBox(height: isSmallScreen ? 12 : 16),
                       _buildResultsContainerForUpload(aiPct, humanPct, isSmallScreen),
@@ -1398,7 +1407,12 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                                 Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 18 : 22),
                                 SizedBox(width: 8),
                                 Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 14 : 16, fontFamily: 'Orbitron'))),
-                                IconButton(onPressed: _copySpansToClipboard, icon: Icon(Icons.copy, color: Colors.white70, size: isSmallScreen ? 18 : 20)),
+                                IconButton(
+                                  onPressed: highlightedSpans.isNotEmpty ? _copySpansToClipboard : () {
+                                    try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
+                                  },
+                                  icon: Icon(Icons.copy, color: highlightedSpans.isNotEmpty ? Colors.white70 : Colors.white24, size: isSmallScreen ? 18 : 20),
+                                ),
                               ],
                             ),
                             SizedBox(height: 10),
@@ -1407,7 +1421,17 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                               padding: EdgeInsets.all(8),
                               decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
                               child: SingleChildScrollView(
-                                child: RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 14 : 16, height: 1.5))),
+                                child: highlightedSpans.isNotEmpty
+                                  ? RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 14 : 16, height: 1.5)))
+                                  : Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 12),
+                                      child: Text(
+                                        (_fileContent != null && _fileContent!.trim().isNotEmpty)
+                                          ? _fileContent!
+                                          : 'Tidak ada teks yang diekstrak dari file. Pastikan file berisi teks yang dapat diambil (PDF / DOCX support membutuhkan ekstraksi).',
+                                        style: TextStyle(color: Colors.grey.shade300, fontSize: isSmallScreen ? 13 : 14),
+                                      ),
+                                    ),
                               ),
                             ),
                           ],

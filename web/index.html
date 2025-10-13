@@ -33,6 +33,53 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script src='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs' type='module'></script>
+  <script type='module'>
+  var { pdfjsLib } = globalThis;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.mjs';
+
+  var pdfRenderOptions = {
+    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/cmaps/',
+    cMapPacked: true,
+  }
+  </script>
+  <!-- pdfx (pdf.js) required scripts. If you prefer to install locally, run:
+       flutter pub run pdfx:install_web
+       or include the files under web/assets/pdfjs/ and adjust paths accordingly.
+       Using CDN here for quick development on web. -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+  <script>
+    // Set workerSrc to the CDN worker file so pdfx can locate pdf.js worker on web
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+    }
+  </script>
+  <script>
+    // Expose a helper that accepts a base64-encoded PDF and returns extracted text.
+    // Uses pdf.js getTextContent for each page.
+    async function extractPdfText(base64) {
+      try {
+        if (!window.pdfjsLib) return null;
+        // convert base64 to Uint8Array
+        const raw = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        const loadingTask = window.pdfjsLib.getDocument({data: raw});
+        const pdf = await loadingTask.promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const strings = content.items.map(item => item.str || '').join(' ');
+          fullText += strings + '\n';
+        }
+        return fullText;
+      } catch (e) {
+        // return null on failure
+        return null;
+      }
+    }
+    // attach to window for Dart JS interop
+    window.extractPdfText = extractPdfText;
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
