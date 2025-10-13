@@ -13,6 +13,11 @@ add_library(text_analyzer
     src/text_analyzer.cpp
 )
 
+# C API wrapper for FFI
+add_library(text_analyzer_capi
+    src/c_api.cpp
+)
+
 # Include directories
 target_include_directories(text_analyzer
     PUBLIC
@@ -26,6 +31,11 @@ target_link_libraries(text_analyzer
     PRIVATE
         tensorflow-lite
         nlohmann_json::nlohmann_json
+)
+
+target_link_libraries(text_analyzer_capi
+    PRIVATE
+        text_analyzer
 )
 
 # Optimization flags for memory efficiency

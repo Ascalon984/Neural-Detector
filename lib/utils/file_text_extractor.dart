@@ -44,7 +44,16 @@ class FileTextExtractor {
           buffer.write(' ');
         }
         return buffer.toString().trim();
-      } catch (e) {
+      } catch (e, st) {
+        // Diagnostic logging for native extraction failures
+        try {
+          // use stdout prints which will appear in flutter run logs
+          // include stacktrace for deeper debugging
+          // ignore: avoid_print
+          print('FileTextExtractor: docx extraction error for ${file.path}: $e');
+          // ignore: avoid_print
+          print(st);
+        } catch (_) {}
         return null;
       }
     }
@@ -62,7 +71,11 @@ class FileTextExtractor {
         pdfDoc.dispose();
         final t = buffer.toString().trim();
         return t.isEmpty ? null : t;
-      } catch (e) {
+      } catch (e, st) {
+        try {
+          print('FileTextExtractor: pdf extraction error for ${file.path}: $e');
+          print(st);
+        } catch (_) {}
         return null;
       }
     }

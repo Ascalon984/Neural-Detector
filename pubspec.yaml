@@ -50,6 +50,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    - assets/models/tokenizer/vocab.txt
 
 flutter_icons:
   android: true

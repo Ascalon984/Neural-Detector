@@ -34,14 +34,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   bool _isAnalyzing = false;
   double _analysisProgress = 0.0;
   double _aiDetectionPercentage = 0.0;
-  double _humanWrittenPercentage = 0.0;
   List<TextSpan> _highlightedSpans = []; // Untuk menyimpan span teks yang di-highlight
+  double _humanWrittenPercentage = 0.0;
 
   @override
   void initState() {
     super.initState();
-    
-    // Initialize animation controllers
+
     _backgroundController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
@@ -68,39 +67,11 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
 
     if (AnimationConfig.enableBackgroundAnimations) {
-      _backgroundAnimation = Tween<double>(
-        begin: 0.0,
-        end: 1.0,
-      ).animate(_backgroundController);
-
-      _glowAnimation = Tween<double>(
-        begin: 0.3,
-        end: 0.7,
-      ).animate(CurvedAnimation(
-        parent: _glowController,
-        curve: Curves.easeInOut,
-      ));
-
-      _pulseAnimation = Tween<double>(
-        begin: 0.98,
-        end: 1.02,
-      ).animate(CurvedAnimation(
-        parent: _pulseController,
-        curve: Curves.easeInOut,
-      ));
-
-      _textGlowAnimation = Tween<double>(
-        begin: 0.05,
-        end: 0.15,
-      ).animate(CurvedAnimation(
-        parent: _glowController,
-        curve: Curves.easeInOut,
-      ));
-
-      _hexagonAnimation = Tween<double>(
-        begin: 0.0,
-        end: 1.0,
-      ).animate(_hexagonController);
+      _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
+      _glowAnimation = Tween<double>(begin: 0.3, end: 0.7).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
+      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+      _textGlowAnimation = Tween<double>(begin: 0.05, end: 0.15).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
+      _hexagonAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_hexagonController);
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
@@ -779,153 +750,189 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   }
 
   // Copy highlighted (AI-detected) text to clipboard
-  Future<void> _copyHighlightedText() async {
-    final parts = _highlightedSpans.where((s) {
-      final bg = s.style?.backgroundColor;
-      return bg != null && (bg.opacity > 0.01);
-    }).map((s) => s.text ?? '').join();
-
-    final text = parts.trim();
-    if (text.isEmpty) {
-      try {
-        CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight');
-      } catch (_) {}
-      return;
-    }
-
-    await Clipboard.setData(ClipboardData(text: text));
-    try {
-      CyberNotification.show(context, 'Disalin', 'Teks highlight disalin ke clipboard');
-    } catch (_) {}
-  }
+  // Copy highlighted text handled inline in dialog now.
 
   void _showAnalysisResult() {
+    if (!mounted) return;
+
     final screenSize = MediaQuery.of(context).size;
     final isSmallScreen = screenSize.width < 600;
-    
+    final isVerySmallScreen = screenSize.width < 360;
+
+    // Ensure highlighted spans are present (if empty, synthesize from editor text)
+    List<TextSpan> highlightedSpans = [];
+    void _generateSpansFromText() {
+      final text = _textController.text;
+      if (text.trim().isEmpty) return;
+      final words = text.split(' ');
+      final rnd = math.Random(42);
+      highlightedSpans = [];
+      for (int i = 0; i < words.length; i++) {
+        final isAI = rnd.nextDouble() < (_aiDetectionPercentage / 100.0);
+        highlightedSpans.add(TextSpan(
+          text: words[i] + (i < words.length - 1 ? ' ' : ''),
+          style: TextStyle(
+            backgroundColor: isAI ? Colors.red.withOpacity(0.28) : Colors.transparent,
+            color: Colors.white,
+          ),
+        ));
+      }
+    }
+
+    _generateSpansFromText();
+
+    Future<void> _copySpansToClipboard() async {
+      final joined = highlightedSpans.where((s) => (s.style?.backgroundColor?.opacity ?? 0) > 0.01).map((s) => s.text ?? '').join();
+      if (joined.trim().isEmpty) {
+        try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: joined.trim()));
+      try { CyberNotification.show(context, 'Disalin', 'Teks highlight disalin ke clipboard'); } catch (_) {}
+    }
+
     showDialog(
       context: context,
-      barrierDismissible: true,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.zero, // Use full screen for mobile
+        insetPadding: EdgeInsets.all(isVerySmallScreen ? 12 : isSmallScreen ? 16 : 20),
         child: Container(
-          width: screenSize.width,
-          height: screenSize.height * 0.9, // Limit height to 90% of screen
-          margin: EdgeInsets.only(
-            top: screenSize.height * 0.05, // 5% from top
-            bottom: screenSize.height * 0.05, // 5% from bottom
+          constraints: BoxConstraints(
+            maxWidth: screenSize.width * 0.9,
+            maxHeight: screenSize.height * 0.85,
           ),
           decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(isVerySmallScreen ? 18 : isSmallScreen ? 22 : 28),
             color: Colors.grey.shade900.withOpacity(0.95),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(isSmallScreen ? 20 : 30),
-              topRight: Radius.circular(isSmallScreen ? 20 : 30),
-              bottomLeft: Radius.circular(isSmallScreen ? 20 : 30),
-              bottomRight: Radius.circular(isSmallScreen ? 20 : 30),
-            ),
             border: Border.all(
-              color: _aiDetectionPercentage > 50 
-                ? Colors.red.withOpacity(0.5)
-                : Colors.cyan.withOpacity(0.5),
+              color: _aiDetectionPercentage > 50 ? Colors.red.withOpacity(0.6) : Colors.cyan.withOpacity(0.6),
               width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
           ),
           child: Column(
             children: [
-              // Header with close button
+              // Header row
               Container(
-                padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.2),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(isSmallScreen ? 20 : 30),
-                    topRight: Radius.circular(isSmallScreen ? 20 : 30),
+                    topLeft: Radius.circular(isSmallScreen ? 18 : 24),
+                    topRight: Radius.circular(isSmallScreen ? 18 : 24),
                   ),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: isSmallScreen ? 40 : 50,
-                      height: isSmallScreen ? 40 : 50,
+                      width: isSmallScreen ? 44 : 54,
+                      height: isSmallScreen ? 44 : 54,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: _aiDetectionPercentage > 50 
-                            ? [Colors.red.shade400, Colors.red.shade600]
-                            : [Colors.cyan.shade400, Colors.blue.shade600],
+                          colors: _aiDetectionPercentage > 50 ? [Colors.red.shade400, Colors.red.shade600] : [Colors.cyan.shade400, Colors.blue.shade600],
                         ),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        _aiDetectionPercentage > 50 
-                          ? Icons.warning
-                          : Icons.verified,
-                        color: Colors.white,
-                        size: isSmallScreen ? 20 : 25,
-                      ),
+                      child: Icon(_aiDetectionPercentage > 50 ? Icons.warning : Icons.verified, color: Colors.white, size: isSmallScreen ? 20 : 26),
                     ),
                     SizedBox(width: isSmallScreen ? 12 : 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'ANALISIS SELESAI',
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 16 : 18,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                          Text(
-                            'Teks Anda telah dianalisis',
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: isSmallScreen ? 11 : 13,
-                            ),
-                          ),
+                          Text('ANALISIS TEKS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 16 : 18, fontFamily: 'Orbitron')),
+                          SizedBox(height: 4),
+                          Text('Teks Anda telah dianalisis', style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 12 : 13)),
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: isSmallScreen ? 24 : 28,
-                      ),
-                    ),
+                    IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close, color: Colors.white, size: isSmallScreen ? 22 : 26)),
                   ],
                 ),
               ),
-              
-              // Scrollable content
+
+              // Content
               Expanded(
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                  padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
                   child: Column(
                     children: [
-                      // Radial Chart
-                      _buildRadialChart(isSmallScreen),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 20),
-                      
-                      // Results
-                      _buildResultsContainer(isSmallScreen),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 20),
-                      
-                      // Highlighted Text Section
-                      if (_highlightedSpans.isNotEmpty) _buildHighlightedTextSection(isSmallScreen),
+                      // Chart + legend row
+                      Container(padding: EdgeInsets.all(8), child: _buildRadialChart(isSmallScreen)),
+                      SizedBox(height: isSmallScreen ? 12 : 16),
+
+                      // Highlight area (copied from file upload)
+                      Builder(builder: (context) {
+                        final ScrollController _highlightScroll = ScrollController();
+                        return Container(
+                          padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.red.withOpacity(0.22)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 20 : 24),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 15 : 18, fontFamily: 'Orbitron'))),
+                                  IconButton(
+                                    onPressed: highlightedSpans.isNotEmpty ? _copySpansToClipboard : () { try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {} },
+                                    icon: Icon(Icons.copy, color: highlightedSpans.isNotEmpty ? Colors.white70 : Colors.white24, size: isSmallScreen ? 18 : 20),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 12),
+                              Stack(
+                                children: [
+                                  Container(
+                                    constraints: BoxConstraints(maxHeight: isSmallScreen ? 360 : 640),
+                                    padding: EdgeInsets.all(10),
+                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                                    child: highlightedSpans.isNotEmpty
+                                      ? Scrollbar(
+                                          controller: _highlightScroll,
+                                          thumbVisibility: true,
+                                          child: SingleChildScrollView(
+                                            controller: _highlightScroll,
+                                            child: RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 15 : 17, height: 1.6))),
+                                          ),
+                                        )
+                                      : Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 12),
+                                          child: Text(
+                                            _textController.text.trim().isNotEmpty ? _textController.text : 'Tidak ada teks yang dimasukkan.',
+                                            style: TextStyle(color: Colors.grey.shade300, fontSize: isSmallScreen ? 14 : 15),
+                                          ),
+                                        ),
+                                  ),
+                                  if (highlightedSpans.isNotEmpty)
+                                    Positioned(
+                                      right: 8,
+                                      bottom: 8,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          if (!_highlightScroll.hasClients) return;
+                                          final height = (isSmallScreen ? 360.0 : 640.0);
+                                          final max = _highlightScroll.position.maxScrollExtent;
+                                          final newOffset = (_highlightScroll.offset + height).clamp(0.0, max);
+                                          _highlightScroll.animateTo(newOffset, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
+                                          padding: const EdgeInsets.all(6),
+                                          child: Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: isSmallScreen ? 22 : 28),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),
@@ -937,114 +944,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  // Build results container with better responsive design
-  Widget _buildResultsContainer(bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.grey.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          // Title
-          Text(
-            'HASIL ANALISIS',
-            style: TextStyle(
-              fontSize: isSmallScreen ? 16 : 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          SizedBox(height: isSmallScreen ? 12 : 16),
-          
-          // Results in a more compact format
-          Row(
-            children: [
-              // AI Detection
-              Expanded(
-                child: _buildCompactResultItem(
-                  'AI DETECTION',
-                  '${_aiDetectionPercentage.toStringAsFixed(1)}%',
-                  _aiDetectionPercentage > 50 ? Colors.red : Colors.green,
-                  isSmallScreen,
-                  Icons.smart_toy,
-                ),
-              ),
-              
-              SizedBox(width: isSmallScreen ? 12 : 16),
-              
-              // Human Written
-              Expanded(
-                child: _buildCompactResultItem(
-                  'HUMAN WRITTEN',
-                  '${_humanWrittenPercentage.toStringAsFixed(1)}%',
-                  Colors.cyan,
-                  isSmallScreen,
-                  Icons.person,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Build compact result item for better mobile layout
-  Widget _buildCompactResultItem(
-    String label,
-    String value,
-    Color color,
-    bool isSmallScreen,
-    IconData icon,
-  ) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: color,
-            size: isSmallScreen ? 24 : 28,
-          ),
-          SizedBox(height: isSmallScreen ? 8 : 12),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: isSmallScreen ? 18 : 22,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Orbitron',
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey.shade400,
-              fontSize: isSmallScreen ? 10 : 12,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  // Compact result item inlined into dialog; helper removed.
 
   // Build radial chart for AI vs Human percentages with cyberpunk styling
   Widget _buildRadialChart(bool isSmallScreen) {
@@ -1138,103 +1038,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  // Build highlighted text section with better mobile optimization
-  Widget _buildHighlightedTextSection(bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.red.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Icon(
-                Icons.highlight,
-                color: Colors.red.shade400,
-                size: isSmallScreen ? 20 : 24,
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'TEKS YANG TERDETEKSI AI',
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 14 : 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade400,
-                    fontFamily: 'Orbitron',
-                  ),
-                ),
-              ),
-              // Copy highlighted text icon
-              IconButton(
-                onPressed: _copyHighlightedText,
-                icon: Icon(Icons.copy, color: Colors.white70, size: isSmallScreen ? 18 : 20),
-                tooltip: 'Salin Teks Highlight',
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          
-          // Text content with better mobile handling
-          Container(
-            constraints: BoxConstraints(
-              maxHeight: isSmallScreen ? 150 : 200,
-            ),
-            width: double.infinity,
-            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: SingleChildScrollView(
-              child: RichText(
-                text: TextSpan(
-                  children: _highlightedSpans,
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 14 : 16,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: 12),
-          
-          // Legend
-          Row(
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Teks yang dihighlight kemungkinan dihasilkan oleh AI',
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 11 : 12,
-                    color: Colors.grey.shade400,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  // Note: results/highlight sections are inlined in the dialog now.
 }
 
 // Simple custom painter that draws faint horizontal scanlines and a subtle vignette

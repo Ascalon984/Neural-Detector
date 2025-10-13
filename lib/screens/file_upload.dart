@@ -51,6 +51,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   String? _fileContent;
+  bool _isLoadingFile = false;
   
 
   @override
@@ -202,46 +203,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildResultsContainerForUpload(double aiPct, double humanPct, bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1)),
-      child: Column(children: [
-        Text('HASIL ANALISIS', style: TextStyle(fontSize: isSmallScreen ? 16 : 18, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Orbitron')),
-        SizedBox(height: isSmallScreen ? 10 : 12),
-        Row(children: [Expanded(child: _buildCompactResultItem('Deteksi AI', '${aiPct.toStringAsFixed(1)}%', aiPct > 50 ? Colors.red : Colors.green, isSmallScreen, Icons.smart_toy)), SizedBox(width: isSmallScreen ? 8 : 12), Expanded(child: _buildCompactResultItem('Ditulis Manusia', '${humanPct.toStringAsFixed(1)}%', Colors.cyan, isSmallScreen, Icons.person))])
-      ]),
-    );
-  }
+  // _buildResultsContainerForUpload was inlined into the analysis dialog. Removed to avoid duplication.
 
-  Widget _buildCompactResultItem(
-    String label,
-    String value,
-    Color color,
-    bool isSmallScreen,
-    IconData icon,
-  ) {
-    return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: isSmallScreen ? 24 : 28),
-          SizedBox(height: isSmallScreen ? 8 : 12),
-          Text(value, style: TextStyle(color: color, fontSize: isSmallScreen ? 18 : 22, fontWeight: FontWeight.w700, fontFamily: 'Orbitron')),
-          SizedBox(height: 4),
-          Text(label, style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 10 : 12, fontWeight: FontWeight.w500), textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
+  // _buildCompactResultItem was removed and its UI inlined in the results dialog.
 
   void _triggerGlitch() {
     if (AnimationConfig.enableBackgroundAnimations) {
@@ -296,8 +260,26 @@ class _FileUploadScreenState extends State<FileUploadScreen>
           // Glitch effect overlay
           _buildGlitchEffect(),
           
-          // Floating particles effect
-          _buildFloatingParticles(),
+          // Floating particles effect (removed per UI perf request)
+          // _buildFloatingParticles(),
+
+          // Loading overlay while a file is being read/extracted
+          if (_isLoadingFile)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.6),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 12),
+                      Text('Memuat file...', style: TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           
           // Main content
           SafeArea(
@@ -454,19 +436,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     );
   }
 
-  Widget _buildFloatingParticles() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _rotateController,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _ParticlesPainter(_rotateController.value),
-            size: Size.infinite,
-          );
-        },
-      ),
-    );
-  }
+  // Floating particles removed to improve performance on lower-end devices
 
   Widget _buildHeader(bool isVerySmallScreen, bool isSmallScreen) {
     return AnimatedBuilder(
@@ -1086,6 +1056,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
   void _pickFile() {
     () async {
       try {
+        if (mounted) setState(() { _isLoadingFile = true; });
         if (kIsWeb) {
           // Use native web picker helper to avoid double dialogs and get lastModified
           final info = await webpicker.pickFileWeb(accept: ['.pdf', '.doc', '.docx', '.txt']);
@@ -1102,14 +1073,6 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               _selectedFileDate = webModified;
               _fileContent = info['content'] as String?;
             });
-            // If extraction returned null, show a helpful notice for web users
-            if ((info['content'] as String?) == null) {
-              try {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Tidak dapat mengekstrak teks dari file di web. Jika file PDF berupa gambar (scan), gunakan OCR atau coba upload DOCX/TXT.'), duration: Duration(seconds: 4))
-                );
-              } catch (_) {}
-            }
           }
           
           // If auto-scan is enabled in settings, start analysis automatically (web)
@@ -1119,6 +1082,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               _analyzeFile();
             }
           } catch (_) {}
+          if (mounted) setState(() { _isLoadingFile = false; });
           return;
         }
 
@@ -1171,6 +1135,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             _selectedFileSize = length;
             _selectedFileDate = modified;
             _fileContent = content;
+            _isLoadingFile = false;
           });
         }
 
@@ -1389,54 +1354,89 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                         child: _buildRadialChart(isSmallScreen, aiPct, humanPct),
                       ),
                       SizedBox(height: isSmallScreen ? 12 : 16),
-                      _buildResultsContainerForUpload(aiPct, humanPct, isSmallScreen),
-                      SizedBox(height: isSmallScreen ? 12 : 16),
-                      // Highlight section
-                      Container(
-                        padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red.withOpacity(0.25)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 18 : 22),
-                                SizedBox(width: 8),
-                                Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 14 : 16, fontFamily: 'Orbitron'))),
-                                IconButton(
-                                  onPressed: highlightedSpans.isNotEmpty ? _copySpansToClipboard : () {
-                                    try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
-                                  },
-                                  icon: Icon(Icons.copy, color: highlightedSpans.isNotEmpty ? Colors.white70 : Colors.white24, size: isSmallScreen ? 18 : 20),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 10),
-                            Container(
-                              constraints: BoxConstraints(maxHeight: isSmallScreen ? 180 : 260),
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                              child: SingleChildScrollView(
-                                child: highlightedSpans.isNotEmpty
-                                  ? RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 14 : 16, height: 1.5)))
-                                  : Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 12),
-                                      child: Text(
-                                        (_fileContent != null && _fileContent!.trim().isNotEmpty)
-                                          ? _fileContent!
-                                          : 'Tidak ada teks yang diekstrak dari file. Pastikan file berisi teks yang dapat diambil (PDF / DOCX support membutuhkan ekstraksi).',
-                                        style: TextStyle(color: Colors.grey.shade300, fontSize: isSmallScreen ? 13 : 14),
+                      // (Legend removed) expanded highlight area below takes this space
+                      // Highlight section (expanded to take the freed space from removed results box)
+                      Builder(builder: (context) {
+                        final ScrollController _highlightScroll = ScrollController();
+                        return Container(
+                          padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.red.withOpacity(0.22)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 20 : 24),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 15 : 18, fontFamily: 'Orbitron'))),
+                                  IconButton(
+                                    onPressed: highlightedSpans.isNotEmpty ? _copySpansToClipboard : () {
+                                      try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
+                                    },
+                                    icon: Icon(Icons.copy, color: highlightedSpans.isNotEmpty ? Colors.white70 : Colors.white24, size: isSmallScreen ? 18 : 20),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 12),
+                              Stack(
+                                children: [
+                                  Container(
+                                    // Expanded to use the freed space from the removed legend/results box
+                                    constraints: BoxConstraints(maxHeight: isSmallScreen ? 360 : 640),
+                                    padding: EdgeInsets.all(10),
+                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                                    child: highlightedSpans.isNotEmpty
+                                      ? Scrollbar(
+                                          controller: _highlightScroll,
+                                          thumbVisibility: true,
+                                          child: SingleChildScrollView(
+                                            controller: _highlightScroll,
+                                            child: RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 15 : 17, height: 1.6))),
+                                          ),
+                                        )
+                                      : Padding(
+                                          padding: EdgeInsets.symmetric(vertical: 12),
+                                          child: Text(
+                                            (_fileContent != null && _fileContent!.trim().isNotEmpty)
+                                              ? _fileContent!
+                                              : 'Tidak ada teks yang diekstrak dari file. Pastikan file berisi teks yang dapat diambil (PDF / DOCX support membutuhkan ekstraksi).',
+                                            style: TextStyle(color: Colors.grey.shade300, fontSize: isSmallScreen ? 14 : 15),
+                                          ),
+                                        ),
+                                  ),
+                                  // Chevron button to scroll by one viewport height
+                                  if (highlightedSpans.isNotEmpty)
+                                    Positioned(
+                                      right: 8,
+                                      bottom: 8,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          if (!_highlightScroll.hasClients) return;
+                                          final height = (isSmallScreen ? 360.0 : 640.0);
+                                          final max = _highlightScroll.position.maxScrollExtent;
+                                          final newOffset = (_highlightScroll.offset + height).clamp(0.0, max);
+                                          _highlightScroll.animateTo(newOffset, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white12,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          padding: const EdgeInsets.all(6),
+                                          child: Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: isSmallScreen ? 22 : 28),
+                                        ),
                                       ),
                                     ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                            ],
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),
@@ -1539,28 +1539,4 @@ class _DataStreamPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-class _ParticlesPainter extends CustomPainter {
-  final double animationValue;
-  
-  _ParticlesPainter(this.animationValue);
-  
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.4)
-      ..style = PaintingStyle.fill;
-    
-    final random = math.Random(42); // Fixed seed for consistent particles
-    
-    for (int i = 0; i < 30; i++) {
-      final x = (random.nextDouble() * size.width);
-      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 3 + 1;
-      
-      canvas.drawCircle(Offset(x, y), radius, paint);
-    }
-  }
-  
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
+// _ParticlesPainter removed (floating particles effect disabled to improve performance)
