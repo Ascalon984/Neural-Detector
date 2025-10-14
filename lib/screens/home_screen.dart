@@ -3,6 +3,7 @@ import '../config/animation_config.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'dart:async';
+import '../widgets/no_scroll_behavior.dart';
 import '../data/search_index.dart';
 import 'history_screen.dart';
 import '../utils/search_bridge.dart';
@@ -268,39 +269,51 @@ class _HomeScreenState extends State<HomeScreen>
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      isVerySmallScreen ? 8 : 12,
-                      16,
-                      isVerySmallScreen ? 8 : 12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header
-                        _buildHeader(isSmallScreen, isVerySmallScreen),
-                        SizedBox(height: isVerySmallScreen ? 8 : 12),
-                        
-                        // Search bar
-                        _buildSearchBar(isSmallScreen, isVerySmallScreen, isNarrowScreen),
-                        SizedBox(height: isVerySmallScreen ? 8 : 12),
-                        
-                        // Mini dashboard with charts
-                        _buildMiniDashboard(isSmallScreen, isVerySmallScreen, isNarrowScreen),
-                        SizedBox(height: isVerySmallScreen ? 8 : 12),
-                        
-                        // Stats overview
-                        _buildStatsOverview(isSmallScreen, isVerySmallScreen, isExtremelySmallScreen),
-                        SizedBox(height: isVerySmallScreen ? 8 : 12),
-                        
-                        // Feature cards
-                        _buildFeatureCards(isSmallScreen, isVerySmallScreen),
-                        SizedBox(height: 16),
-                      ],
-                    ),
+                // Keep header fixed and make only the content below scrollable
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    isVerySmallScreen ? 8 : 12,
+                    16,
+                    isVerySmallScreen ? 8 : 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Fixed Header
+                      _buildHeader(isSmallScreen, isVerySmallScreen),
+                      SizedBox(height: isVerySmallScreen ? 8 : 12),
+
+                      // The rest of the page scrolls
+                      Expanded(
+                        child: ScrollConfiguration(
+                          behavior: const NoScrollbarBehavior(),
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Search bar
+                                _buildSearchBar(isSmallScreen, isVerySmallScreen, isNarrowScreen),
+                                SizedBox(height: isVerySmallScreen ? 8 : 12),
+
+                                // Mini dashboard with charts
+                                _buildMiniDashboard(isSmallScreen, isVerySmallScreen, isNarrowScreen),
+                                SizedBox(height: isVerySmallScreen ? 8 : 12),
+
+                                // Stats overview
+                                _buildStatsOverview(isSmallScreen, isVerySmallScreen, isExtremelySmallScreen),
+                                SizedBox(height: isVerySmallScreen ? 8 : 12),
+
+                                // Feature cards
+                                _buildFeatureCards(isSmallScreen, isVerySmallScreen),
+                                SizedBox(height: 16),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

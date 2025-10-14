@@ -6,6 +6,7 @@ import '../utils/app_localizations.dart';
 import 'dart:math' as math;
 import '../data/search_index.dart';
 import '../utils/search_bridge.dart';
+import '../widgets/no_scroll_behavior.dart';
 
 // Global tooltip manager: ensures only one overlay tooltip is visible at a time
 OverlayEntry? _activeTooltipOverlay;
@@ -229,7 +230,6 @@ class _HistoryScreenState extends State<HistoryScreen>
           _buildDataStreamEffect(),
           _buildScanLine(),
           _buildGlitchEffect(),
-          _buildFloatingParticles(),
           
           SafeArea(
             child: LayoutBuilder(
@@ -385,20 +385,6 @@ class _HistoryScreenState extends State<HistoryScreen>
                 ),
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFloatingParticles() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _rotateController,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _ParticlesPainter(_rotateController.value),
-            size: Size.infinite,
           );
         },
       ),
@@ -1196,90 +1182,93 @@ class _HistoryScreenState extends State<HistoryScreen>
             ),
             child: Padding(
               padding: const EdgeInsets.all(22),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'SCAN DETAILS',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.cyan.shade300,
-                            fontFamily: 'Orbitron',
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.25),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.green.withOpacity(_glowAnimation.value),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Text(
-                            history.status,
-                            style: TextStyle(
-                              color: Colors.green.shade300,
-                              fontSize: 11,
-                              fontFamily: 'Orbitron',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _buildDetailItem('Nama Dokumen', history.fileName),
-                    _buildDetailItem('Tanggal & Waktu', history.date),
-                    _buildDetailItem('Ukuran File', history.fileSize),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.cyan.withOpacity(_glowAnimation.value),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Column(
+              child: ScrollConfiguration(
+                behavior: const NoScrollbarBehavior(),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'HASIL',
+                            'SCAN DETAILS',
                             style: TextStyle(
-                              color: Colors.pink.shade300,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
+                              color: Colors.cyan.shade300,
                               fontFamily: 'Orbitron',
-                              fontSize: 15,
+                              letterSpacing: 2,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _buildResultIndicator('AI', '${history.aiDetection}%', _getAiLevelColor(history.aiDetection)),
-                              _buildResultIndicator('HUMAN', '${history.humanWritten}%', Colors.cyan),
-                            ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.green.withOpacity(_glowAnimation.value),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              history.status,
+                              style: TextStyle(
+                                color: Colors.green.shade300,
+                                fontSize: 11,
+                                fontFamily: 'Orbitron',
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 22),
-                    _buildCyberButton(
-                      text: 'TUTUP',
-                      icon: Icons.close,
-                      onPressed: () => Navigator.pop(context),
-                      color: Colors.cyan,
-                    ),
-                  ],
+                      const SizedBox(height: 18),
+                      _buildDetailItem('Nama Dokumen', history.fileName),
+                      _buildDetailItem('Tanggal & Waktu', history.date),
+                      _buildDetailItem('Ukuran File', history.fileSize),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Colors.cyan.withOpacity(_glowAnimation.value),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'HASIL',
+                              style: TextStyle(
+                                color: Colors.pink.shade300,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Orbitron',
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildResultIndicator('AI', '${history.aiDetection}%', _getAiLevelColor(history.aiDetection)),
+                                _buildResultIndicator('HUMAN', '${history.humanWritten}%', Colors.cyan),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      _buildCyberButton(
+                        text: 'TUTUP',
+                        icon: Icons.close,
+                        onPressed: () => Navigator.pop(context),
+                        color: Colors.cyan,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2060,32 +2049,6 @@ Color _getAiLevelColor(int aiPercentage) {
   } else {
     return Colors.red.shade800; // Almost all AI - very dark red
   }
-}
-
-class _ParticlesPainter extends CustomPainter {
-  final double animationValue;
-  
-  _ParticlesPainter(this.animationValue);
-  
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.4)
-      ..style = PaintingStyle.fill;
-    
-    final random = math.Random(42);
-    
-    for (int i = 0; i < 25; i++) {
-      final x = (random.nextDouble() * size.width);
-      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 3 + 1;
-      
-      canvas.drawCircle(Offset(x, y), radius, paint);
-    }
-  }
-  
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 enum SortOption { az, newest, oldest }

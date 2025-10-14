@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/animation_config.dart';
+import '../widgets/no_scroll_behavior.dart';
 // provider and theme provider removed because dark mode and language features were removed
 import '../utils/settings_manager.dart';
 import '../utils/history_manager.dart';
@@ -20,7 +21,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   late AnimationController _glowController;
   late AnimationController _scanController;
   late AnimationController _pulseController;
-  late AnimationController _rotateController;
   late AnimationController _hexagonController;
   late AnimationController _dataStreamController;
   late AnimationController _glitchController;
@@ -63,11 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
-
-    _rotateController = AnimationController(
-      duration: const Duration(seconds: 30),
-      vsync: this,
-    )..repeat();
     
     _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
@@ -149,7 +144,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     _glowController.dispose();
     _scanController.dispose();
     _pulseController.dispose();
-    _rotateController.dispose();
     _hexagonController.dispose();
     _dataStreamController.dispose();
     _glitchController.dispose();
@@ -226,10 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           
           // Glitch effect overlay
           _buildGlitchEffect(),
-          
-          // Floating particles effect
-          _buildFloatingParticles(),
-          
+
           // Main content
           SafeArea(
             child: LayoutBuilder(
@@ -247,10 +238,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18),
-                        child: SingleChildScrollView(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 20, bottom: 20),
-                            child: _buildSettingsContent(),
+                        child: ScrollConfiguration(
+                          behavior: const NoScrollbarBehavior(),
+                          child: SingleChildScrollView(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 20, bottom: 20),
+                              child: _buildSettingsContent(),
+                            ),
                           ),
                         ),
                       ),
@@ -379,20 +373,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFloatingParticles() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _rotateController,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _ParticlesPainter(_rotateController.value),
-            size: Size.infinite,
           );
         },
       ),
@@ -982,6 +962,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       future: HistoryManager.loadHistory(),
       builder: (context, snapshot) {
         double dbSizeMb = 0.0;
+        String dbSizeDisplay = '—';
+
         if (snapshot.hasData) {
           final list = snapshot.data!;
           int totalBytes = 0;
@@ -989,8 +971,23 @@ class _SettingsScreenState extends State<SettingsScreen>
             final bytes = _parseSizeToBytes(h.fileSize);
             if (bytes != null) totalBytes += bytes;
           }
-          dbSizeMb = totalBytes / (1024 * 1024);
+
+          if (totalBytes <= 0) {
+            dbSizeDisplay = '0 KB';
+          } else if (totalBytes < 1024 * 1024) {
+            // Less than 1 MB -> show in KB (use one decimal for small values)
+            final kb = totalBytes / 1024.0;
+            dbSizeDisplay = kb >= 100 ? '${kb.round()} KB' : '${(kb * 10).round() / 10} KB';
+            dbSizeMb = totalBytes / (1024 * 1024);
+          } else {
+            // 1 MB or more -> show in MB with one decimal
+            dbSizeMb = totalBytes / (1024 * 1024);
+            dbSizeDisplay = '${dbSizeMb.toStringAsFixed(1)} MB';
+          }
         }
+
+        // Expose both numeric MB and formatted display string for use in the UI
+        // The UI code below can use `dbSizeDisplay` to show the appropriately formatted unit.
 
   final lastUpdated = '09 Oktober 2025';
 
@@ -1038,8 +1035,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 15),
                   _buildInfoRow('Versi', '1.0.0'),
                   _buildInfoRow('Terakhir Diperbarui', lastUpdated),
-                  _buildInfoRow('Ukuran Database', snapshot.hasData ? '${dbSizeMb.toStringAsFixed(1)} MB' : '—'),
-                  _buildInfoRow('Model AI', 'Tensor Flow Lite'),
+                  _buildInfoRow('Ukuran Penyimpanan', snapshot.hasData ? dbSizeDisplay : '—'),
                 ],
               ),
             );
@@ -1561,32 +1557,6 @@ class _DataStreamPainter extends CustomPainter {
     }
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}
-
-class _ParticlesPainter extends CustomPainter {
-  final double animationValue;
-  
-  _ParticlesPainter(this.animationValue);
-  
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.cyan.withOpacity(0.4)
-      ..style = PaintingStyle.fill;
-    
-    final random = math.Random(42); // Fixed seed for consistent particles
-    
-    for (int i = 0; i < 25; i++) {
-      final x = (random.nextDouble() * size.width);
-      final y = (random.nextDouble() * size.height + animationValue * size.height) % size.height;
-      final radius = random.nextDouble() * 3 + 1;
-      
-      canvas.drawCircle(Offset(x, y), radius, paint);
-    }
-  }
-  
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

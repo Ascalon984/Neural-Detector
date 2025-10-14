@@ -19,6 +19,7 @@ import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
 import '../utils/app_localizations.dart';
+import '../widgets/no_scroll_behavior.dart';
 
 class FileUploadScreen extends StatefulWidget {
   const FileUploadScreen({super.key});
@@ -287,8 +288,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
               builder: (context, constraints) {
                 final screenHeight = constraints.maxHeight;
                 
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
+                return ScrollConfiguration(
+                  behavior: const NoScrollbarBehavior(),
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
                     constraints: BoxConstraints(minHeight: screenHeight),
                     child: Padding(
                       padding: EdgeInsets.all(isVerySmallScreen ? 12 : isSmallScreen ? 16 : 20),
@@ -307,6 +310,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                       ),
                     ),
                   ),
+                ),
                 );
               },
             ),

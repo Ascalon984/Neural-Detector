@@ -7,6 +7,7 @@ import '../utils/text_analyzer.dart';
 import '../utils/sensitivity.dart';
 import '../utils/settings_manager.dart';
 import '../widgets/cyber_notification.dart';
+import '../widgets/no_scroll_behavior.dart';
 
 class TextEditorScreen extends StatefulWidget {
   const TextEditorScreen({super.key});
@@ -22,12 +23,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
   late AnimationController _pulseController;
   late AnimationController _typingController;
   late AnimationController _hexagonController;
+  late AnimationController _dataStreamController;
+  late AnimationController _scanController;
   
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _pulseAnimation;
   late Animation<double> _textGlowAnimation;
   late Animation<double> _hexagonAnimation;
+  late Animation<double> _dataStreamAnimation;
+  late Animation<double> _scanAnimation;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
@@ -42,22 +47,32 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     super.initState();
 
     _backgroundController = AnimationController(
-      duration: const Duration(seconds: 20),
+      duration: const Duration(seconds: 15),
       vsync: this,
     )..repeat();
 
     _glowController = AnimationController(
-      duration: const Duration(seconds: 4),
+      duration: const Duration(seconds: 3),
       vsync: this,
     )..repeat(reverse: true);
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 3, milliseconds: 500),
+      duration: Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
     _hexagonController = AnimationController(
       duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
+    
+    _dataStreamController = AnimationController(
+      duration: const Duration(seconds: 8),
+      vsync: this,
+    )..repeat();
+    
+    _scanController = AnimationController(
+      duration: const Duration(seconds: 4),
       vsync: this,
     )..repeat();
 
@@ -68,17 +83,26 @@ class _TextEditorScreenState extends State<TextEditorScreen>
 
     if (AnimationConfig.enableBackgroundAnimations) {
       _backgroundAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_backgroundController);
-      _glowAnimation = Tween<double>(begin: 0.3, end: 0.7).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
-      _pulseAnimation = Tween<double>(begin: 0.98, end: 1.02).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+      _glowAnimation = Tween<double>(begin: 0.4, end: 0.9).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
+      _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
       _textGlowAnimation = Tween<double>(begin: 0.05, end: 0.15).animate(CurvedAnimation(parent: _glowController, curve: Curves.easeInOut));
       _hexagonAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_hexagonController);
+      _dataStreamAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_dataStreamController);
+      _scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(CurvedAnimation(parent: _scanController, curve: Curves.easeInOut));
     } else {
       _backgroundAnimation = AlwaysStoppedAnimation(0.0);
       _glowAnimation = AlwaysStoppedAnimation(0.5);
       _pulseAnimation = AlwaysStoppedAnimation(1.0);
       _textGlowAnimation = AlwaysStoppedAnimation(0.1);
       _hexagonAnimation = AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
+      _scanAnimation = AlwaysStoppedAnimation(0.0);
     }
+
+    // Auto-focus the text editor after first frame so user can start typing immediately.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _textFocusNode.requestFocus();
+    });
   }
 
   @override
@@ -87,6 +111,8 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     _glowController.dispose();
     _pulseController.dispose();
     _hexagonController.dispose();
+    _dataStreamController.dispose();
+    _scanController.dispose();
     _typingController.dispose();
     _textController.dispose();
     _textFocusNode.dispose();
@@ -102,54 +128,54 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Simplified animated background
-          _buildSimplifiedBackground(),
-
-          // Subtle animated scanlines to give a retro-futuristic/cyberpunk feel
-          _buildScanlines(),
+          // Enhanced animated background matching home screen
+          _buildAnimatedBackground(),
           
-          // Hexagon background overlay (match home screen)
-          if (AnimationConfig.enableBackgroundAnimations)
-            IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _hexagonAnimation,
-                builder: (context, child) {
-                  return CustomPaint(
-                    painter: _HexagonGridPainter(_hexagonAnimation.value),
-                    size: Size.infinite,
-                  );
-                },
-              ),
-            ),
-
-          // Main content (scrollable to avoid overflow on small screens)
+          // Hexagon grid overlay effect (matching home screen)
+          _buildHexagonGridOverlay(),
+          
+          // Data stream effect (matching home screen)
+          _buildDataStreamEffect(),
+          
+          // Scan line effect (matching home screen)
+          _buildScanLine(),
+          
+          // Main content with fixed header and scrollable body
           SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.vertical),
-                child: Padding(
-                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      _buildMinimalistHeader(isSmallScreen),
-                      SizedBox(height: isSmallScreen ? 20 : 30),
-                      
-                      // Text editor
-                      _buildMinimalistTextEditor(isSmallScreen),
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                      
-                      // Stats bar
-                      _buildMinimalistStatsBar(isSmallScreen),
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                      
-                      // Action buttons
-                      _buildMinimalistActionButtons(isSmallScreen),
-                    ],
+            child: Padding(
+              padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Fixed Header
+                  _buildMinimalistHeader(isSmallScreen),
+                  SizedBox(height: isSmallScreen ? 20 : 30),
+
+                  // Scrollable content below header
+                  Expanded(
+                    child: ScrollConfiguration(
+                      behavior: const NoScrollbarBehavior(),
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Text editor
+                            _buildMinimalistTextEditor(isSmallScreen),
+                            SizedBox(height: isSmallScreen ? 16 : 24),
+
+                            // Stats bar
+                            _buildMinimalistStatsBar(isSmallScreen),
+                            SizedBox(height: isSmallScreen ? 16 : 24),
+
+                            // Action buttons
+                            _buildMinimalistActionButtons(isSmallScreen),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -158,29 +184,90 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  Widget _buildSimplifiedBackground() {
+  Widget _buildAnimatedBackground() {
     return AnimatedBuilder(
       animation: _backgroundAnimation,
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
             gradient: RadialGradient(
-              center: Alignment(0.5 - _backgroundAnimation.value * 0.2, 0.3),
-              radius: 1.2 + _backgroundAnimation.value * 0.2,
+              center: Alignment(0.5 - _backgroundAnimation.value * 0.3, 0.3),
+              radius: 1.2 + _backgroundAnimation.value * 0.3,
               colors: [
                 Color.lerp(
                   const Color(0xFF0a0a0a),
-                  const Color(0xFF0f172a),
+                  const Color(0xFF1a0033),
                   _backgroundAnimation.value,
                 )!,
                 Color.lerp(
                   const Color(0xFF0d1117),
-                  const Color(0xFF0f172a),
+                  const Color(0xFF0a0e27),
                   _backgroundAnimation.value,
                 )!,
                 Colors.black,
               ],
               stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHexagonGridOverlay() {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _hexagonAnimation,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: _HexagonGridPainter(_hexagonAnimation.value),
+            size: Size.infinite,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDataStreamEffect() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _dataStreamAnimation,
+      builder: (context, child) {
+        return CustomPaint(
+          painter: _DataStreamPainter(_dataStreamAnimation.value),
+          size: Size.infinite,
+        );
+      },
+    );
+  }
+
+  Widget _buildScanLine() {
+    if (!AnimationConfig.enableBackgroundAnimations) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: _scanAnimation,
+      builder: (context, child) {
+        return Positioned(
+          top: _scanAnimation.value * MediaQuery.of(context).size.height,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 4,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  Colors.cyan.withOpacity(0.8),
+                  Colors.pink.withOpacity(0.8),
+                  Colors.transparent,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyan.withOpacity(0.6),
+                  blurRadius: 15,
+                  spreadRadius: 3,
+                ),
+              ],
             ),
           ),
         );
@@ -199,30 +286,25 @@ class _TextEditorScreenState extends State<TextEditorScreen>
               width: isSmallScreen ? 50 : 60,
               height: isSmallScreen ? 50 : 60,
               decoration: BoxDecoration(
-                color: const Color(0xFF1a253e).withOpacity(0.85),
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF2a4675).withOpacity(0.95),
-                    const Color(0xFF1a253e).withOpacity(0.85),
+                    Colors.cyan.withOpacity(_glowAnimation.value),
+                    Colors.pink.withOpacity(_glowAnimation.value),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
-                border: Border.all(
-                  color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.5),
-                  width: 1.5,
-                ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF4a9fff).withOpacity(_glowAnimation.value * 0.25),
-                    blurRadius: 18,
+                    color: Colors.cyan.withOpacity(_glowAnimation.value * 0.6),
+                    blurRadius: 15,
                     spreadRadius: 2,
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
+                    color: Colors.pink.withOpacity(_glowAnimation.value * 0.4),
+                    blurRadius: 12,
+                    spreadRadius: 1,
                   ),
                 ],
               ),
@@ -403,6 +485,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                       controller: _textController,
                       maxLines: null,
                       expands: true,
+                      autofocus: true,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: isSmallScreen ? 15 : 17,
@@ -640,21 +723,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  // Animated scanline overlay for retro/cyberpunk aesthetic
-  Widget _buildScanlines() {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _backgroundAnimation,
-        builder: (context, child) {
-          return CustomPaint(
-            size: Size.infinite,
-            painter: _ScanlinePainter(_backgroundAnimation.value),
-          );
-        },
-      ),
-    );
-  }
-
   int _countWords() {
     if (_textController.text.trim().isEmpty) return 0;
     return _textController.text.trim().split(RegExp(r'\s+')).length;
@@ -748,9 +816,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       );
     }
   }
-
-  // Copy highlighted (AI-detected) text to clipboard
-  // Copy highlighted text handled inline in dialog now.
 
   void _showAnalysisResult() {
     if (!mounted) return;
@@ -944,8 +1009,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     );
   }
 
-  // Compact result item inlined into dialog; helper removed.
-
   // Build radial chart for AI vs Human percentages with cyberpunk styling
   Widget _buildRadialChart(bool isSmallScreen) {
     return SizedBox(
@@ -1037,52 +1100,6 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       ),
     );
   }
-
-  // Note: results/highlight sections are inlined in the dialog now.
-}
-
-// Simple custom painter that draws faint horizontal scanlines and a subtle vignette
-class _ScanlinePainter extends CustomPainter {
-  final double progress;
-
-  _ScanlinePainter(this.progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint linePaint = Paint()
-      ..color = const Color(0xFF00FFD1).withOpacity(0.03)
-      ..style = PaintingStyle.fill;
-
-    // spacing and offset to animate lines slowly
-    const double spacing = 6.0;
-    final double offset = (progress * spacing * 2) % spacing;
-
-    for (double y = -spacing; y < size.height + spacing; y += spacing) {
-      final double yy = y + offset;
-      // slightly vary opacity per line for depth
-      final double alpha = 0.02 + (0.01 * ((y / spacing) % 3));
-      linePaint.color = const Color(0xFF00FFD1).withOpacity(alpha);
-      canvas.drawRect(Rect.fromLTWH(0, yy, size.width, 1.0), linePaint);
-    }
-
-    // subtle vignette to focus center
-    final Rect rect = Offset.zero & size;
-    final Gradient vignette = RadialGradient(
-      colors: [Colors.transparent, Colors.black.withOpacity(0.55)],
-      stops: [0.6, 1.0],
-      center: Alignment.center,
-      radius: 0.9,
-    );
-    final Paint vignettePaint = Paint()
-      ..shader = vignette.createShader(rect)
-      ..blendMode = BlendMode.darken;
-    canvas.drawRect(rect, vignettePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ScanlinePainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
 }
 
 // Hexagon grid painter (copied from home_screen to reuse hex background)
@@ -1130,6 +1147,42 @@ class _HexagonGridPainter extends CustomPainter {
     }
     path.close();
     canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// Data stream painter (copied from home_screen to match background)
+class _DataStreamPainter extends CustomPainter {
+  final double animationValue;
+  _DataStreamPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.pink.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+    final random = math.Random(123);
+    
+    for (int i = 0; i < 5; i++) {
+      final startX = random.nextDouble() * size.width;
+      final startY = -50.0;
+      final endY = size.height + 50;
+      
+      path.moveTo(startX, startY);
+      
+      for (double y = startY; y < endY; y += 20) {
+        final x = startX + math.sin((y / 50) + animationValue * 2 * math.pi + i) * 30;
+        path.lineTo(x, y + (animationValue * size.height) % (size.height + 100) - 50);
+      }
+      
+      canvas.drawPath(path, paint);
+      path.reset();
+    }
   }
 
   @override
