@@ -7,6 +7,10 @@ import '../widgets/no_scroll_behavior.dart';
 import '../data/search_index.dart';
 import 'history_screen.dart';
 import '../utils/search_bridge.dart';
+import '../utils/history_manager.dart';
+import '../models/scan_history.dart' as Model;
+import '../utils/live_analysis_bridge.dart';
+import '../models/chart_statistics.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<int>? onNavTap;
@@ -18,8 +22,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> 
-    with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  // Animation Controllers
   late AnimationController _backgroundController;
   late AnimationController _glowController;
   late AnimationController _scanController;
@@ -29,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen>
   late AnimationController _hexagonController;
   late AnimationController _dataStreamController;
   
+  // Animations
   late Animation<double> _backgroundAnimation;
   late Animation<double> _glowAnimation;
   late Animation<double> _scanAnimation;
@@ -37,38 +42,323 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _hexagonAnimation;
   late Animation<double> _dataStreamAnimation;
   
-  // Dashboard state
-  String _selectedPeriod = 'daily'; // daily, weekly, monthly
-  List<double> _aiRateData = [];
-  List<int> _scanFreqData = [];
+  // Dashboard State - IMPROVED
+  String _selectedPeriod = '1d';
+  ChartStatistics _aiRateStats = ChartStatistics.empty('1d');
+  ChartStatistics _scanFreqStats = ChartStatistics.empty('1d');
   
-  // Search/filter state
+  // Search/Filter State
   late TextEditingController _searchController;
   late Map<String, dynamic> _searchFilters;
   Timer? _debounceTimer;
   List<String> _suggestions = [];
   bool _loadingSuggestions = false;
 
+  // Data Subscriptions
+  StreamSubscription<Model.ScanHistory>? _historySub;
+  StreamSubscription<LiveAnalysis>? _liveSub;
+
   @override
   void initState() {
     super.initState();
+    _initializeSearch();
+    _initializeData();
+    _setupDataSubscriptions();
+    _initializeAnimations();
+  }
+
+  // ============ SEARCH INITIALIZATION ============
+  void _initializeSearch() {
     _searchController = TextEditingController();
     _searchController.addListener(_onSearchChanged);
-    // initialize search filters
+    
     _searchFilters = {
-      'source': 'all', // all/history/upload/editor
+      'source': 'all',
       'minConfidence': 50,
       'sensitivityOverride': null,
       'dateFrom': null,
       'dateTo': null,
       'onlyAi': false,
-      'sort': 'relevance', // relevance/newest/confidence
+      'sort': 'relevance',
     };
+  }
 
-    // generate sample dashboard data
-    _generateDashboardData();
+  // ============ DATA INITIALIZATION ============
+  void _initializeData() async {
+    try {
+      await _loadChartData();
+    } catch (e) {
+      print('Error initializing chart data: $e');
+      // Set empty data on error
+      if (mounted) {
+        setState(() {
+          _aiRateStats = ChartStatistics.empty(_selectedPeriod);
+          _scanFreqStats = ChartStatistics.empty(_selectedPeriod);
+        });
+      }
+    }
+  }
+
+  void _setupDataSubscriptions() {
+    // Subscribe to live editor analyses
+    _liveSub = LiveAnalysisBridge().stream.listen((entry) {
+      if (!mounted) return;
+      _handleNewAnalysis(entry);
+    });
     
-    // Initialize multiple animation controllers for different effects
+    // Subscribe to history additions
+    _historySub = HistoryManager.onNewEntry.listen((entry) {
+      if (!mounted) return;
+      _handleNewHistoryEntry(entry);
+    });
+  }
+
+  void _handleNewAnalysis(LiveAnalysis entry) {
+    _loadChartData(); // Reload data untuk konsistensi
+  }
+
+  void _handleNewHistoryEntry(Model.ScanHistory entry) {
+    _loadChartData(); // Reload data untuk konsistensi
+  }
+
+  // ============ CHART DATA PROCESSING ============
+  Future<void> _loadChartData() async {
+    try {
+      final historyData = await HistoryManager.loadHistory();
+      final liveData = LiveAnalysisBridge().recent;
+      
+      final allDataPoints = await _combineAndProcessData(historyData, liveData);
+      
+      if (mounted) {
+        setState(() {
+          _aiRateStats = _calculateAiRateStatistics(allDataPoints, _selectedPeriod);
+          _scanFreqStats = _calculateScanFrequencyStatistics(allDataPoints, _selectedPeriod);
+        });
+      }
+    } catch (e) {
+      print('Error loading chart data: $e');
+      if (mounted) {
+        setState(() {
+          _aiRateStats = ChartStatistics.empty(_selectedPeriod);
+          _scanFreqStats = ChartStatistics.empty(_selectedPeriod);
+        });
+      }
+    }
+  }
+
+  Future<List<ChartDataPoint>> _combineAndProcessData(
+    List<Model.ScanHistory> historyData, 
+    List<LiveAnalysis> liveData
+  ) async {
+    final allDataPoints = <ChartDataPoint>[];
+    
+    // Process history data
+    for (final history in historyData) {
+      try {
+        final timestamp = _parseHistoryTimestamp(history.date);
+        final dataPoint = ChartDataPoint(
+          timestamp: timestamp,
+          aiPercentage: history.aiDetection.toDouble(),
+          scanCount: 1,
+        );
+        allDataPoints.add(dataPoint);
+      } catch (e) {
+        print('Error parsing history entry: $e');
+      }
+    }
+    
+    // Process live data
+    for (final live in liveData) {
+      try {
+        final dataPoint = ChartDataPoint(
+          timestamp: live.time.toLocal(),
+          aiPercentage: live.aiPercent,
+          scanCount: 1,
+        );
+        allDataPoints.add(dataPoint);
+      } catch (e) {
+        print('Error parsing live analysis: $e');
+      }
+    }
+    
+    // Sort by timestamp (oldest first)
+    allDataPoints.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    
+    return allDataPoints;
+  }
+
+  DateTime _parseHistoryTimestamp(String dateString) {
+    try {
+      final normalizedDate = dateString.replaceFirst(' ', 'T');
+      return DateTime.parse(normalizedDate).toLocal();
+    } catch (e) {
+      print('Failed to parse date: $dateString, using current time');
+      return DateTime.now().toLocal();
+    }
+  }
+
+  ChartStatistics _calculateAiRateStatistics(List<ChartDataPoint> allData, String period) {
+    final filteredData = _filterDataByPeriod(allData, period);
+    
+    if (filteredData.isEmpty) {
+      return ChartStatistics.empty(period);
+    }
+    
+    final bucketedData = _bucketDataByTime(filteredData, period);
+    
+    // Calculate average AI percentage per bucket
+    final averagedData = bucketedData.asMap().entries.map((entry) {
+      final index = entry.key;
+      final bucket = entry.value;
+      
+      if (bucket.isEmpty) {
+        return ChartDataPoint(
+          timestamp: _getBaseTimeForBucket(period, index),
+          aiPercentage: 0.0,
+          scanCount: 0,
+        );
+      }
+      
+      final totalAi = bucket.map((point) => point.aiPercentage).reduce((a, b) => a + b);
+      final averageAi = totalAi / bucket.length;
+      
+      return ChartDataPoint(
+        timestamp: bucket.first.timestamp,
+        aiPercentage: averageAi,
+        scanCount: bucket.length,
+      );
+    }).toList();
+    
+    // Calculate overall average
+    final overallAverage = filteredData.map((point) => point.aiPercentage).reduce((a, b) => a + b) / filteredData.length;
+    
+    return ChartStatistics(
+      dataPoints: averagedData,
+      averageAiPercentage: double.parse(overallAverage.toStringAsFixed(1)),
+      totalScans: filteredData.length,
+      period: period,
+    );
+  }
+
+  ChartStatistics _calculateScanFrequencyStatistics(List<ChartDataPoint> allData, String period) {
+    final filteredData = _filterDataByPeriod(allData, period);
+    
+    if (filteredData.isEmpty) {
+      return ChartStatistics.empty(period);
+    }
+    
+    final bucketedData = _bucketDataByTime(filteredData, period);
+    
+    // Create data points with scan count per bucket
+    final frequencyData = bucketedData.asMap().entries.map((entry) {
+      final index = entry.key;
+      final bucket = entry.value;
+      
+      return ChartDataPoint(
+        timestamp: _getBaseTimeForBucket(period, index),
+        aiPercentage: 0.0,
+        scanCount: bucket.length,
+      );
+    }).toList();
+    
+    return ChartStatistics(
+      dataPoints: frequencyData,
+      averageAiPercentage: 0.0,
+      totalScans: filteredData.length,
+      period: period,
+    );
+  }
+
+  List<ChartDataPoint> _filterDataByPeriod(List<ChartDataPoint> data, String period) {
+    final now = DateTime.now().toLocal();
+    final cutoff = _getCutoffDate(period, now);
+    
+    return data.where((point) => point.timestamp.isAfter(cutoff)).toList();
+  }
+
+  DateTime _getCutoffDate(String period, DateTime now) {
+    switch (period) {
+      case '1d':
+        return now.subtract(const Duration(days: 1));
+      case '3d':
+        return now.subtract(const Duration(days: 3));
+      case '7d':
+        return now.subtract(const Duration(days: 7));
+      default:
+        return now.subtract(const Duration(days: 1));
+    }
+  }
+
+  List<List<ChartDataPoint>> _bucketDataByTime(List<ChartDataPoint> data, String period) {
+    final buckets = <List<ChartDataPoint>>[];
+    final now = DateTime.now().toLocal();
+    
+    switch (period) {
+      case '1d':
+        // 24 buckets for hours
+        for (int i = 0; i < 24; i++) {
+          final hourStart = DateTime(now.year, now.month, now.day).subtract(Duration(hours: 23 - i));
+          final hourEnd = hourStart.add(const Duration(hours: 1));
+          final bucket = data.where((point) => 
+            point.timestamp.isAfter(hourStart) && point.timestamp.isBefore(hourEnd)
+          ).toList();
+          buckets.add(bucket);
+        }
+        break;
+        
+      case '3d':
+        // 18 buckets (6 per day, 4-hour windows)
+        for (int i = 0; i < 18; i++) {
+          final hoursAgo = (17 - i) * 4;
+          final windowStart = now.subtract(Duration(hours: hoursAgo + 4));
+          final windowEnd = windowStart.add(const Duration(hours: 4));
+          final bucket = data.where((point) => 
+            point.timestamp.isAfter(windowStart) && point.timestamp.isBefore(windowEnd)
+          ).toList();
+          buckets.add(bucket);
+        }
+        break;
+        
+      case '7d':
+        // 7 buckets for days
+        for (int i = 0; i < 7; i++) {
+          final dayStart = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - i));
+          final dayEnd = dayStart.add(const Duration(days: 1));
+          final bucket = data.where((point) => 
+            point.timestamp.isAfter(dayStart) && point.timestamp.isBefore(dayEnd)
+          ).toList();
+          buckets.add(bucket);
+        }
+        break;
+    }
+    
+    return buckets;
+  }
+
+  DateTime _getBaseTimeForBucket(String period, int index) {
+    final now = DateTime.now().toLocal();
+    
+    switch (period) {
+      case '1d':
+        return DateTime(now.year, now.month, now.day).add(Duration(hours: index));
+      case '3d':
+        return now.subtract(Duration(hours: (17 - index) * 4));
+      case '7d':
+        return DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - index));
+      default:
+        return now;
+    }
+  }
+
+  void _onPeriodChanged(String newPeriod) {
+    setState(() {
+      _selectedPeriod = newPeriod;
+    });
+    _loadChartData();
+  }
+
+  // ============ ANIMATION INITIALIZATION ============
+  void _initializeAnimations() {
     _backgroundController = AnimationController(
       duration: const Duration(seconds: 15),
       vsync: this,
@@ -85,7 +375,7 @@ class _HomeScreenState extends State<HomeScreen>
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 2, milliseconds: 500),
+      duration: const Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
@@ -175,29 +465,12 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  void _generateDashboardData() {
-    // Create simple deterministic sample data for charts so UI looks complete.
-    final rnd = math.Random(42);
-    if (_selectedPeriod == 'daily') {
-      _aiRateData = List.generate(24, (i) => 40 + rnd.nextDouble() * 60); // hourly
-      _scanFreqData = List.generate(24, (i) => 5 + rnd.nextInt(20));
-    } else if (_selectedPeriod == 'weekly') {
-      _aiRateData = List.generate(7, (i) => 30 + rnd.nextDouble() * 70); // days
-      _scanFreqData = List.generate(7, (i) => 50 + rnd.nextInt(200));
-    } else {
-      // monthly (last 30 days)
-      _aiRateData = List.generate(30, (i) => 35 + rnd.nextDouble() * 65);
-      _scanFreqData = List.generate(30, (i) => 20 + rnd.nextInt(150));
-    }
-  }
-
   void _triggerGlitch() {
     if (AnimationConfig.enableBackgroundAnimations) {
       _glitchController.forward().then((_) {
         _glitchController.reverse();
       });
       
-      // Schedule next glitch
       Future.delayed(Duration(seconds: 5 + math.Random().nextInt(10)), () {
         if (mounted) {
           _triggerGlitch();
@@ -206,6 +479,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ============ DISPOSE ============
   @override
   void dispose() {
     _backgroundController.dispose();
@@ -219,24 +493,67 @@ class _HomeScreenState extends State<HomeScreen>
     _debounceTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _historySub?.cancel();
+    _liveSub?.cancel();
     super.dispose();
   }
 
+  // ============ SEARCH METHODS ============
   void _onSearchChanged() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
-      final q = _searchController.text.trim();
-      if (q.isEmpty) {
-        if (mounted) setState(() { _suggestions = []; _loadingSuggestions = false; });
+      final query = _searchController.text.trim();
+      if (query.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _suggestions = [];
+            _loadingSuggestions = false;
+          });
+        }
         return;
       }
-      if (mounted) setState(() { _loadingSuggestions = true; });
-      final s = await SearchIndex.searchSuggestions(q, _searchFilters);
+      
+      if (mounted) {
+        setState(() {
+          _loadingSuggestions = true;
+        });
+      }
+      
+      final suggestions = await SearchIndex.searchSuggestions(query, _searchFilters);
+      
       if (!mounted) return;
-      setState(() { _suggestions = s; _loadingSuggestions = false; });
+      
+      setState(() {
+        _suggestions = suggestions;
+        _loadingSuggestions = false;
+      });
     });
   }
 
+  void _onSearchSubmitted(String query) {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) return;
+    
+    final filters = Map<String, dynamic>.from(_searchFilters);
+    
+    if (widget.onNavTap != null) {
+      SearchBridge.set(trimmedQuery, filters);
+      widget.onNavTap!(3); // Navigate to history tab
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HistoryScreen(
+          initialQuery: trimmedQuery,
+          initialFilters: filters,
+        ),
+      ),
+    );
+  }
+
+  // ============ BUILD METHOD ============
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -250,26 +567,17 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Enhanced animated cyberpunk background
+          // Background Effects
           _buildAnimatedBackground(),
-          
-          // Hexagon grid overlay effect
           _buildHexagonGridOverlay(),
-          
-          // Data stream effect
           _buildDataStreamEffect(),
-          
-          // Scan line effect
           _buildScanLine(),
-          
-          // Glitch effect overlay
           _buildGlitchEffect(),
           
-          // Main content
+          // Main Content
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // Keep header fixed and make only the content below scrollable
                 return Padding(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -284,7 +592,7 @@ class _HomeScreenState extends State<HomeScreen>
                       _buildHeader(isSmallScreen, isVerySmallScreen),
                       SizedBox(height: isVerySmallScreen ? 8 : 12),
 
-                      // The rest of the page scrolls
+                      // Scrollable Content
                       Expanded(
                         child: ScrollConfiguration(
                           behavior: const NoScrollbarBehavior(),
@@ -293,19 +601,19 @@ class _HomeScreenState extends State<HomeScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Search bar
+                                // Search Bar
                                 _buildSearchBar(isSmallScreen, isVerySmallScreen, isNarrowScreen),
                                 SizedBox(height: isVerySmallScreen ? 8 : 12),
 
-                                // Mini dashboard with charts
+                                // Mini Dashboard with IMPROVED Charts
                                 _buildMiniDashboard(isSmallScreen, isVerySmallScreen, isNarrowScreen),
                                 SizedBox(height: isVerySmallScreen ? 8 : 12),
 
-                                // Stats overview
+                                // Stats Overview
                                 _buildStatsOverview(isSmallScreen, isVerySmallScreen, isExtremelySmallScreen),
                                 SizedBox(height: isVerySmallScreen ? 8 : 12),
 
-                                // Feature cards
+                                // Feature Cards
                                 _buildFeatureCards(isSmallScreen, isVerySmallScreen),
                                 SizedBox(height: 16),
                               ],
@@ -320,13 +628,14 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           
-          // Enhanced cyberpunk frame borders
+          // Cyberpunk Frame
           _buildCyberpunkFrame(),
         ],
       ),
     );
   }
 
+  // ============ BACKGROUND EFFECT WIDGETS ============
   Widget _buildAnimatedBackground() {
     return AnimatedBuilder(
       animation: _backgroundAnimation,
@@ -444,6 +753,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // ============ MAIN CONTENT WIDGETS ============
   Widget _buildHeader(bool isSmallScreen, bool isVerySmallScreen) {
     return AnimatedBuilder(
       animation: _glowAnimation,
@@ -565,7 +875,6 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 child: Row(
                   children: [
-                    // Search icon
                     GestureDetector(
                       onTap: () => _onSearchSubmitted(_searchController.text),
                       child: Container(
@@ -585,7 +894,7 @@ class _HomeScreenState extends State<HomeScreen>
                     Expanded(
                       child: TextField(
                         controller: _searchController,
-                        onSubmitted: (q) => _onSearchSubmitted(q),
+                        onSubmitted: _onSearchSubmitted,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: isVerySmallScreen ? 14 : 16,
@@ -646,11 +955,11 @@ class _HomeScreenState extends State<HomeScreen>
                     itemCount: _suggestions.length,
                     separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white12),
                     itemBuilder: (ctx, i) {
-                      final s = _suggestions[i];
+                      final suggestion = _suggestions[i];
                       return ListTile(
                         dense: true,
                         title: Text(
-                          s,
+                          suggestion,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: isVerySmallScreen ? 13 : 14,
@@ -662,8 +971,8 @@ class _HomeScreenState extends State<HomeScreen>
                           size: isVerySmallScreen ? 14 : 16,
                         ),
                         onTap: () {
-                          _searchController.text = s;
-                          _onSearchSubmitted(s);
+                          _searchController.text = suggestion;
+                          _onSearchSubmitted(suggestion);
                         },
                       );
                     },
@@ -726,15 +1035,13 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     ToggleButtons(
                       isSelected: [
-                        _selectedPeriod == 'daily',
-                        _selectedPeriod == 'weekly',
-                        _selectedPeriod == 'monthly'
+                        _selectedPeriod == '1d',
+                        _selectedPeriod == '3d',
+                        _selectedPeriod == '7d'
                       ],
-                      onPressed: (i) {
-                        setState(() {
-                          _selectedPeriod = i == 0 ? 'daily' : i == 1 ? 'weekly' : 'monthly';
-                          _generateDashboardData();
-                        });
+                      onPressed: (index) {
+                        final newPeriod = index == 0 ? '1d' : index == 1 ? '3d' : '7d';
+                        _onPeriodChanged(newPeriod);
                       },
                       borderRadius: BorderRadius.circular(8),
                       color: Colors.white70,
@@ -745,22 +1052,22 @@ class _HomeScreenState extends State<HomeScreen>
                         minHeight: isVerySmallScreen ? 24 : 28,
                       ),
                       children: const [
-                        Text('H', style: TextStyle(fontSize: 12)),
-                        Text('M', style: TextStyle(fontSize: 12)),
-                        Text('B', style: TextStyle(fontSize: 12)),
+                        Text('1D', style: TextStyle(fontSize: 12)),
+                        Text('3D', style: TextStyle(fontSize: 12)),
+                        Text('7D', style: TextStyle(fontSize: 12)),
                       ],
                     ),
                   ],
                 ),
                 SizedBox(height: isVerySmallScreen ? 6 : 8),
 
-                // Charts
+                // IMPROVED Charts with new data structure
                 Row(
                   children: [
                     Expanded(
                       child: _MiniChartCard(
                         title: 'AI Rate (avg %)',
-                        subtitle: 'Rata-rata tingkat AI',
+                        subtitle: 'Rata-rata: ${_aiRateStats.averageAiPercentage}%',
                         isSmall: isSmallScreen || isVerySmallScreen,
                         child: CustomPaint(
                           size: Size(
@@ -768,7 +1075,7 @@ class _HomeScreenState extends State<HomeScreen>
                             isVerySmallScreen ? 50 : (isSmallScreen ? 60 : 80),
                           ),
                           painter: _LineChartPainter(
-                            _aiRateData.map((e) => e.toDouble()).toList(),
+                            _aiRateStats.dataPoints.map((point) => point.aiPercentage).toList(),
                             Colors.cyanAccent.withOpacity(0.9),
                           ),
                         ),
@@ -778,7 +1085,7 @@ class _HomeScreenState extends State<HomeScreen>
                     Expanded(
                       child: _MiniChartCard(
                         title: 'Scan frequency',
-                        subtitle: 'Frekuensi pemindaian',
+                        subtitle: 'Total: ${_scanFreqStats.totalScans} scans',
                         isSmall: isSmallScreen || isVerySmallScreen,
                         child: CustomPaint(
                           size: Size(
@@ -786,7 +1093,7 @@ class _HomeScreenState extends State<HomeScreen>
                             isVerySmallScreen ? 50 : (isSmallScreen ? 60 : 80),
                           ),
                           painter: _BarLineChartPainter(
-                            _scanFreqData.map((e) => e.toDouble()).toList(),
+                            _scanFreqStats.dataPoints.map((point) => point.scanCount.toDouble()).toList(),
                             Colors.pinkAccent.withOpacity(0.9),
                           ),
                         ),
@@ -810,23 +1117,20 @@ class _HomeScreenState extends State<HomeScreen>
           opacity: _fadeAnimation.value,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // 计算间距和每张卡片的最大宽度
               final double gap = isExtremelySmallScreen ? 4 : (isVerySmallScreen ? 6 : 12);
-              final double totalGaps = isExtremelySmallScreen ? gap : (gap * 3); // 卡片之间的总间距
+              final double totalGaps = isExtremelySmallScreen ? gap : (gap * 3);
               final double perCardMax = isExtremelySmallScreen 
-                  ? (constraints.maxWidth - gap) / 2.0  // 两行布局，每行两个卡片
-                  : (constraints.maxWidth - totalGaps).clamp(0.0, constraints.maxWidth) / 4.0; // 一行四个卡片
+                  ? (constraints.maxWidth - gap) / 2.0
+                  : (constraints.maxWidth - totalGaps).clamp(0.0, constraints.maxWidth) / 4.0;
 
               Widget constrainedCard(Widget card) => ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: perCardMax),
                     child: Flexible(child: card),
                   );
 
-              // 如果是极小屏幕，使用两行布局
               if (isExtremelySmallScreen) {
                 return Column(
                   children: [
-                    // 第一行：hit rate 和 speed
                     Row(
                       children: [
                         constrainedCard(_buildCompactStatCard(
@@ -851,7 +1155,6 @@ class _HomeScreenState extends State<HomeScreen>
                       ],
                     ),
                     SizedBox(height: gap),
-                    // 第二行：volume 和 efficiency
                     Row(
                       children: [
                         constrainedCard(_buildCompactStatCard(
@@ -879,7 +1182,6 @@ class _HomeScreenState extends State<HomeScreen>
                 );
               }
               
-              // 正常屏幕，使用一行布局
               return Row(
                 children: [
                   constrainedCard(_buildCompactStatCard(
@@ -990,7 +1292,6 @@ class _HomeScreenState extends State<HomeScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // value should scale down if space is tight
                     Flexible(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
@@ -1006,7 +1307,6 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                     ),
-                    // label scales down instead of ellipsizing so it remains readable and keeps layout
                     Flexible(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
@@ -1191,7 +1491,6 @@ class _HomeScreenState extends State<HomeScreen>
     return IgnorePointer(
       child: Stack(
         children: [
-          // Only bottom border for navbar
           Positioned(
             bottom: 0,
             left: 0,
@@ -1226,29 +1525,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  void _onSearchSubmitted(String q) {
-    // For now: do a simple action — in real app, integrate search/index and scan
-    if (q.trim().isEmpty) return;
-    final filters = Map<String, dynamic>.from(_searchFilters);
-    if (widget.onNavTap != null) {
-      // set bridge so History screen can pick it up and then switch tab to history index (now 3)
-      SearchBridge.set(q, filters);
-      widget.onNavTap!(3);
-      return;
-    }
-
-    // fallback: push history screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HistoryScreen(
-          initialQuery: q,
-          initialFilters: filters,
-        ),
-      ),
-    );
-  }
-
+  // ============ FILTER SHEET ============
   Future<void> _openFilterSheet() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -1266,7 +1543,7 @@ class _HomeScreenState extends State<HomeScreen>
 
         return Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: StatefulBuilder(builder: (c, setC) {
+          child: StatefulBuilder(builder: (context, setState) {
             return ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
               child: BackdropFilter(
@@ -1318,10 +1595,10 @@ class _HomeScreenState extends State<HomeScreen>
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          _neonChip('all', 'Semua', source, (v) => setC(() => source = v)),
-                          _neonChip('history', 'Riwayat', source, (v) => setC(() => source = v)),
-                          _neonChip('upload', 'Unggah', source, (v) => setC(() => source = v)),
-                          _neonChip('editor', 'Editor', source, (v) => setC(() => source = v)),
+                          _neonChip('all', 'Semua', source, (v) => setState(() => source = v)),
+                          _neonChip('history', 'Riwayat', source, (v) => setState(() => source = v)),
+                          _neonChip('upload', 'Unggah', source, (v) => setState(() => source = v)),
+                          _neonChip('editor', 'Editor', source, (v) => setState(() => source = v)),
                         ],
                       ),
                       const SizedBox(height: 15),
@@ -1343,7 +1620,7 @@ class _HomeScreenState extends State<HomeScreen>
                           max: 100,
                           divisions: 50,
                           label: '$minConf%',
-                          onChanged: (v) => setC(() => minConf = v.round()),
+                          onChanged: (value) => setState(() => minConf = value.round()),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -1365,7 +1642,7 @@ class _HomeScreenState extends State<HomeScreen>
                           max: 10,
                           divisions: 9,
                           label: '$sensitivity',
-                          onChanged: (v) => setC(() => sensitivity = v.round()),
+                          onChanged: (value) => setState(() => sensitivity = value.round()),
                         ),
                       ),
                       const SizedBox(height: 15),
@@ -1375,7 +1652,7 @@ class _HomeScreenState extends State<HomeScreen>
                             scale: 1.2,
                             child: Checkbox(
                               value: onlyAi,
-                              onChanged: (v) => setC(() => onlyAi = v ?? false),
+                              onChanged: (value) => setState(() => onlyAi = value ?? false),
                               checkColor: Colors.black,
                               activeColor: Colors.cyanAccent,
                             ),
@@ -1398,9 +1675,9 @@ class _HomeScreenState extends State<HomeScreen>
                       Wrap(
                         spacing: 10,
                         children: [
-                          _neonChip('relevance', 'Relevansi', sort, (v) => setC(() => sort = v)),
-                          _neonChip('newest', 'Terbaru', sort, (v) => setC(() => sort = v)),
-                          _neonChip('confidence', 'Kepercayaan', sort, (v) => setC(() => sort = v)),
+                          _neonChip('relevance', 'Relevansi', sort, (v) => setState(() => sort = v)),
+                          _neonChip('newest', 'Terbaru', sort, (v) => setState(() => sort = v)),
+                          _neonChip('confidence', 'Kepercayaan', sort, (v) => setState(() => sort = v)),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -1408,19 +1685,20 @@ class _HomeScreenState extends State<HomeScreen>
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => setState(() {
-                                // reset filters to defaults
-                                _searchFilters = {
-                                  'source': 'all',
-                                  'minConfidence': 50,
-                                  'sensitivityOverride': null,
-                                  'dateFrom': null,
-                                  'dateTo': null,
-                                  'onlyAi': false,
-                                  'sort': 'relevance',
-                                };
+                              onPressed: () {
+                                setState(() {
+                                  _searchFilters = {
+                                    'source': 'all',
+                                    'minConfidence': 50,
+                                    'sensitivityOverride': null,
+                                    'dateFrom': null,
+                                    'dateTo': null,
+                                    'onlyAi': false,
+                                    'sort': 'relevance',
+                                  };
+                                });
                                 Navigator.pop(ctx, _searchFilters);
-                              }),
+                              },
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.white24),
                                 foregroundColor: Colors.white70,
@@ -1528,6 +1806,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
+// ============ SUPPORTING WIDGETS ============
 class _MiniChartCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -1581,7 +1860,6 @@ class _MiniChartCard extends StatelessWidget {
   }
 }
 
-// Simple smooth line painter for small charts
 class _LineChartPainter extends CustomPainter {
   final List<double> data;
   final Color color;
@@ -1596,41 +1874,88 @@ class _LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
 
-    if (data.isEmpty) return;
+    const double leftPadding = 28.0;
 
-    final min = data.reduce((a, b) => a < b ? a : b);
-    final max = data.reduce((a, b) => a > b ? a : b);
-    final range = (max - min) == 0 ? 1.0 : (max - min);
+    if (data.isEmpty) {
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: 'Belum ada data',
+          style: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      )..layout(minWidth: 0, maxWidth: size.width - leftPadding);
+
+      final offset = Offset(leftPadding + (size.width - leftPadding - textPainter.width) / 2, (size.height - textPainter.height) / 2);
+      textPainter.paint(canvas, offset);
+      return;
+    }
+
+    final List<double> fixedData = data.map((d) => d.clamp(0.0, 100.0)).toList();
+
+    final gridPaint = Paint()
+      ..color = Colors.white12
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+    final labelStyle = TextStyle(color: Colors.white54, fontSize: 10);
+    const ticks = [0, 25, 50, 75, 100];
+    for (final tick in ticks) {
+      final normalizedY = 1.0 - (tick / 100.0);
+      final y = normalizedY * size.height;
+      canvas.drawLine(Offset(leftPadding, y), Offset(size.width, y), gridPaint);
+
+      final textPainter = TextPainter(
+        text: TextSpan(text: '$tick', style: labelStyle),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.right,
+      )..layout(minWidth: 0, maxWidth: leftPadding - 4);
+      textPainter.paint(canvas, Offset(leftPadding - textPainter.width - 4, y - textPainter.height / 2));
+    }
 
     final path = Path();
-    for (int i = 0; i < data.length; i++) {
-      final dx = (i / (data.length - 1)) * size.width;
-      final norm = (data[i] - min) / range;
-      final dy = size.height - (norm * size.height);
+    final denominator = (fixedData.length - 1) <= 0 ? 1 : (fixedData.length - 1);
+    for (int i = 0; i < fixedData.length; i++) {
+      final x = leftPadding + (i / denominator) * (size.width - leftPadding);
+      final normalizedValue = (fixedData[i] / 100.0).clamp(0.0, 1.0);
+      final y = size.height - (normalizedValue * size.height);
       if (i == 0) {
-        path.moveTo(dx, dy);
+        path.moveTo(x, y);
       } else {
-        path.lineTo(dx, dy);
+        path.lineTo(x, y);
       }
     }
 
-    // draw glow/backdrop
-    final glow = Paint()
+    final fillPaint = Paint()
+      ..color = color.withOpacity(0.06)
+      ..style = PaintingStyle.fill;
+    final fillPath = Path.from(path);
+    fillPath.lineTo(size.width, size.height);
+    fillPath.lineTo(leftPadding, size.height);
+    fillPath.close();
+    canvas.drawPath(fillPath, fillPaint);
+
+    final glowPaint = Paint()
       ..color = color
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    
-    canvas.drawPath(path, glow);
+    canvas.drawPath(path, glowPaint);
     canvas.drawPath(path, paint);
+
+    final markerPaint = Paint()..color = color;
+    for (int i = 0; i < fixedData.length; i++) {
+      final x = leftPadding + (i / denominator) * (size.width - leftPadding);
+      final normalizedValue = (fixedData[i] / 100.0).clamp(0.0, 1.0);
+      final y = size.height - (normalizedValue * size.height);
+      canvas.drawCircle(Offset(x, y), 2.0, markerPaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// Painter that draws a thinner line but scaled for integer counts
 class _BarLineChartPainter extends CustomPainter {
   final List<double> data;
   final Color color;
@@ -1645,37 +1970,79 @@ class _BarLineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
 
-    if (data.isEmpty) return;
+    const double leftPadding = 28.0;
+
+    if (data.isEmpty) {
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: 'Belum ada data',
+          style: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      )..layout(minWidth: 0, maxWidth: size.width - leftPadding);
+
+      final offset = Offset(leftPadding + (size.width - leftPadding - textPainter.width) / 2, (size.height - textPainter.height) / 2);
+      textPainter.paint(canvas, offset);
+      return;
+    }
 
     final min = data.reduce((a, b) => a < b ? a : b);
     final max = data.reduce((a, b) => a > b ? a : b);
-    final range = (max - min) == 0 ? 1.0 : (max - min);
+    final rawRange = (max - min) == 0 ? 1.0 : (max - min).toDouble();
+    final range = rawRange < 5.0 ? 5.0 : rawRange;
+
+    final gridPaint = Paint()
+      ..color = Colors.white12
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+    final labelStyle = TextStyle(color: Colors.white54, fontSize: 10);
+    final mid = (min + max) / 2.0;
+    final labels = [min, mid, max].map((v) => v.round()).toList();
+    for (int i = 0; i < 3; i++) {
+      final value = i == 0 ? min : (i == 1 ? mid : max);
+      final normalizedValue = (value - min) / range;
+      final y = size.height - (normalizedValue * size.height);
+      canvas.drawLine(Offset(leftPadding, y), Offset(size.width, y), gridPaint);
+      final textPainter = TextPainter(
+        text: TextSpan(text: '${labels[i]}', style: labelStyle),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.right,
+      )..layout(minWidth: 0, maxWidth: leftPadding - 4);
+      textPainter.paint(canvas, Offset(leftPadding - textPainter.width - 4, y - textPainter.height / 2));
+    }
 
     final path = Path();
+    final denominator = (data.length - 1) <= 0 ? 1 : (data.length - 1);
     for (int i = 0; i < data.length; i++) {
-      final dx = (i / (data.length - 1)) * size.width;
-      final norm = (data[i] - min) / range;
-      final dy = size.height - (norm * size.height);
+      final x = leftPadding + (i / denominator) * (size.width - leftPadding);
+      final normalizedValue = ((data[i] - min) / range).clamp(0.0, 1.0);
+      final y = size.height - (normalizedValue * size.height);
       if (i == 0) {
-        path.moveTo(dx, dy);
+        path.moveTo(x, y);
       } else {
-        path.lineTo(dx, dy);
+        path.lineTo(x, y);
       }
     }
 
-    // faint fill
     final fillPaint = Paint()
       ..color = color.withOpacity(0.08)
       ..style = PaintingStyle.fill;
-    
+
     final fillPath = Path.from(path);
     fillPath.lineTo(size.width, size.height);
-    fillPath.lineTo(0, size.height);
+    fillPath.lineTo(leftPadding, size.height);
     fillPath.close();
     canvas.drawPath(fillPath, fillPaint);
 
-    // draw line
     canvas.drawPath(path, paint);
+    final markerPaint = Paint()..color = color;
+    for (int i = 0; i < data.length; i++) {
+      final x = leftPadding + (i / denominator) * (size.width - leftPadding);
+      final normalizedValue = ((data[i] - min) / range).clamp(0.0, 1.0);
+      final y = size.height - (normalizedValue * size.height);
+      canvas.drawCircle(Offset(x, y), 1.8, markerPaint);
+    }
   }
 
   @override
@@ -1696,17 +2063,16 @@ class _HexagonGridPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    final verticalDistance = hexHeight * 3 / 4;
 
-    int cols = (size.width / hexWidth).ceil() + 1;
-    int rows = (size.height / vertDist).ceil() + 1;
+    int columns = (size.width / hexWidth).ceil() + 1;
+    int rows = (size.height / verticalDistance).ceil() + 1;
 
     for (int row = 0; row < rows; row++) {
-      for (int col = 0; col < cols; col++) {
+      for (int col = 0; col < columns; col++) {
         final x = col * hexWidth + (row % 2) * hexWidth / 2;
-        final y = row * vertDist;
+        final y = row * verticalDistance;
         
-        // Add some animation by shifting hexagons
         final offsetX = math.sin(animationValue * 2 * math.pi + row * 0.1) * 5;
         final offsetY = math.cos(animationValue * 2 * math.pi + col * 0.1) * 5;
         

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import '../utils/live_analysis_bridge.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/services.dart';
 import '../config/animation_config.dart';
@@ -777,6 +778,16 @@ class _TextEditorScreenState extends State<TextEditorScreen>
         _aiDetectionPercentage = result['ai_detection']!;
         _humanWrittenPercentage = result['human_written']!;
       });
+
+      // publish live analysis so HomeScreen (dashboard) can pick it up in real-time
+      try {
+        try {
+          // lightweight runtime trace when editor pushes live analysis
+          // ignore: avoid_print
+          print('[TextEditor] pushing live analysis ai=${result['ai_detection']!.toStringAsFixed(2)}');
+        } catch (_) {}
+        LiveAnalysisBridge().push(result['ai_detection']!);
+      } catch (_) {}
 
       try {
         final notify = await SettingsManager.getNotifications();
