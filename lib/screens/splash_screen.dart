@@ -160,7 +160,7 @@ class CyberPunkScreen extends StatelessWidget {
                 
                 // Progress text
                 Text(
-                  'INITIALIZING SYSTEM... ${progress.toInt()}%',
+                  'Sedang Memuat... ${progress.toInt()}%',
                   style: TextStyle(
                     color: Colors.cyanAccent.withOpacity(glowAnimation.value),
                     fontSize: 16,

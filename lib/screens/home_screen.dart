@@ -573,7 +573,8 @@ class _HomeScreenState extends State<HomeScreen>
               Container(
                 padding: EdgeInsets.symmetric(
                   horizontal: isVerySmallScreen ? 12 : 16,
-                  vertical: isVerySmallScreen ? 8 : 12,
+                  // Reduced vertical padding to make the search box less tall
+                  vertical: isVerySmallScreen ? 6 : 8,
                 ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(isVerySmallScreen ? 20 : 25),
@@ -602,8 +603,8 @@ class _HomeScreenState extends State<HomeScreen>
                     // Search icon
                     GestureDetector(
                       onTap: () => _onSearchSubmitted(_searchController.text),
-                      child: Container(
-                        padding: EdgeInsets.all(isVerySmallScreen ? 4 : 6),
+                        child: Container(
+                        padding: EdgeInsets.all(isVerySmallScreen ? 3 : 5),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.cyan.withOpacity(0.1),
@@ -639,7 +640,7 @@ class _HomeScreenState extends State<HomeScreen>
                     IconButton(
                       onPressed: _openFilterSheet,
                       icon: Container(
-                        padding: EdgeInsets.all(isVerySmallScreen ? 6 : 8),
+                        padding: EdgeInsets.all(isVerySmallScreen ? 4 : 6),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
