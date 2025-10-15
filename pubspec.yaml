@@ -40,6 +40,7 @@ dependencies:
   # device_info_plus, flutter_image_compress, image_cropper, flutter_isolate,
   # wakelock_plus
 
+  path: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

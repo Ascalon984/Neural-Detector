@@ -82,7 +82,7 @@ class SearchIndex {
       if (term.isEmpty) {
         candidates.add(item);
       } else {
-        final hay = (item.fileName + ' ' + item.date).toLowerCase();
+        final hay = ('${item.fileName} ${item.date}').toLowerCase();
         if (hay.contains(term)) candidates.add(item);
       }
     }
@@ -95,8 +95,8 @@ class SearchIndex {
     } else {
       // basic relevance: contains earlier + aiDetection
       candidates.sort((a, b) {
-        final aHas = (a.fileName + ' ' + a.date).toLowerCase().contains(term);
-        final bHas = (b.fileName + ' ' + b.date).toLowerCase().contains(term);
+        final aHas = ('${a.fileName} ${a.date}').toLowerCase().contains(term);
+        final bHas = ('${b.fileName} ${b.date}').toLowerCase().contains(term);
         if (aHas && !bHas) return -1;
         if (!aHas && bHas) return 1;
         return b.aiDetection.compareTo(a.aiDetection);

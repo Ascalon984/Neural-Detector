@@ -68,8 +68,12 @@ class TextAnalyzer {
 
             final idsPtr = calloc<ffi.Int32>(ids.length);
             final maskPtr = calloc<ffi.Int32>(mask.length);
-            for (var i = 0; i < ids.length; i++) idsPtr.elementAt(i).value = ids[i];
-            for (var i = 0; i < mask.length; i++) maskPtr.elementAt(i).value = mask[i];
+            for (var i = 0; i < ids.length; i++) {
+              idsPtr.elementAt(i).value = ids[i];
+            }
+            for (var i = 0; i < mask.length; i++) {
+              maskPtr.elementAt(i).value = mask[i];
+            }
             try {
               final result = _analyzeTokenIds!(idsPtr, maskPtr, ids.length);
               calloc.free(idsPtr);

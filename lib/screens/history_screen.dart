@@ -84,7 +84,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 2, milliseconds: 500),
+      duration: const Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
@@ -141,13 +141,13 @@ class _HistoryScreenState extends State<HistoryScreen>
         }
       });
     } else {
-      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
-      _glowAnimation = AlwaysStoppedAnimation(0.5);
-      _scanAnimation = AlwaysStoppedAnimation(0.0);
-      _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _glitchAnimation = AlwaysStoppedAnimation(0.0);
-      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
-      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
+      _backgroundAnimation = const AlwaysStoppedAnimation(0.0);
+      _glowAnimation = const AlwaysStoppedAnimation(0.5);
+      _scanAnimation = const AlwaysStoppedAnimation(0.0);
+      _pulseAnimation = const AlwaysStoppedAnimation(1.0);
+      _glitchAnimation = const AlwaysStoppedAnimation(0.0);
+      _hexagonAnimation = const AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = const AlwaysStoppedAnimation(0.0);
     }
 
     _loadHistory();
@@ -235,7 +235,7 @@ class _HistoryScreenState extends State<HistoryScreen>
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return Padding(
-                      padding: EdgeInsets.fromLTRB(
+                      padding: const EdgeInsets.fromLTRB(
                         16,
                         12,
                         16,
@@ -615,8 +615,8 @@ class _HistoryScreenState extends State<HistoryScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildStatItem('Total Scans', '${_scanHistory.length}', Icons.analytics, Colors.cyan),
-                  _buildStatItem('AI Avg', '${_aiAvg}%', Icons.psychology, Colors.pink),
-                  _buildStatItem('Human Avg', '${_humanAvg}%', Icons.person, Colors.purple),
+                  _buildStatItem('AI Avg', '$_aiAvg%', Icons.psychology, Colors.pink),
+                  _buildStatItem('Human Avg', '$_humanAvg%', Icons.person, Colors.purple),
                 ],
               ),
             ),
@@ -799,7 +799,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               'Start scanning to see results here',
               style: TextStyle(
                 color: Colors.white70,
@@ -1403,7 +1403,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                     const SizedBox(width: 12),
                     Text(
                       text,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -1462,7 +1462,7 @@ class _HexagonGridPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;
@@ -1517,7 +1517,7 @@ class _DataStreamPainter extends CustomPainter {
     
     for (int i = 0; i < 5; i++) {
       final startX = random.nextDouble() * size.width;
-      final startY = -50.0;
+      const startY = -50.0;
       final endY = size.height + 50;
       
       path.moveTo(startX, startY);
@@ -1591,7 +1591,7 @@ Widget buildHistoryGraph(List<Model.ScanHistory> scanHistory, double glow) {
             const Spacer(),
             Text(
               'Total: ${scanHistory.length}',
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 11,
                 fontFamily: 'Orbitron',
@@ -1693,7 +1693,7 @@ Widget _buildLegendItem(String label, Color color) {
       const SizedBox(width: 8),
       Text(
         label,
-        style: TextStyle(
+        style: const TextStyle(
           color: Colors.white70,
           fontSize: 11,
           fontFamily: 'Orbitron',
@@ -1888,7 +1888,7 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
     final offset = renderBox.localToGlobal(Offset.zero);
 
     final tooltipWidth = math.min(220.0, MediaQuery.of(context).size.width * 0.8);
-    final tooltipHeight = 110.0; // Increased height for better content display
+    const tooltipHeight = 110.0; // Increased height for better content display
 
     final screenSize = MediaQuery.of(context).size;
     double top = offset.dy - tooltipHeight - 10;
@@ -2003,7 +2003,7 @@ class _IndividualScanBarState extends State<_IndividualScanBar> with SingleTicke
                   const SizedBox(height: 8),
                   Text(
                     widget.date,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 10,
                     ),

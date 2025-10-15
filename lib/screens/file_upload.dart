@@ -76,7 +76,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 2, milliseconds: 500),
+      duration: const Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
@@ -130,12 +130,12 @@ class _FileUploadScreenState extends State<FileUploadScreen>
         }
       });
     } else {
-      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
-      _glowAnimation = AlwaysStoppedAnimation(0.5);
-      _scanAnimation = AlwaysStoppedAnimation(0.0);
-      _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
-      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
+      _backgroundAnimation = const AlwaysStoppedAnimation(0.0);
+      _glowAnimation = const AlwaysStoppedAnimation(0.5);
+      _scanAnimation = const AlwaysStoppedAnimation(0.0);
+      _pulseAnimation = const AlwaysStoppedAnimation(1.0);
+      _hexagonAnimation = const AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = const AlwaysStoppedAnimation(0.0);
     }
   }
 
@@ -189,10 +189,10 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(children: [Container(width: 10, height: 10, color: Colors.red.shade400), SizedBox(width: 8), Text('Deteksi AI', style: TextStyle(color: Colors.white70)), Spacer(), Text('${aiPct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.red.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
-                    SizedBox(height: 8),
-                    Row(children: [Container(width: 10, height: 10, color: Colors.cyan.shade400), SizedBox(width: 8), Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)), Spacer(), Text('${humanPct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
-                    SizedBox(height: 12),
+                    Row(children: [Container(width: 10, height: 10, color: Colors.red.shade400), const SizedBox(width: 8), const Text('Deteksi AI', style: TextStyle(color: Colors.white70)), const Spacer(), Text('${aiPct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.red.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
+                    const SizedBox(height: 8),
+                    Row(children: [Container(width: 10, height: 10, color: Colors.cyan.shade400), const SizedBox(width: 8), const Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)), const Spacer(), Text('${humanPct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron'))]),
+                    const SizedBox(height: 12),
                     Text('Persentase menunjukkan proporsi konten yang terdeteksi AI vs manusia.', style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 11 : 12)),
                   ],
                 ),
@@ -269,12 +269,12 @@ class _FileUploadScreenState extends State<FileUploadScreen>
             Positioned.fill(
               child: Container(
                 color: Colors.black.withOpacity(0.6),
-                child: Center(
+                child: const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 12),
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
                       Text('Memuat file...', style: TextStyle(color: Colors.white70)),
                     ],
                   ),
@@ -1257,7 +1257,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
     // Build a dialog that mirrors the text editor's analysis result layout
     // We'll synthesize highlighted spans based on the file content and aiPct
     List<TextSpan> highlightedSpans = [];
-    void _generateSpansFromContent() {
+    void generateSpansFromContent() {
       final text = _fileContent ?? '';
       if (text.trim().isEmpty) return;
       final words = text.split(' ');
@@ -1275,9 +1275,9 @@ class _FileUploadScreenState extends State<FileUploadScreen>
       }
     }
 
-    _generateSpansFromContent();
+    generateSpansFromContent();
 
-    Future<void> _copySpansToClipboard() async {
+    Future<void> copySpansToClipboard() async {
       final joined = highlightedSpans.where((s) => (s.style?.backgroundColor?.opacity ?? 0) > 0.01).map((s) => s.text ?? '').join();
       if (joined.trim().isEmpty) {
         try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
@@ -1336,7 +1336,7 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('ANALISIS FILE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 16 : 18, fontFamily: 'Orbitron')),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text(p.basename(_selectedFileName ?? 'file'), style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 12 : 13)),
                         ],
                       ),
@@ -1354,14 +1354,14 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                     children: [
                       // Chart + legend row (reuse file editor's radial style)
                       Container(
-                        padding: EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(8),
                         child: _buildRadialChart(isSmallScreen, aiPct, humanPct),
                       ),
                       SizedBox(height: isSmallScreen ? 12 : 16),
                       // (Legend removed) expanded highlight area below takes this space
                       // Highlight section (expanded to take the freed space from removed results box)
                       Builder(builder: (context) {
-                        final ScrollController _highlightScroll = ScrollController();
+                        final ScrollController highlightScroll = ScrollController();
                         return Container(
                           padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
                           decoration: BoxDecoration(
@@ -1375,35 +1375,35 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                               Row(
                                 children: [
                                   Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 20 : 24),
-                                  SizedBox(width: 10),
+                                  const SizedBox(width: 10),
                                   Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 15 : 18, fontFamily: 'Orbitron'))),
                                   IconButton(
-                                    onPressed: highlightedSpans.isNotEmpty ? _copySpansToClipboard : () {
+                                    onPressed: highlightedSpans.isNotEmpty ? copySpansToClipboard : () {
                                       try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
                                     },
                                     icon: Icon(Icons.copy, color: highlightedSpans.isNotEmpty ? Colors.white70 : Colors.white24, size: isSmallScreen ? 18 : 20),
                                   ),
                                 ],
                               ),
-                              SizedBox(height: 12),
+                              const SizedBox(height: 12),
                               Stack(
                                 children: [
                                   Container(
                                     // Expanded to use the freed space from the removed legend/results box
                                     constraints: BoxConstraints(maxHeight: isSmallScreen ? 360 : 640),
-                                    padding: EdgeInsets.all(10),
+                                    padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
                                     child: highlightedSpans.isNotEmpty
                                       ? Scrollbar(
-                                          controller: _highlightScroll,
+                                          controller: highlightScroll,
                                           thumbVisibility: true,
                                           child: SingleChildScrollView(
-                                            controller: _highlightScroll,
+                                            controller: highlightScroll,
                                             child: RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 15 : 17, height: 1.6))),
                                           ),
                                         )
                                       : Padding(
-                                          padding: EdgeInsets.symmetric(vertical: 12),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
                                           child: Text(
                                             (_fileContent != null && _fileContent!.trim().isNotEmpty)
                                               ? _fileContent!
@@ -1419,14 +1419,14 @@ class _FileUploadScreenState extends State<FileUploadScreen>
                                       bottom: 8,
                                       child: GestureDetector(
                                         onTap: () {
-                                          if (!_highlightScroll.hasClients) return;
+                                          if (!highlightScroll.hasClients) return;
                                           final height = (isSmallScreen ? 360.0 : 640.0);
-                                          final max = _highlightScroll.position.maxScrollExtent;
-                                          final newOffset = (_highlightScroll.offset + height).clamp(0.0, max);
-                                          _highlightScroll.animateTo(newOffset, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+                                          final max = highlightScroll.position.maxScrollExtent;
+                                          final newOffset = (highlightScroll.offset + height).clamp(0.0, max);
+                                          highlightScroll.animateTo(newOffset, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
                                         },
                                         child: Container(
-                                          decoration: BoxDecoration(
+                                          decoration: const BoxDecoration(
                                             color: Colors.white12,
                                             shape: BoxShape.circle,
                                           ),
@@ -1469,7 +1469,7 @@ class _HexagonGridPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;
@@ -1524,7 +1524,7 @@ class _DataStreamPainter extends CustomPainter {
     
     for (int i = 0; i < 5; i++) {
       final startX = random.nextDouble() * size.width;
-      final startY = -50.0;
+      const startY = -50.0;
       final endY = size.height + 50;
       
       path.moveTo(startX, startY);

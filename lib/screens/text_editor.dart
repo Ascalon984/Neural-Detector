@@ -58,7 +58,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
     )..repeat(reverse: true);
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 2, milliseconds: 500),
+      duration: const Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 
@@ -91,13 +91,13 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       _dataStreamAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_dataStreamController);
       _scanAnimation = Tween<double>(begin: -0.2, end: 1.2).animate(CurvedAnimation(parent: _scanController, curve: Curves.easeInOut));
     } else {
-      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
-      _glowAnimation = AlwaysStoppedAnimation(0.5);
-      _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _textGlowAnimation = AlwaysStoppedAnimation(0.1);
-      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
-      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
-      _scanAnimation = AlwaysStoppedAnimation(0.0);
+      _backgroundAnimation = const AlwaysStoppedAnimation(0.0);
+      _glowAnimation = const AlwaysStoppedAnimation(0.5);
+      _pulseAnimation = const AlwaysStoppedAnimation(1.0);
+      _textGlowAnimation = const AlwaysStoppedAnimation(0.1);
+      _hexagonAnimation = const AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = const AlwaysStoppedAnimation(0.0);
+      _scanAnimation = const AlwaysStoppedAnimation(0.0);
     }
 
     // Auto-focus the text editor after first frame so user can start typing immediately.
@@ -353,7 +353,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   );
                 },
               ),
-              SizedBox(height: 4),
+              const SizedBox(height: 4),
               Text(
                 'Analisis AI untuk teks Anda',
                 style: TextStyle(
@@ -587,7 +587,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
             fontFamily: 'Orbitron',
           ),
         ),
-        SizedBox(height: 2),
+        const SizedBox(height: 2),
         Text(
           label,
           style: TextStyle(
@@ -837,7 +837,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
 
     // Ensure highlighted spans are present (if empty, synthesize from editor text)
     List<TextSpan> highlightedSpans = [];
-    void _generateSpansFromText() {
+    void generateSpansFromText() {
       final text = _textController.text;
       if (text.trim().isEmpty) return;
       final words = text.split(' ');
@@ -855,9 +855,9 @@ class _TextEditorScreenState extends State<TextEditorScreen>
       }
     }
 
-    _generateSpansFromText();
+    generateSpansFromText();
 
-    Future<void> _copySpansToClipboard() async {
+    Future<void> copySpansToClipboard() async {
       final joined = highlightedSpans.where((s) => (s.style?.backgroundColor?.opacity ?? 0) > 0.01).map((s) => s.text ?? '').join();
       if (joined.trim().isEmpty) {
         try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {}
@@ -916,7 +916,7 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('ANALISIS TEKS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 16 : 18, fontFamily: 'Orbitron')),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text('Teks Anda telah dianalisis', style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 12 : 13)),
                         ],
                       ),
@@ -933,12 +933,12 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                   child: Column(
                     children: [
                       // Chart + legend row
-                      Container(padding: EdgeInsets.all(8), child: _buildRadialChart(isSmallScreen)),
+                      Container(padding: const EdgeInsets.all(8), child: _buildRadialChart(isSmallScreen)),
                       SizedBox(height: isSmallScreen ? 12 : 16),
 
                       // Highlight area (copied from file upload)
                       Builder(builder: (context) {
-                        final ScrollController _highlightScroll = ScrollController();
+                        final ScrollController highlightScroll = ScrollController();
                         return Container(
                           padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
                           decoration: BoxDecoration(
@@ -952,32 +952,32 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                               Row(
                                 children: [
                                   Icon(Icons.highlight, color: Colors.red.shade400, size: isSmallScreen ? 20 : 24),
-                                  SizedBox(width: 10),
+                                  const SizedBox(width: 10),
                                   Expanded(child: Text('TEKS YANG TERDETEKSI AI', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 15 : 18, fontFamily: 'Orbitron'))),
                                   IconButton(
-                                    onPressed: highlightedSpans.isNotEmpty ? _copySpansToClipboard : () { try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {} },
+                                    onPressed: highlightedSpans.isNotEmpty ? copySpansToClipboard : () { try { CyberNotification.show(context, 'Salin', 'Tidak ada teks yang di-highlight'); } catch (_) {} },
                                     icon: Icon(Icons.copy, color: highlightedSpans.isNotEmpty ? Colors.white70 : Colors.white24, size: isSmallScreen ? 18 : 20),
                                   ),
                                 ],
                               ),
-                              SizedBox(height: 12),
+                              const SizedBox(height: 12),
                               Stack(
                                 children: [
                                   Container(
                                     constraints: BoxConstraints(maxHeight: isSmallScreen ? 360 : 640),
-                                    padding: EdgeInsets.all(10),
+                                    padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
                                     child: highlightedSpans.isNotEmpty
                                       ? Scrollbar(
-                                          controller: _highlightScroll,
+                                          controller: highlightScroll,
                                           thumbVisibility: true,
                                           child: SingleChildScrollView(
-                                            controller: _highlightScroll,
+                                            controller: highlightScroll,
                                             child: RichText(text: TextSpan(children: highlightedSpans, style: TextStyle(fontSize: isSmallScreen ? 15 : 17, height: 1.6))),
                                           ),
                                         )
                                       : Padding(
-                                          padding: EdgeInsets.symmetric(vertical: 12),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
                                           child: Text(
                                             _textController.text.trim().isNotEmpty ? _textController.text : 'Tidak ada teks yang dimasukkan.',
                                             style: TextStyle(color: Colors.grey.shade300, fontSize: isSmallScreen ? 14 : 15),
@@ -990,14 +990,14 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                                       bottom: 8,
                                       child: GestureDetector(
                                         onTap: () {
-                                          if (!_highlightScroll.hasClients) return;
+                                          if (!highlightScroll.hasClients) return;
                                           final height = (isSmallScreen ? 360.0 : 640.0);
-                                          final max = _highlightScroll.position.maxScrollExtent;
-                                          final newOffset = (_highlightScroll.offset + height).clamp(0.0, max);
-                                          _highlightScroll.animateTo(newOffset, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
+                                          final max = highlightScroll.position.maxScrollExtent;
+                                          final newOffset = (highlightScroll.offset + height).clamp(0.0, max);
+                                          highlightScroll.animateTo(newOffset, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
                                         },
                                         child: Container(
-                                          decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
+                                          decoration: const BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
                                           padding: const EdgeInsets.all(6),
                                           child: Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: isSmallScreen ? 22 : 28),
                                         ),
@@ -1084,23 +1084,23 @@ class _TextEditorScreenState extends State<TextEditorScreen>
                     Row(
                       children: [
                         Container(width: 10, height: 10, color: Colors.red.shade400),
-                        SizedBox(width: 8),
-                        Text('Deteksi AI', style: TextStyle(color: Colors.white70)),
-                        Spacer(),
+                        const SizedBox(width: 8),
+                        const Text('Deteksi AI', style: TextStyle(color: Colors.white70)),
+                        const Spacer(),
                         Text('${_aiDetectionPercentage.toStringAsFixed(1)}%', style: TextStyle(color: _aiDetectionPercentage > 50 ? Colors.red.shade300 : Colors.green.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron')),
                       ],
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Container(width: 10, height: 10, color: Colors.cyan.shade400),
-                        SizedBox(width: 8),
-                        Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)),
-                        Spacer(),
+                        const SizedBox(width: 8),
+                        const Text('Ditulis Manusia', style: TextStyle(color: Colors.white70)),
+                        const Spacer(),
                         Text('${_humanWrittenPercentage.toStringAsFixed(1)}%', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.bold, fontFamily: 'Orbitron')),
                       ],
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Text('Persentase menunjukkan proporsi konten yang terdeteksi AI vs manusia.', style: TextStyle(color: Colors.grey.shade400, fontSize: isSmallScreen ? 11 : 12)),
                   ],
                 ),
@@ -1128,7 +1128,7 @@ class _HexagonGridPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;
@@ -1181,7 +1181,7 @@ class _DataStreamPainter extends CustomPainter {
     
     for (int i = 0; i < 5; i++) {
       final startX = random.nextDouble() * size.width;
-      final startY = -50.0;
+      const startY = -50.0;
       final endY = size.height + 50;
       
       path.moveTo(startX, startY);

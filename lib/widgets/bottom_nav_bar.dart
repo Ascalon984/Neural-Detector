@@ -66,7 +66,7 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
   }
 
   // Removed camera/scan entry
-  static const List<String> _labels = ['HOME', 'EDIT', 'UPLOAD', 'HISTORY', 'SETTINGS'];
+  static const List<String> _labels = ['BERANDA', 'EDIT', 'UNGGAH', 'RIWAYAT', 'PENGATURA'];
   static const List<IconData> _icons = [
     Icons.home_outlined,
     Icons.edit_note,
@@ -85,7 +85,7 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
     )..repeat(reverse: true);
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 1, milliseconds: 500),
+      duration: const Duration(seconds: 1, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
 

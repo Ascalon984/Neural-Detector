@@ -329,7 +329,7 @@ class Exporter {
     
     try {
       // Update status
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.0,
         status: ExportStatusType.initializing,
         message: 'Preparing export...',
@@ -376,7 +376,7 @@ class Exporter {
     ExportOptions options
   ) async {
     try {
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.2,
         status: ExportStatusType.processing,
         message: 'Generating CSV...',
@@ -386,7 +386,7 @@ class Exporter {
       final csvBytes = Uint8List.fromList(csvContent.codeUnits);
       await web_export.saveBytesAsFile(csvBytes, '$baseName.csv');
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.6,
         status: ExportStatusType.processing,
         message: 'Generating XLSX...',
@@ -397,7 +397,7 @@ class Exporter {
         await web_export.saveBytesAsFile(Uint8List.fromList(xlsxBytes), '$baseName.xlsx');
       }
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 1.0,
         status: ExportStatusType.completed,
         message: 'Export completed successfully',
@@ -428,7 +428,7 @@ class Exporter {
   ) async {
     try {
       // Check and request storage permissions
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.1,
         status: ExportStatusType.requestingPermissions,
         message: 'Checking storage permissions...',
@@ -436,14 +436,14 @@ class Exporter {
       
       final hasPermission = await _checkStoragePermission();
       if (!hasPermission) {
-        return ExportResult(
+        return const ExportResult(
           success: false,
           errorMessage: 'Storage permission denied',
         );
       }
       
       // Try to save to Downloads folder first
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.2,
         status: ExportStatusType.processing,
         message: 'Preparing files for export...',
@@ -453,7 +453,7 @@ class Exporter {
       final xlsxBytes = await generateXlsxBytes(rows, options: options);
       
       // Use MethodChannel to save to Downloads
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.4,
         status: ExportStatusType.saving,
         message: 'Saving to Downloads folder...',
@@ -462,7 +462,7 @@ class Exporter {
       final csvBytes = Uint8List.fromList(csvContent.codeUnits);
       final csvResult = await _saveToDownloads('$baseName.csv', csvBytes);
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.7,
         status: ExportStatusType.saving,
         message: 'Saving XLSX file...',
@@ -471,7 +471,7 @@ class Exporter {
       final xlsxUint8 = Uint8List.fromList(xlsxBytes);
       final xlsxResult = await _saveToDownloads('$baseName.xlsx', xlsxUint8);
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 1.0,
         status: ExportStatusType.completed,
         message: 'Export completed successfully',
@@ -502,7 +502,7 @@ class Exporter {
   ) async {
     try {
       // iOS doesn't have a Downloads folder accessible to apps, so we use app's documents directory
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.2,
         status: ExportStatusType.processing,
         message: 'Preparing files for export...',
@@ -514,7 +514,7 @@ class Exporter {
       // Get app's documents directory
       final directory = await getApplicationDocumentsDirectory();
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.4,
         status: ExportStatusType.saving,
         message: 'Saving CSV file...',
@@ -524,7 +524,7 @@ class Exporter {
       final csvFile = File(csvPath);
       await csvFile.writeAsString(csvContent, flush: true);
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.7,
         status: ExportStatusType.saving,
         message: 'Saving XLSX file...',
@@ -534,7 +534,7 @@ class Exporter {
       final xlsxFile = File(xlsxPath);
       await xlsxFile.writeAsBytes(xlsxBytes, flush: true);
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 1.0,
         status: ExportStatusType.completed,
         message: 'Export completed successfully',
@@ -565,7 +565,7 @@ class Exporter {
   ) async {
     try {
       // Let user pick a directory
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.2,
         status: ExportStatusType.requestingInput,
         message: 'Please select a destination folder...',
@@ -580,13 +580,13 @@ class Exporter {
       }
 
       if (selectedDirectory == null) {
-        return ExportResult(
+        return const ExportResult(
           success: false,
           errorMessage: 'No directory selected',
         );
       }
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.4,
         status: ExportStatusType.processing,
         message: 'Preparing files for export...',
@@ -595,7 +595,7 @@ class Exporter {
       final csvContent = await generateCsv(rows, options: options);
       final xlsxBytes = await generateXlsxBytes(rows, options: options);
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.6,
         status: ExportStatusType.saving,
         message: 'Saving CSV file...',
@@ -605,7 +605,7 @@ class Exporter {
       final csvFile = File(csvPath);
       await csvFile.writeAsString(csvContent, flush: true);
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 0.8,
         status: ExportStatusType.saving,
         message: 'Saving XLSX file...',
@@ -617,7 +617,7 @@ class Exporter {
         await xlsxFile.writeAsBytes(xlsxBytes, flush: true);
       }
       
-      _exportStatusController.add(ExportStatus(
+      _exportStatusController.add(const ExportStatus(
         progress: 1.0,
         status: ExportStatusType.completed,
         message: 'Export completed successfully',
@@ -665,10 +665,10 @@ class Exporter {
   
   // Save file to Downloads folder using MethodChannel
   static Future<String> _saveToDownloads(String filename, Uint8List bytes) async {
-    const MethodChannel _channel = MethodChannel('ai_text_checker/saveFileToDownloads');
+    const MethodChannel channel = MethodChannel('ai_text_checker/saveFileToDownloads');
     
     try {
-      final result = await _channel.invokeMethod('saveFile', {
+      final result = await channel.invokeMethod('saveFile', {
         'filename': filename,
         'bytes': bytes,
       });

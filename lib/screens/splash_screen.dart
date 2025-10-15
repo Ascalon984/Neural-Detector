@@ -285,7 +285,7 @@ class CyberPunkScreen extends StatelessWidget {
   }
 
   Widget _buildNeonEffects() {
-    final size = MediaQueryData.fromWindow(WidgetsBinding.instance.window).size;
+    final size = MediaQueryData.fromView(WidgetsBinding.instance.window).size;
 
     return Stack(
       children: [
@@ -550,7 +550,7 @@ class _HexagonGridPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;

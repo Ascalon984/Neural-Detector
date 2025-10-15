@@ -147,9 +147,9 @@ class _HexagonPatternPainter extends CustomPainter {
       ..strokeWidth = 0.8;
 
   const hexSize = 40.0;
-  final hexHeight = hexSize * 2;
+  const hexHeight = hexSize * 2;
   final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;

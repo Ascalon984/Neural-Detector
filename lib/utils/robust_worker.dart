@@ -120,7 +120,7 @@ void _isolateEntry(_IsolateMessage msg) async {
     // perform text analysis (uses routing inside TextAnalyzer)
     final toAnalyze = (msg.extractedText != null && msg.extractedText!.isNotEmpty)
         ? msg.extractedText!
-        : 'image_capture_' + DateTime.now().millisecondsSinceEpoch.toString();
+        : 'image_capture_${DateTime.now().millisecondsSinceEpoch}';
 
     Map<String, double> rawResult = {'ai_detection': 0.0, 'human_written': 100.0};
     try {

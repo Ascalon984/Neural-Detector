@@ -60,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     )..repeat();
 
     _pulseController = AnimationController(
-      duration: Duration(seconds: 2, milliseconds: 500),
+      duration: const Duration(seconds: 2, milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
     
@@ -109,12 +109,12 @@ class _SettingsScreenState extends State<SettingsScreen>
         }
       });
     } else {
-      _backgroundAnimation = AlwaysStoppedAnimation(0.0);
-      _glowAnimation = AlwaysStoppedAnimation(0.5);
-      _scanAnimation = AlwaysStoppedAnimation(0.0);
-      _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _hexagonAnimation = AlwaysStoppedAnimation(0.0);
-      _dataStreamAnimation = AlwaysStoppedAnimation(0.0);
+      _backgroundAnimation = const AlwaysStoppedAnimation(0.0);
+      _glowAnimation = const AlwaysStoppedAnimation(0.5);
+      _scanAnimation = const AlwaysStoppedAnimation(0.0);
+      _pulseAnimation = const AlwaysStoppedAnimation(1.0);
+      _hexagonAnimation = const AlwaysStoppedAnimation(0.0);
+      _dataStreamAnimation = const AlwaysStoppedAnimation(0.0);
     }
 
   _loadSensitivity();
@@ -497,10 +497,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _buildSectionHeader('PENGATURAN DETEKSI'),
                 _buildSettingSwitch(
                   title: 'Mode Akurasi Tinggi',
-                  subtitle: 'Presisi deteksi maksimum (lebih lambat)',
+                  subtitle: 'Presisi deteksi maksimum',
                   value: _highAccuracy,
                   onChanged: (value) async {
                     if (value) {
@@ -526,7 +525,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
                 _buildSettingSwitch(
                   title: 'Pindai Dokumen Otomatis',
-                  subtitle: 'Secara otomatis pindai file yang diunggah',
+                  subtitle: 'Secara otomatis pindai file',
                   value: _autoScan,
                   onChanged: (value) async {
                     setState(() => _autoScan = value);
@@ -542,7 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 // Dark mode removed from settings per user request
                 _buildSettingSwitch(
                   title: 'Notifikasi',
-                  subtitle: 'Terima pemberitahuan penyelesaian pemindaian',
+                  subtitle: 'Terima pemberitahuan',
                   value: _notifications,
                   onChanged: (value) async {
                     setState(() => _notifications = value);
@@ -557,7 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 _buildSectionHeader('DATA & PRIVASI'),
                 _buildSettingButton(
                   title: 'Hapus Riwayat Pemindaian',
-                  subtitle: 'Hapus semua data pemindaian sebelumnya',
+                  subtitle: 'Hapus semua data',
                   icon: Icons.delete,
                   color: Colors.red,
                   onTap: _clearHistory,
@@ -746,10 +745,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                 children: [
                   Icon(Icons.tune, color: Colors.pink.shade300, size: 22),
                   const SizedBox(width: 10),
-                  Expanded(
+                  const Expanded(
                     child: Text(
                       'Sensivitas Deteksi',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -819,12 +818,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ],
               ),
               const SizedBox(height: 10),
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'RENDAH',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
                       fontFamily: 'Orbitron',
@@ -832,7 +831,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   Text(
                     'TINGGI',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
                       fontFamily: 'Orbitron',
@@ -989,7 +988,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         // Expose both numeric MB and formatted display string for use in the UI
         // The UI code below can use `dbSizeDisplay` to show the appropriately formatted unit.
 
-  final lastUpdated = '09 Oktober 2025';
+  const lastUpdated = '09 Oktober 2025';
 
         return AnimatedBuilder(
           animation: _glowAnimation,
@@ -1454,7 +1453,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(width: 10),
                     Text(
                       text,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -1487,7 +1486,7 @@ class _HexagonGridPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;
@@ -1542,7 +1541,7 @@ class _DataStreamPainter extends CustomPainter {
     
     for (int i = 0; i < 5; i++) {
       final startX = random.nextDouble() * size.width;
-      final startY = -50.0;
+      const startY = -50.0;
       final endY = size.height + 50;
       
       path.moveTo(startX, startY);

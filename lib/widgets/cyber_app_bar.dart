@@ -64,7 +64,7 @@ class _CyberAppBarState<T extends CyberAppBar> extends State<T>
       )..repeat(reverse: true);
 
       _pulseController = AnimationController(
-        duration: Duration(seconds: 2, milliseconds: 500),
+        duration: const Duration(seconds: 2, milliseconds: 500),
         vsync: this,
       )..repeat(reverse: true);
 
@@ -104,10 +104,10 @@ class _CyberAppBarState<T extends CyberAppBar> extends State<T>
       
       _particleAnimation = Tween<double>(begin: 0, end: 1).animate(_particleController);
     } else {
-      _glowAnimation = AlwaysStoppedAnimation(0.4);
-      _scanAnimation = AlwaysStoppedAnimation(0.0);
-      _pulseAnimation = AlwaysStoppedAnimation(1.0);
-      _particleAnimation = AlwaysStoppedAnimation(0.0);
+      _glowAnimation = const AlwaysStoppedAnimation(0.4);
+      _scanAnimation = const AlwaysStoppedAnimation(0.0);
+      _pulseAnimation = const AlwaysStoppedAnimation(1.0);
+      _particleAnimation = const AlwaysStoppedAnimation(0.0);
     }
   }
 

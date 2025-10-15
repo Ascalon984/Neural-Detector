@@ -43,7 +43,9 @@ class WordpieceTokenizer {
     if (out.length > maxLen) {
       return out.sublist(0, maxLen);
     }
-    while (out.length < maxLen) out.add(0);
+    while (out.length < maxLen) {
+      out.add(0);
+    }
     return out;
   }
 
@@ -64,7 +66,7 @@ class WordpieceTokenizer {
       String cur = '';
       while (start < end) {
         var piece = word.substring(start, end);
-        if (start > 0) piece = '##' + piece;
+        if (start > 0) piece = '##$piece';
         if (vocab.containsKey(piece)) {
           cur = piece;
           break;

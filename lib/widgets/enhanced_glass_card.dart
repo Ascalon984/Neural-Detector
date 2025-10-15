@@ -200,7 +200,7 @@ class EnhancedGlassCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     border: Border(
                       right: BorderSide(color: Colors.pink.withOpacity(0.6), width: 3),
-                      top: BorderSide(color: Colors.transparent, width: 3),
+                      top: const BorderSide(color: Colors.transparent, width: 3),
                     ),
                   ),
                 );
@@ -264,7 +264,7 @@ class _HexagonPatternPainter extends CustomPainter {
     const hexSize = 40.0;
     const hexHeight = hexSize * 2;
     final hexWidth = math.sqrt(3) * hexSize;
-    final vertDist = hexHeight * 3 / 4;
+    const vertDist = hexHeight * 3 / 4;
 
     int cols = (size.width / hexWidth).ceil() + 1;
     int rows = (size.height / vertDist).ceil() + 1;
@@ -312,7 +312,7 @@ class _DataStreamPainter extends CustomPainter {
     
     for (int i = 0; i < 5; i++) {
       final startX = random.nextDouble() * size.width;
-      final startY = -50.0;
+      const startY = -50.0;
       final endY = size.height + 50;
       
       path.moveTo(startX, startY);

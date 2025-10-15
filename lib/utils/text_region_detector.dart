@@ -57,7 +57,7 @@ TextDetectionResult optimizedTextDetection(Uint8List bytes) {
     if (image == null) return TextDetectionResult(hasText: false, confidence: 0.0);
 
     // Downscale for performance - target 300x300 max
-    final targetSize = 300;
+    const targetSize = 300;
     final width = image.width;
     final height = image.height;
 
@@ -126,7 +126,9 @@ int _calculateOptimalThreshold(img.Image gray) {
 
   int total = gray.width * gray.height;
   double sum = 0.0;
-  for (int t = 0; t < 256; t++) sum += t * histogram[t];
+  for (int t = 0; t < 256; t++) {
+    sum += t * histogram[t];
+  }
 
   double sumB = 0.0;
   int wB = 0;
