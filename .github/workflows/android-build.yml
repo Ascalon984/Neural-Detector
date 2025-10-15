@@ -45,14 +45,18 @@ jobs:
     name: Build & Analyze
     runs-on: ubuntu-latest
 
+    # KOREKSI/PERBAIKAN 1: Tambahkan izin (permissions) untuk keamanan.
+    # Workflow ini hanya perlu membaca kode sumber dan mengunggah artefak.
+    permissions:
+      contents: read
+      actions: write # Diperlukan untuk mengunggah artefak
+
     steps:
       # Langkah 1: Checkout kode sumber
-      # - Menggunakan action resmi, versi dipin (diamankan) untuk kestabilan
       - name: Checkout repository
-        uses: actions/checkout@v4 # Pin ke versi spesifik untuk keamanan
+        uses: actions/checkout@v4
 
       # Langkah 2: Setup Java JDK
-      # - Flutter membutuhkan Java. Versi 17 adalah pilihan yang aman dan modern.
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
@@ -60,13 +64,10 @@ jobs:
           java-version: '17'
 
       # Langkah 3: Setup Android SDK
-      # - **GANTI BESAR**: Menggunakan action resmi yang menggantikan semua skrip instalasi SDK yang panjang dan rentan error.
-      # - Jauh lebih andal, cepat, dan mudah dikelola.
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3 # Pin ke versi spesifik
+        uses: android-actions/setup-android@v3
 
       # Langkah 4: Setup Flutter
-      # - Menggunakan action resmi untuk setup Flutter dengan caching otomatis.
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -78,7 +79,14 @@ jobs:
         run: flutter pub get
 
       # --- LOGIKA BUILD KONDISIONAL ---
-      # Langkah-langkah berikut hanya akan dijalankan berdasarkan input `build_type`
+
+      # KOREKSI/PERBAIKAN 2: Gabungkan langkah "Enable Gradle minify" menjadi satu.
+      # Ini lebih efisien dan menghindari redundansi.
+      - name: Enable Gradle Configuration for Release Builds
+        if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
+        run: |
+          echo "enableMinify=true" >> android/gradle.properties
+          echo "Gradle minify enabled for release builds."
 
       # Build 1: APK Cepat (untuk testing cepat)
       - name: 🚀 Build Quick APK (arm64)
@@ -88,11 +96,6 @@ jobs:
           flutter build apk --release --target-platform android-arm64
 
       # Build 2: AAB Rilis Lengkap (untuk publikasi ke Play Store)
-      - name: Enable Gradle minify for CI
-        if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
-        run: |
-          echo "enableMinify=true" >> android/gradle.properties
-
       - name: 📦 Build Full Release AAB (with Obfuscation + minify)
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
@@ -105,11 +108,6 @@ jobs:
             --tree-shake-icons
 
       # Build 3: APK Split-per-ABI (untuk distribusi manual)
-      - name: Enable Gradle minify for APK build
-        if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
-        run: |
-          echo "enableMinify=true" >> android/gradle.properties
-
       - name: 📱 Build Split-per-ABI APKs (with Obfuscation + minify)
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
@@ -122,21 +120,14 @@ jobs:
             --tree-shake-icons
 
       # --- UPLOAD ARTEFAK ---
-      # Langkah terakhir: Unggah semua hasil build dan log
-
       - name: Upload Build Artifacts
-        # `if: always()` memastikan langkah ini tetap berjalan meskipun build gagal,
-        # sehingga kita bisa mengumpulkan log untuk debugging.
-        if: always()
+        if: always() # Pastikan langkah ini tetap berjalan meskipun build gagal
         uses: actions/upload-artifact@v4
         with:
-          # Nama artefak menjadi unik untuk setiap run
           name: build-artifacts-${{ env.BUILD_TYPE }}-${{ github.run_number }}
-          # Path menggunakan wildcard untuk menangkap semua output yang relevan
           path: |
             build/app/outputs/**/*.apk
             build/app/outputs/**/*.aab
             build/**/app_size_*.json
             build/symbols/**
-          # Jika tidak ada file yang ditemukan, jangan gagalkan langkahnya
           if-no-files-found: warn
