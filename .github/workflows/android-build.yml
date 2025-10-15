@@ -17,6 +17,7 @@ on:
       build_type:
         description: 'Pilih jenis build yang ingin dijalankan'
         required: true
+        # PERUBAHAN: Default untuk manual run adalah 'all' agar semua build diuji
         default: 'all'
         type: choice
         options:
@@ -37,6 +38,7 @@ on:
 env:
   JAVA_TOOL_OPTIONS: -Xmx4g # Berikan lebih banyak memori untuk Gradle
   FLUTTER_CHANNEL: ${{ github.event.inputs.flutter_channel || 'stable' }}
+  # PERUBAHAN: Default untuk otomatis (push/PR) adalah 'quick_apk' untuk pengujian cepat
   BUILD_TYPE: ${{ github.event.inputs.build_type || 'quick_apk' }}
 
 # Definisi Job
@@ -45,7 +47,6 @@ jobs:
     name: Build & Analyze
     runs-on: ubuntu-latest
 
-    # PERBAIKAN: Tambahkan izin (permissions) untuk keamanan.
     permissions:
       contents: read
       actions: write # Diperlukan untuk mengunggah artefak
@@ -78,18 +79,14 @@ jobs:
         run: flutter pub get
 
       # --- LOGIKA BUILD KONDISIONAL ---
-
-      # Langkah ini adalah KUNCI untuk mengaktifkan minify dengan benar.
-      # Ini menulis properti ke file gradle.properties yang akan dibaca oleh Gradle saat build.
-      - name: Enable Gradle Configuration for Release Builds
-        if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
-        run: |
-          echo "enableMinify=true" >> android/gradle.properties
-          echo "Gradle minify enabled for release builds."
+      # PERUBAHAN BESAR: Kami tidak lagi mengubah gradle.properties dari sini.
+      # Semua konfigurasi build (minify, proguard) sekarang 100% diatur
+      # di dalam file `android/app/build.gradle` dan `android/app/proguard-rules.pro`.
+      # Ini membuat proyek lebih mandiri dan build lebih konsisten.
 
       # Build 1: APK Cepat (untuk testing cepat)
-      # PERBAIKAN: Perintah ini sudah benar dan TAK PERLU menambahkan -P...
-      # Minify untuk build ini diatur oleh `minifyEnabled true` di build.gradle Anda.
+      # Build ini akan menggunakan minifikasi karena `minifyEnabled true` di build.gradle
+      # dan akan berhasil jika aturan ProGuard sudah benar.
       - name: 🚀 Build Quick APK (arm64)
         if: env.BUILD_TYPE == 'quick_apk' || env.BUILD_TYPE == 'all'
         run: |
@@ -109,8 +106,6 @@ jobs:
             --tree-shake-icons
 
       # Build 3: APK Split-per-ABI (untuk distribusi manual)
-      # PERBAIKAN: Perintah ini juga sudah benar.
-      # Minify diaktifkan oleh langkah "Enable Gradle Configuration" di atas.
       - name: 📱 Build Split-per-ABI APKs (with Obfuscation + minify)
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
