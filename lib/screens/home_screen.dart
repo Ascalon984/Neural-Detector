@@ -895,7 +895,7 @@ class _HomeScreenState extends State<HomeScreen>
                     Expanded(
                       child: _buildInsightCard(
                         icon: Icons.speed,
-                        title: 'Kecepatan Rata-rata',
+                        title: 'Kecepatan',
                         value: '2.1s',
                         color: Colors.purple,
                         isSmall: isSmallScreen || isVerySmallScreen,
