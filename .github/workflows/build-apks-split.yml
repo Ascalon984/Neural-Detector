@@ -37,7 +37,7 @@ jobs:
         run: flutter pub get
 
       - name: Build arm64-v8a APK (release)
-        run: flutter build apk --release --target-platform android-arm64 --split-per-abi
+        run: flutter build apk --release --target-platform android-arm64 --split-per-abi -- -PenableMinify=true
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
