@@ -17,7 +17,6 @@ on:
       build_type:
         description: 'Pilih jenis build yang ingin dijalankan'
         required: true
-        # PERUBAHAN: Default untuk manual run adalah 'all' agar semua build diuji
         default: 'all'
         type: choice
         options:
@@ -38,8 +37,9 @@ on:
 env:
   JAVA_TOOL_OPTIONS: -Xmx4g # Berikan lebih banyak memori untuk Gradle
   FLUTTER_CHANNEL: ${{ github.event.inputs.flutter_channel || 'stable' }}
-  # PERUBAHAN: Default untuk otomatis (push/PR) adalah 'quick_apk' untuk pengujian cepat
-  BUILD_TYPE: ${{ github.event.inputs.build_type || 'quick_apk' }}
+  # PERBAIKAN: Ubah default untuk otomatis (push/PR) menjadi 'all'
+  # Ini memastikan build AAB dan Split APK selalu dijalankan
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'all' }}
 
 # Definisi Job
 jobs:
@@ -78,15 +78,16 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      # --- LANGKAH DEBUG (Opsional) ---
+      # Jika suatu saat build dilewati lagi, hapus tanda '#' pada baris di bawah ini
+      # untuk melihat nilai BUILD_TYPE yang sebenarnya.
+      # - name: 🔍 Debug - Show BUILD_TYPE value
+      #   run: |
+      #     echo "The current BUILD_TYPE is: ${{ env.BUILD_TYPE }}"
+
       # --- LOGIKA BUILD KONDISIONAL ---
-      # PERUBAHAN BESAR: Kami tidak lagi mengubah gradle.properties dari sini.
-      # Semua konfigurasi build (minify, proguard) sekarang 100% diatur
-      # di dalam file `android/app/build.gradle` dan `android/app/proguard-rules.pro`.
-      # Ini membuat proyek lebih mandiri dan build lebih konsisten.
 
       # Build 1: APK Cepat (untuk testing cepat)
-      # Build ini akan menggunakan minifikasi karena `minifyEnabled true` di build.gradle
-      # dan akan berhasil jika aturan ProGuard sudah benar.
       - name: 🚀 Build Quick APK (arm64)
         if: env.BUILD_TYPE == 'quick_apk' || env.BUILD_TYPE == 'all'
         run: |
