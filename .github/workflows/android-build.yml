@@ -45,7 +45,7 @@ jobs:
     name: Build & Analyze
     runs-on: ubuntu-latest
 
-    # KOREKSI/PERBAIKAN 1: Tambahkan izin (permissions) untuk keamanan.
+    # PERBAIKAN: Tambahkan izin (permissions) untuk keamanan.
     # Workflow ini hanya perlu membaca kode sumber dan mengunggah artefak.
     permissions:
       contents: read
@@ -80,8 +80,9 @@ jobs:
 
       # --- LOGIKA BUILD KONDISIONAL ---
 
-      # KOREKSI/PERBAIKAN 2: Gabungkan langkah "Enable Gradle minify" menjadi satu.
+      # PERBAIKAN: Gabungkan langkah "Enable Gradle minify" menjadi satu.
       # Ini lebih efisien dan menghindari redundansi.
+      # PENTING: Langkah ini hanya akan berhasil jika file proguard-rules.pro sudah ada di proyek.
       - name: Enable Gradle Configuration for Release Builds
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
