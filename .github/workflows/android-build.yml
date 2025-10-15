@@ -17,7 +17,7 @@ on:
       build_type:
         description: 'Pilih jenis build yang ingin dijalankan'
         required: true
-        default: 'quick_apk'
+        default: 'all'
         type: choice
         options:
           - quick_apk          # Cepat: Hanya build APK dasar untuk testing
