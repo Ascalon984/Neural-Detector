@@ -46,7 +46,6 @@ jobs:
     runs-on: ubuntu-latest
 
     # PERBAIKAN: Tambahkan izin (permissions) untuk keamanan.
-    # Workflow ini hanya perlu membaca kode sumber dan mengunggah artefak.
     permissions:
       contents: read
       actions: write # Diperlukan untuk mengunggah artefak
@@ -80,9 +79,8 @@ jobs:
 
       # --- LOGIKA BUILD KONDISIONAL ---
 
-      # PERBAIKAN: Gabungkan langkah "Enable Gradle minify" menjadi satu.
-      # Ini lebih efisien dan menghindari redundansi.
-      # PENTING: Langkah ini hanya akan berhasil jika file proguard-rules.pro sudah ada di proyek.
+      # Langkah ini adalah KUNCI untuk mengaktifkan minify dengan benar.
+      # Ini menulis properti ke file gradle.properties yang akan dibaca oleh Gradle saat build.
       - name: Enable Gradle Configuration for Release Builds
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
@@ -90,6 +88,8 @@ jobs:
           echo "Gradle minify enabled for release builds."
 
       # Build 1: APK Cepat (untuk testing cepat)
+      # PERBAIKAN: Perintah ini sudah benar dan TAK PERLU menambahkan -P...
+      # Minify untuk build ini diatur oleh `minifyEnabled true` di build.gradle Anda.
       - name: 🚀 Build Quick APK (arm64)
         if: env.BUILD_TYPE == 'quick_apk' || env.BUILD_TYPE == 'all'
         run: |
@@ -109,6 +109,8 @@ jobs:
             --tree-shake-icons
 
       # Build 3: APK Split-per-ABI (untuk distribusi manual)
+      # PERBAIKAN: Perintah ini juga sudah benar.
+      # Minify diaktifkan oleh langkah "Enable Gradle Configuration" di atas.
       - name: 📱 Build Split-per-ABI APKs (with Obfuscation + minify)
         if: env.BUILD_TYPE == 'full_release_aab' || env.BUILD_TYPE == 'all'
         run: |
